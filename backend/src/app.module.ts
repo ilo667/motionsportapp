@@ -1,8 +1,20 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import Joi from 'joi';
 import { DatabaseModule } from './database/database.module';
-import { AuthModule } from './auth/auth.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validationSchema: Joi.object({
+        DATABASE_URL: Joi.string().required(),
+        NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
+      }),
+    }),
+    DatabaseModule,
+    HealthModule,
+  ],
 })
 export class AppModule {}
