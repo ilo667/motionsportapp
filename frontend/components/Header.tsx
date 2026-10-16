@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { BrainsMateLogo } from "./BrainsMateLogo";
+import { MotionSportLogo } from "./MotionSportLogo";
 import { SignOutButton } from "./SignOutButton";
 
 export function Header() {
@@ -9,7 +9,7 @@ export function Header() {
   const mobilePadding = pathname === "/report" ? "p-[8px]" : "p-[19px]";
   return (
     <header className={`${mobilePadding} sm:px-[70px] sm:py-[27px] flex items-center justify-between`}>
-      <BrainsMateLogo />
+      <MotionSportLogo />
       <SignOutButton />
     </header>
   );

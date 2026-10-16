@@ -15,8 +15,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "BrainsMate: Discover your ADHD Profile",
-  description: "Take the ADHD screening quiz and get your personalised report.",
+  title: "MotionSport",
+  description: "Track your sports performance with MotionSport.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

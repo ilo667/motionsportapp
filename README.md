@@ -1,151 +1,71 @@
-# BrainsMate — ADHD Screening Funnel
+# MotionSport — Sports Performance PWA
 
-Full-stack ADHD quiz with personalised report.  
-Flow: **Landing → Quiz → Account Creation → Report → Sign In**
+Full-stack sports performance app. Users complete a short assessment and receive a personalised performance result.
 
-Stack: **NestJS** (backend) · **Next.js App Router** (frontend) · **PostgreSQL** · **Tailwind CSS v4** · **Vercel** (deployment)
+**Stack:** NestJS · Next.js App Router · PostgreSQL · Tailwind CSS v4 · Vercel
 
 ---
 
-## Solution Structure
+## Architecture
 
 ```
-adhdtest/
-├── backend/                      # NestJS REST API
-│   ├── api/index.ts              # Vercel serverless entrypoint
-│   ├── src/
-│   │   ├── app.module.ts         # Root module — wires everything together
-│   │   ├── main.ts               # Bootstrap: CORS, ValidationPipe, cookieParser
-│   │   ├── auth/                 # Auth module
-│   │   │   ├── auth.controller.ts  # POST /auth/register, /auth/login, /auth/logout
-│   │   │   │                       # GET  /auth/customer (JWT-guarded, returns user + latest attempt)
-│   │   │   │                       # POST /auth/link-attempt (links anonymous attempt on register)
-│   │   │   ├── auth.service.ts
-│   │   │   ├── jwt-auth.guard.ts   # Reads JWT from httpOnly cookie
-│   │   │   └── dto/                # RegisterDto, LoginDto (class-validator)
-│   │   ├── quiz/                 # Quiz module
-│   │   │   ├── quiz.controller.ts  # GET /quiz/active, POST /quiz/attempts
-│   │   │   ├── quiz.service.ts
-│   │   │   └── dto/                # CreateAttemptDto with nested QuizAnswerDto
-│   │   └── database/             # Global pg Pool — injected across modules
-│   └── sql/
-│       ├── schema.sql            # DDL — idempotent (IF NOT EXISTS + ALTER migrations)
-│       └── seed.sql              # Quiz v1 with 5 ADHD screening questions
-│
-└── frontend/                     # Next.js App Router
-    ├── app/
-    │   ├── globals.css           # Tailwind v4 @theme inline: font-size + line-height tokens
-    │   ├── layout.tsx            # Root layout: Geologica + Inter fonts, Header, BodyBg
-    │   ├── page.tsx              # Landing — floating tags, hero, Start Test CTA
-    │   ├── quiz/page.tsx         # One question at a time, progress bar, arrow navigation
-    │   ├── register/page.tsx     # Two-step flow: email → password
-    │   ├── login/page.tsx        # Sign in
-    │   └── report/page.tsx       # HIGH / LOW report: score gauge SVG, sections, FAQ accordion
-    ├── components/
-    │   ├── AuthCard.tsx          # Shared wrapper for register and login pages
-    │   ├── BodyBg.tsx            # White body background
-    │   ├── BrainsMateLogo.tsx    # Logo image, accepts white + className props
-    │   ├── Footer.tsx            # Footer with logo, copyright, rounded top corners
-    │   ├── Header.tsx            # Client component — route-aware mobile padding
-    │   └── SignOutButton.tsx     # Sign out with icon
-    └── lib/
-        └── api.ts                # Typed fetch wrapper — single source of truth for all API calls
+motionsportapp/
+├── frontend/   # Next.js 16 (App Router) — deployed as Vercel frontend project
+└── backend/    # NestJS 11 — deployed as Vercel serverless functions project
 ```
 
+The two Vercel projects share a single git repository. The frontend proxies `/api/*` requests to the backend via `next.config.ts` rewrites.
+
 ---
 
-## Data Model
+## Data model
 
-```
-users
-  id BIGSERIAL PK
-  email         VARCHAR UNIQUE
-  password_hash VARCHAR          -- bcrypt, 10 rounds
+| Table | Purpose |
+|-------|---------|
+| `users` | Registered users (email + bcrypt password hash) |
+| `quiz_versions` | Assessment versions; only one is active at a time |
+| `questions` | Questions belonging to a version |
+| `quiz_attempts` | Submitted attempts with score and result (`HIGH` / `LOW`) |
+| `answers` | Individual answer values (0–4) per attempt |
 
-quiz_versions
-  id         BIGSERIAL PK
-  is_active  BOOLEAN             -- enforced unique at DB level: only one active at a time
-  created_at TIMESTAMPTZ
+---
 
-questions
-  id              BIGSERIAL PK
-  quiz_version_id FK → quiz_versions
-  question_key    VARCHAR        -- stable identifier across versions (e.g. "lose_track_of_time")
-  question_text   TEXT
-  position        INTEGER
+## Auth flow
 
-quiz_attempts
-  id              BIGSERIAL PK
-  user_id         FK → users (nullable — filled on registration)
-  quiz_version_id FK → quiz_versions
-  attempt_token   UUID UNIQUE    -- bridges anonymous attempt to account
-  score           INTEGER        -- raw sum of answer values
-  max_score       INTEGER        -- questions × 4 (max value per question)
-  result          VARCHAR        -- HIGH | LOW, computed at submission time
-  completed_at    TIMESTAMPTZ
+- JWT stored in an **httpOnly cookie** (XSS-safe)
+- Anonymous-first: assessment is submitted before registration; the `attemptToken` UUID is stored in `localStorage` and linked on register
 
-answers
-  id           BIGSERIAL PK
-  attempt_id   FK → quiz_attempts
-  question_id  FK → questions
-  answer_value INTEGER (0–4)    -- Strongly Disagree=0 … Strongly Agree=4
-  UNIQUE (attempt_id, question_id)
+---
+
+## Local dev
+
+```bash
+# Backend (port 3001)
+cd backend && npm install && npm run start:dev
+
+# Frontend (port 3000)
+cd frontend && npm install && npm run dev
 ```
 
-### Scoring
-
-5-point Likert scale per question (0–4). **Result is HIGH** if 2 or more answers have value ≥ 3 (Agree / Strongly Agree). Result and score are computed server-side at submission and stored immutably — re-scoring old attempts after a logic change does not affect historical results.
+Copy `backend/.env.example` → `backend/.env` and set `DATABASE_URL` and `JWT_SECRET`.
 
 ---
 
-## Key Architectural Decisions
+## Database setup
 
-**Anonymous-first quiz with `attemptToken` bridge**  
-The quiz is submitted before account creation. The backend returns a UUID `attempt_token` which the frontend stores in `localStorage`. On registration, the token is sent and the backend runs a single `UPDATE quiz_attempts SET user_id = $1 WHERE attempt_token = $2 AND user_id IS NULL`. This decouples the quiz flow from auth entirely — the user completes the quiz with zero friction, then creates an account only to view their report.
+```bash
+cd backend && npm run db:setup
+```
 
-**Quiz versioning**  
-Questions belong to a `quiz_version`, not to a global pool. Every attempt stores `quiz_version_id` and full individual `answers`. Changing the quiz means inserting a new `quiz_versions` row and flipping `is_active`. Old attempts remain fully intact and queryable. There is no schema migration needed when questions change.
-
-**Result stored at submission, not computed on read**  
-`result` and `score` are written once to `quiz_attempts`. Changing the scoring algorithm does not silently alter historical reports. If future business logic needs re-scoring, it is an explicit migration, not an accidental side-effect.
-
-**JWT in httpOnly cookie**  
-Tokens are never accessible to JavaScript, which eliminates XSS-based token theft. The frontend uses `credentials: 'include'` on every fetch — there is no token management code anywhere in the client. Logout is a `POST /auth/logout` that clears the cookie server-side.
-
-**Dynamic score gauge**  
-The report renders an inline SVG gauge with a rotating needle computed client-side from `scorePercent`. The needle angle and pivot point are calculated with a blend correction around the midpoint to avoid visual jump. No external charting library is used — the gauge is a pure SVG path with a `rotate()` transform, keeping the bundle small and the animation fully controllable.
-
-**Raw `pg` over ORM**  
-Raw SQL keeps queries explicit and avoids the abstraction layer that hides what actually happens in the database. For a schema this simple and stable, an ORM adds complexity without proportional benefit. Schema changes are managed via idempotent `schema.sql` with `ALTER TABLE` migrations appended as needed.
+Runs `sql/schema.sql` then `sql/seed.sql` against `DATABASE_URL`.
 
 ---
 
-## Trade-offs
+## Deployment
 
-| Decision | Cost | Benefit |
-|---|---|---|
-| No ORM | Schema migrations are manual SQL | Full control over queries; no hidden behaviour |
-| `localStorage` for `attemptToken` | Lost if user clears storage or switches device — they must retake the quiz | Simple; no server-side session state for anonymous users |
-| Single active quiz version | Cannot A/B test two versions simultaneously | Simpler query (`WHERE is_active = TRUE`); no version-selection UI needed |
-| Result stored at submission | Changing scoring logic does not backfill old results | Historical reports are immutable and auditable |
-| No email verification | Fake emails can be registered | Out of scope for a screening funnel; trivially addable later |
-| Generic login error message | Slightly less helpful UX | Prevents user enumeration — attacker cannot distinguish "email not found" from "wrong password" |
+Two separate Vercel projects, both pointing at this repository:
 
-**Why the login error message is generic**  
-The login form always returns "Invalid email or password." regardless of whether the email exists or the password is wrong. A specific message like "No account found" would allow an attacker to probe which emails are registered in the system — sending thousands of requests to discover valid accounts (user enumeration). A generic message makes both failure cases indistinguishable, eliminating that attack vector at zero implementation cost.
+- **motionsport** — root: `frontend/`
+- **motionsport-api** — root: `backend/`
 
----
-
-## Extensibility
-
-**Changing quiz questions**  
-Insert a new `quiz_versions` row with `is_active = TRUE` (the DB partial unique index ensures the old active version is set to `FALSE` first), then add questions linked to the new version. Old attempts remain intact — they reference their original `quiz_version_id` and individual answers. `GET /quiz/active` automatically serves the new version.
-
-**Changing the scoring algorithm**  
-Edit `quiz.service.ts → createAttempt`. Because `result` is persisted at submission time, old attempts are unaffected. If backfilling is needed, write a one-off migration that re-runs the new formula against stored `answers`.
-
-**Adding personalised report sections**  
-Each `answer` row references a `question_id` which links back to a stable `question_key`. New report sections can query `answers JOIN questions ON question_key = 'specific_key'` for a given `attempt_id` — no schema change required.
-
-**Scaling beyond a single active version**  
-The current schema enforces one active version at a time via a partial unique index. To support A/B testing or multiple simultaneous versions, drop that constraint, add a version-selection parameter to `GET /quiz/active`, and update the frontend to pass it. The rest of the system — attempts, answers, scoring — is unchanged.
+Set `FRONTEND_URL` and `BACKEND_URL` env vars in each Vercel project's settings.

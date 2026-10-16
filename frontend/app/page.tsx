@@ -1,6 +1,6 @@
 import React from "react";
-import Image from "next/image";
 import Link from "next/link";
+import Image from "next/image";
 
 function FloatingTag({ first, second, icon, paddingClass, className }: { first: string; second: string; icon?: string; paddingClass?: string; className?: string }) {
   return (
@@ -32,36 +32,25 @@ export default function LandingPage() {
         style={{ boxShadow: "0px 10px 22px 0px #8393a505, 0px 41px 41px 0px #8393a505, 0px 91px 55px 0px #8393a503, 0px 162px 65px 0px #8393a500, 0px 254px 71px 0px #8393a500" }}
       >
         <div className="relative flex items-center justify-center w-full mb-6 sm:mb-8 h-[223px] sm:h-[284px]">
-          <FloatingTag first="High" second="Productivity" className="top-[59px] left-[-1px] sm:top-[39px]" />
-          <FloatingTag first="-6%" second="Focus" icon="/arrow-down.svg" paddingClass="px-[6px] py-[4px] sm:px-[11px] sm:py-[7px]" className="top-[124px] left-[12px] sm:top-[163px] sm:left-[23px]" />
-          <Image
-            src="/head.png"
-            alt="Head illustration"
-            width={273}
-            height={237}
-            quality={100}
-            className="w-[169px] sm:w-[273px]"
-          />
-          <FloatingTag first="+10%" second="Impulsivity" icon="/arrow-up.svg" paddingClass="px-[6px] py-[4px] sm:px-[11px] sm:py-[7px]" className="top-[33px] right-[-1px] sm:top-[5px]" />
-          <FloatingTag first="Medium" second="Distractions" className="top-[137px] right-[-1px] sm:top-[185px] text-right" />
+          <FloatingTag first="Strength" second="+12%" icon="/arrow-up.svg" paddingClass="px-[6px] py-[4px] sm:px-[11px] sm:py-[7px]" className="top-[59px] left-[-1px] sm:top-[39px]" />
+          <FloatingTag first="-3s" second="Sprint" icon="/arrow-down.svg" paddingClass="px-[6px] py-[4px] sm:px-[11px] sm:py-[7px]" className="top-[124px] left-[12px] sm:top-[163px] sm:left-[23px]" />
+          <div className="w-[169px] sm:w-[273px] h-[169px] sm:h-[237px] rounded-full bg-surface" />
+          <FloatingTag first="Recovery" second="85%" className="top-[33px] right-[-1px] sm:top-[5px]" />
+          <FloatingTag first="Top" second="Form" className="top-[137px] right-[-1px] sm:top-[185px] text-right" />
         </div>
 
         <div className="w-full sm:px-[33px]">
           <h1 className="font-semibold text-[24px] leading-[1.2] sm:text-[48px] sm:leading-[58px] text-heading text-center mb-5">
-            Discover Your{" "}
-            <span className="text-accent block">ADHD Trait Profile</span>
+            Track Your{" "}
+            <span className="text-accent block">Sports Performance</span>
           </h1>
           <p className="text-[16px] leading-[1.4] sm:text-sm sm:leading-[28px] text-body text-center mb-[38px] sm:mb-[40px]">
-            Find out how ADHD traits influence your focus, energy, and daily life
+            Analyse your training, track progress, and improve your results.
           </p>
 
-          <div className="flex space-x-4 w-full">
-            {["Male", "Female"].map((label) => (
-              <Link key={label} href="/quiz" className="flex-1 text-center bg-teal hover:bg-teal-dark text-white font-medium text-[16px] leading-[22px] sm:text-sm sm:leading-[28px] py-[15px] sm:py-[14px] px-8 rounded-[8px] transition-colors">
-                {label}
-              </Link>
-            ))}
-          </div>
+          <Link href="/quiz" className="block text-center bg-teal hover:bg-teal-dark text-white font-medium text-[16px] leading-[22px] sm:text-sm sm:leading-[28px] py-[15px] sm:py-[14px] px-8 rounded-[8px] transition-colors">
+            Start Assessment
+          </Link>
         </div>
 
       </div>

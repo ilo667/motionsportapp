@@ -6,7 +6,7 @@ BEGIN
   SELECT qv.id INTO v_id
   FROM quiz_versions qv
   JOIN questions q ON q.quiz_version_id = qv.id
-  WHERE q.question_key = 'lose_track_of_time'
+  WHERE q.question_key = 'consistent_training'
   LIMIT 1;
 
   -- Deactivate all versions
@@ -23,14 +23,11 @@ INSERT INTO questions (quiz_version_id, question_key, question_text, position)
 SELECT qv.id, q.question_key, q.question_text, q.position
 FROM quiz_versions qv
 CROSS JOIN (VALUES
-  ('lose_track_of_time',    'I easily lose track of time when doing
-something I enjoy', 1),
-  ('misplace_things',       'I often misplace things like my phone, keys, or wallet',   2),
-  ('start_not_finish',      'I frequently start tasks but struggle to finish them',      3),
-  ('focus_in_conversation', 'I find it hard to stay focused during
-conversations or meetings', 4),
-  ('forget_daily_tasks',    'I often forget about daily tasks like appointments
-or returning calls', 5)
+  ('consistent_training',  'I maintain a consistent training schedule each week',          1),
+  ('track_personal_bests', 'I track my personal bests and review them regularly',          2),
+  ('recover_well',         'I recover well after intense physical activity',               3),
+  ('stay_focused',         'I stay focused and motivated during competitions',             4),
+  ('set_goals',            'I set specific performance goals for each training cycle',     5)
 ) AS q(question_key, question_text, position)
 WHERE qv.is_active = TRUE
 ON CONFLICT (quiz_version_id, question_key) DO UPDATE SET
