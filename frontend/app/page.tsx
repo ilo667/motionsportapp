@@ -37,7 +37,7 @@ export default function SchedulePage() {
 
   const startPolling = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(fetchSchedule, 10_000);
+    intervalRef.current = setInterval(fetchSchedule, 5_000);
   }, [fetchSchedule]);
 
   useEffect(() => {
