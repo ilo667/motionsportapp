@@ -1,15 +1,92 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
+import { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
-import { trainingDays, trainingSlots, bookings } from '../database/schema';
+import { trainingDays, trainingSlots, bookings, members, attendance } from '../database/schema';
 import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
+import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
 
 const SLOT_TIMES = ['19:00', '20:00'];
+const KY_ZONE = 'Europe/Kyiv';
 
 @Injectable()
 export class AdminScheduleService {
   constructor(private readonly database: DatabaseService) {}
+
+  async getSchedule() {
+    const now = DateTime.now().setZone(KY_ZONE);
+    const today = now.toISODate()!;
+
+    const upcoming = await this.database.db
+      .select()
+      .from(trainingDays)
+      .where(eq(trainingDays.status, 'SCHEDULED'))
+      .orderBy(trainingDays.localDate)
+      .limit(30);
+
+    const future = upcoming.filter((d) => d.localDate >= today);
+    let targetDay = future.find((day) => {
+      const closeAt = DateTime.fromISO(`${day.localDate}T21:00:00`, { zone: KY_ZONE });
+      return now < closeAt;
+    }) ?? future[0];
+
+    if (!targetDay) return null;
+
+    const openAt = DateTime.fromISO(`${targetDay.localDate}T14:00:00`, { zone: KY_ZONE });
+    const closeAt = DateTime.fromISO(`${targetDay.localDate}T21:00:00`, { zone: KY_ZONE });
+    const bookingWindowOpen = now >= openAt && now < closeAt;
+
+    const slots = await this.database.db
+      .select()
+      .from(trainingSlots)
+      .where(eq(trainingSlots.trainingDayId, targetDay.id))
+      .orderBy(trainingSlots.slotTime);
+
+    const slotIds = slots.map((s) => s.id);
+
+    const participantRows =
+      slotIds.length > 0
+        ? await this.database.db
+            .select({
+              bookingId: bookings.id,
+              slotId: bookings.slotId,
+              displayName: members.displayName,
+              attendanceStatus: attendance.status,
+            })
+            .from(bookings)
+            .innerJoin(members, eq(bookings.memberId, members.id))
+            .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
+            .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')))
+            .orderBy(bookings.createdAt)
+        : [];
+
+    return {
+      localDate: targetDay.localDate,
+      status: targetDay.status,
+      bookingWindowOpen,
+      bookingOpenAt: openAt.toUTC().toISO(),
+      bookingCloseAt: closeAt.toUTC().toISO(),
+      serverTime: now.toUTC().toISO(),
+      slots: slots.map((s) => {
+        const participants = participantRows
+          .filter((p) => p.slotId === s.id)
+          .map((p) => ({
+            bookingId: p.bookingId,
+            displayName: p.displayName,
+            attendanceStatus: (p.attendanceStatus ?? 'UNMARKED') as 'PRESENT' | 'ABSENT' | 'UNMARKED',
+          }));
+        return {
+          id: s.id,
+          slotTime: s.slotTime,
+          status: s.status,
+          capacity: s.capacity,
+          bookedCount: s.bookedCount,
+          participants,
+        };
+      }),
+    };
+  }
 
   async upsertTrainingDay(date: string, dto: UpsertTrainingDayDto) {
     await this.database.db
@@ -42,6 +119,28 @@ export class AdminScheduleService {
         bookedCount: 0,
       }));
       await this.database.db.insert(trainingSlots).values(slotValues).onConflictDoNothing();
+    }
+
+    if (dto.status === 'CANCELLED') {
+      const daySlots = await this.database.db
+        .select({ id: trainingSlots.id })
+        .from(trainingSlots)
+        .where(eq(trainingSlots.trainingDayId, day.id));
+
+      if (daySlots.length > 0) {
+        const daySlotIds = daySlots.map((s) => s.id);
+        await this.database.db.transaction(async (tx) => {
+          await tx
+            .update(bookings)
+            .set({ status: 'CANCELLED', cancelledAt: new Date() })
+            .where(and(inArray(bookings.slotId, daySlotIds), eq(bookings.status, 'ACTIVE')));
+
+          await tx
+            .update(trainingSlots)
+            .set({ status: 'CANCELLED', bookedCount: 0, cancelledAt: new Date() })
+            .where(inArray(trainingSlots.id, daySlotIds));
+        });
+      }
     }
 
     const slots = await this.database.db
@@ -88,5 +187,54 @@ export class AdminScheduleService {
       .limit(1);
 
     return updated;
+  }
+
+  async markAllAttendance(slotId: string, adminId: string) {
+    const activeBookings = await this.database.db
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
+
+    if (activeBookings.length === 0) return { marked: 0 };
+
+    const now = new Date();
+    await this.database.db.transaction(async (tx) => {
+      for (const booking of activeBookings) {
+        await tx
+          .insert(attendance)
+          .values({ bookingId: booking.id, status: 'PRESENT', markedAt: now, markedByAdminId: adminId })
+          .onConflictDoUpdate({
+            target: attendance.bookingId,
+            set: { status: 'PRESENT', markedAt: now, markedByAdminId: adminId },
+          });
+      }
+    });
+
+    return { marked: activeBookings.length };
+  }
+
+  async updateBookingAttendance(bookingId: string, dto: UpdateAttendanceDto, adminId: string) {
+    const [booking] = await this.database.db
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1);
+
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const now = new Date();
+    if (dto.status === 'UNMARKED') {
+      await this.database.db.delete(attendance).where(eq(attendance.bookingId, bookingId));
+    } else {
+      await this.database.db
+        .insert(attendance)
+        .values({ bookingId, status: dto.status, markedAt: now, markedByAdminId: adminId })
+        .onConflictDoUpdate({
+          target: attendance.bookingId,
+          set: { status: dto.status, markedAt: now, markedByAdminId: adminId },
+        });
+    }
+
+    return { ok: true };
   }
 }

@@ -53,6 +53,33 @@ export interface LoginResponse {
   displayName: string;
 }
 
+export type AttendanceStatus = "PRESENT" | "ABSENT" | "UNMARKED";
+
+export interface AdminParticipant {
+  bookingId: string;
+  displayName: string;
+  attendanceStatus: AttendanceStatus;
+}
+
+export interface AdminSlotView {
+  id: string;
+  slotTime: "19:00" | "20:00";
+  status: "ACTIVE" | "CANCELLED";
+  capacity: number;
+  bookedCount: number;
+  participants: AdminParticipant[];
+}
+
+export interface AdminSchedule {
+  localDate: string;
+  status: string;
+  bookingWindowOpen: boolean;
+  bookingOpenAt: string;
+  bookingCloseAt: string;
+  slots: AdminSlotView[];
+  serverTime: string;
+}
+
 export const api = {
   me: () => request<MeResponse>("/auth/me"),
 
@@ -86,5 +113,36 @@ export const api = {
     request<{ ok: boolean }>("/bookings/current", {
       method: "PATCH",
       body: JSON.stringify({ newSlotId }),
+    }),
+
+  adminLogin: (username: string, password: string) =>
+    request<{ username: string }>("/auth/admin/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+
+  getAdminSchedule: () => request<AdminSchedule>("/admin/schedule"),
+
+  cancelSlot: (slotId: string) =>
+    request<{ ok: boolean }>(`/admin/slots/${slotId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "CANCELLED" }),
+    }),
+
+  cancelTrainingDay: (date: string) =>
+    request<{ ok: boolean }>(`/admin/training-days/${date}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: "CANCELLED", isException: true }),
+    }),
+
+  markAllAttendance: (slotId: string) =>
+    request<{ marked: number }>(`/admin/slots/${slotId}/attendance/all`, {
+      method: "PUT",
+    }),
+
+  updateAttendance: (bookingId: string, status: AttendanceStatus) =>
+    request<{ ok: boolean }>(`/admin/bookings/${bookingId}/attendance`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
     }),
 };
