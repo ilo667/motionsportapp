@@ -2,6 +2,7 @@
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
   "crons": [
     { "path": "/internal/cron/booking-open", "schedule": "0 11 * * *" },
-    { "path": "/internal/cron/booking-open", "schedule": "0 12 * * *" }
+    { "path": "/internal/cron/booking-open", "schedule": "0 12 * * *" },
+    { "path": "/internal/cron/generate-announcement", "schedule": "0 11 * * *" }
   ]
 }

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { and, eq, gte, lte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { trainingDays, trainingSlots, bookings, vacancyAlerts } from '../database/schema';
+import { trainingDays, trainingSlots, bookings, vacancyAlerts, announcements } from '../database/schema';
 
 const KY_ZONE = 'Europe/Kyiv';
 const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
@@ -86,6 +86,14 @@ export class ScheduleService {
       }
     }
 
+    const [ann] = await this.database.db
+      .select({ text: announcements.text, publishedAt: announcements.publishedAt })
+      .from(announcements)
+      .where(eq(announcements.trainingDayId, targetDay.id))
+      .limit(1);
+
+    const announcement = ann?.publishedAt && ann.text ? ann.text : null;
+
     return {
       localDate: targetDay.localDate,
       status: targetDay.status,
@@ -102,6 +110,7 @@ export class ScheduleService {
         isMyVacancyAlert: myVacancyAlertSlotIds.has(s.id),
       })),
       serverTime: now.toUTC().toISO(),
+      announcement,
     };
   }
 

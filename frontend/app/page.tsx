@@ -116,9 +116,15 @@ export default function SchedulePage() {
           </button>
         </div>
 
-        <p className="text-muted text-sm mb-6 capitalize">
+        <p className="text-muted text-sm mb-4 capitalize">
           {formatLocalDate(schedule.localDate)}
         </p>
+
+        {schedule.announcement && (
+          <div className="bg-teal/8 border border-teal/20 rounded-[10px] px-4 py-3 mb-5 text-sm text-body">
+            {schedule.announcement}
+          </div>
+        )}
 
         {beforeWindow && (
           <div className="bg-surface rounded-[10px] px-4 py-3 mb-6 text-sm text-body">

@@ -9,6 +9,7 @@ import { DateTime } from 'luxon';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { NotificationService } from './notification.service';
+import { AnnouncementsService } from '../ai/announcements.service';
 import { trainingDays } from '../database/schema';
 
 const KY_ZONE = 'Europe/Kyiv';
@@ -18,6 +19,7 @@ export class InternalCronController {
   constructor(
     private readonly database: DatabaseService,
     private readonly notifications: NotificationService,
+    private readonly announcementsService: AnnouncementsService,
   ) {}
 
   @Post('cron/booking-open')
@@ -62,6 +64,27 @@ export class InternalCronController {
     this.verifyCronSecret(auth);
     await this.notifications.processAllPending();
     return { ok: true };
+  }
+
+  @Post('cron/generate-announcement')
+  @HttpCode(200)
+  async generateAnnouncement(@Headers('authorization') auth: string) {
+    this.verifyCronSecret(auth);
+    const now = DateTime.now().setZone(KY_ZONE);
+    const today = now.toISODate()!;
+
+    const [day] = await this.database.db
+      .select()
+      .from(trainingDays)
+      .where(eq(trainingDays.localDate, today))
+      .limit(1);
+
+    if (!day || day.status !== 'SCHEDULED') {
+      return { ok: true, skipped: 'no scheduled day today' };
+    }
+
+    await this.announcementsService.autoGenerate(today);
+    return { ok: true, localDate: today };
   }
 
   private verifyCronSecret(auth: string) {

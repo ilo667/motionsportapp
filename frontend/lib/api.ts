@@ -42,6 +42,24 @@ export interface ScheduleNext {
   bookingCloseAt: string;
   slots: SlotView[];
   serverTime: string;
+  announcement?: string | null;
+}
+
+export interface AnnouncementExample {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface Announcement {
+  id: string;
+  trainingDayId: string;
+  topic: string | null;
+  text: string | null;
+  source: string | null;
+  approvedAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string;
 }
 
 export interface RegisterResponse {
@@ -167,4 +185,40 @@ export const api = {
 
   unsubscribeVacancy: (slotId: string) =>
     request<{ ok: boolean }>(`/slots/${slotId}/vacancy-alert`, { method: "DELETE" }),
+
+  listAnnouncementExamples: () =>
+    request<AnnouncementExample[]>("/admin/announcement-examples"),
+
+  addAnnouncementExample: (text: string) =>
+    request<AnnouncementExample>("/admin/announcement-examples", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+
+  deleteAnnouncementExample: (id: string) =>
+    request<{ ok: boolean }>(`/admin/announcement-examples/${id}`, { method: "DELETE" }),
+
+  getAnnouncement: (date: string) =>
+    request<Announcement>(`/admin/announcements/${date}`),
+
+  setAnnouncementTopic: (date: string, topic: string) =>
+    request<Announcement>(`/admin/announcements/${date}/topic`, {
+      method: "PUT",
+      body: JSON.stringify({ topic }),
+    }),
+
+  generateAnnouncement: (date: string) =>
+    request<Announcement>(`/admin/announcements/${date}/generate`, { method: "POST" }),
+
+  updateAnnouncementText: (date: string, text: string) =>
+    request<Announcement>(`/admin/announcements/${date}/text`, {
+      method: "PUT",
+      body: JSON.stringify({ text }),
+    }),
+
+  publishAnnouncement: (date: string) =>
+    request<Announcement>(`/admin/announcements/${date}/publish`, { method: "POST" }),
+
+  unpublishAnnouncement: (date: string) =>
+    request<Announcement>(`/admin/announcements/${date}/unpublish`, { method: "POST" }),
 };
