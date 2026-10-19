@@ -1,0 +1,263 @@
+<title>Motion Sport</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:ital,wght@0,600;0,700;1,700&family=Russo+One&family=Rajdhani:wght@600;700&family=Chakra+Petch:ital,wght@0,600;0,700;1,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ── TOKENS PER VARIANT ─────────────────────────────────────────────── */
+[data-v="1"] {
+  --bg:#080808; --surf:#101010; --surf-m:rgba(200,255,0,.07); --brd:#1e1e1e;
+  --brd-m:#c8ff00; --acc:#c8ff00; --acc-fg:#080808; --acc-dim:rgba(200,255,0,.11);
+  --fg:#ffffff; --fg2:#777777; --red:#f43f5e; --red-d:rgba(244,63,94,.13);
+  --r:12px; --disp:'Bebas Neue',sans-serif; --trk:.06em;
+  --btn-fam:'Bebas Neue',sans-serif; --btn-sz:17px; --btn-up:none; --btn-trk:.06em;
+  color-scheme:dark;
+}
+[data-v="2"] {
+  --bg:#060d06; --surf:#0c1a0c; --surf-m:rgba(34,197,94,.09); --brd:#18281a;
+  --brd-m:#22c55e; --acc:#22c55e; --acc-fg:#060d06; --acc-dim:rgba(34,197,94,.12);
+  --fg:#e8f5e8; --fg2:#4a6e52; --red:#f43f5e; --red-d:rgba(244,63,94,.13);
+  --r:16px; --disp:'Barlow Condensed',sans-serif; --trk:.01em;
+  --btn-fam:'Inter',sans-serif; --btn-sz:14px; --btn-up:none; --btn-trk:0;
+  color-scheme:dark;
+}
+[data-v="3"] {
+  --bg:#0f0f0f; --surf:#171717; --surf-m:rgba(212,255,0,.06); --brd:#2a2a2a;
+  --brd-m:#d4ff00; --acc:#d4ff00; --acc-fg:#0f0f0f; --acc-dim:rgba(212,255,0,.1);
+  --fg:#f0f0f0; --fg2:#555; --red:#ff5252; --red-d:rgba(255,82,82,.12);
+  --r:6px; --disp:'Rajdhani',sans-serif; --trk:.1em;
+  --btn-fam:'Rajdhani',sans-serif; --btn-sz:14px; --btn-up:uppercase; --btn-trk:.08em;
+  color-scheme:dark;
+}
+[data-v="4"] {
+  --bg:#070910; --surf:#0d1019; --surf-m:rgba(147,210,60,.08); --brd:#1a2040;
+  --brd-m:#93d23c; --acc:#93d23c; --acc-fg:#070910; --acc-dim:rgba(147,210,60,.1);
+  --fg:#d8e4f8; --fg2:#4a5a80; --red:#f87171; --red-d:rgba(248,113,113,.12);
+  --r:14px; --disp:'Russo One',sans-serif; --trk:.02em;
+  --btn-fam:'Inter',sans-serif; --btn-sz:14px; --btn-up:none; --btn-trk:0;
+  color-scheme:dark;
+}
+[data-v="5"] {
+  --bg:#0b0c08; --surf:#151610; --surf-m:rgba(132,204,22,.08); --brd:#262818;
+  --brd-m:#84cc16; --acc:#84cc16; --acc-fg:#0b0c08; --acc-dim:rgba(132,204,22,.09);
+  --fg:#f0ede0; --fg2:#5e5c4a; --red:#fb7185; --red-d:rgba(251,113,133,.12);
+  --r:18px; --disp:'Chakra Petch',sans-serif; --trk:.04em;
+  --btn-fam:'Inter',sans-serif; --btn-sz:14px; --btn-up:none; --btn-trk:0;
+  color-scheme:dark;
+}
+
+/* ── RESET ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0 }
+
+html { height:100% }
+
+body {
+  font-family:'Inter',sans-serif;
+  font-size:15px;
+  line-height:1.5;
+  background:var(--bg);
+  color:var(--fg);
+  min-height:100%;
+  padding-left:max(20px,env(safe-area-inset-left,0px));
+  padding-right:max(20px,env(safe-area-inset-right,0px));
+  padding-bottom:56px;
+  transition:background .18s;
+}
+body::before {
+  content:"";
+  position:fixed;
+  inset:0 0 auto;
+  height:env(safe-area-inset-top,0px);
+  z-index:30;
+  background:var(--bg);
+  transition:background .18s;
+}
+
+/* ── TAB BAR ────────────────────────────────────────────────────────── */
+.tabs {
+  position:sticky;
+  top:env(safe-area-inset-top,0px);
+  z-index:20;
+  display:flex;
+  gap:6px;
+  padding:12px 0;
+  background:var(--bg);
+  border-bottom:1px solid var(--brd);
+  overflow-x:auto;
+  scrollbar-width:none;
+  transition:background .18s, border-color .18s;
+  margin-bottom:28px;
+}
+.tabs::-webkit-scrollbar { display:none }
+
+.tab {
+  flex-shrink:0;
+  padding:7px 16px;
+  border-radius:100px;
+  border:1px solid var(--brd);
+  background:transparent;
+  color:var(--fg2);
+  font-family:'Inter',sans-serif;
+  font-size:13px;
+  font-weight:500;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:all .15s;
+}
+.tab.on { background:var(--acc); border-color:var(--acc); color:var(--acc-fg); font-weight:600 }
+
+/* ── APP CONTENT ────────────────────────────────────────────────────── */
+.wrap { max-width:560px; margin:0 auto }
+
+h1 {
+  font-family:var(--disp);
+  font-size:clamp(32px,9vw,50px);
+  letter-spacing:var(--trk);
+  color:var(--fg);
+  line-height:1;
+  text-wrap:balance;
+  margin-bottom:6px;
+  text-transform:uppercase;
+  transition:font-family .18s;
+}
+[data-v="4"] h1 { text-transform:none }
+[data-v="5"] h1 { text-transform:none }
+
+.date { font-size:14px; color:var(--fg2); margin-bottom:18px; text-transform:capitalize }
+
+.announce {
+  font-size:14px;
+  color:var(--acc);
+  background:var(--acc-dim);
+  border:1px solid color-mix(in srgb,var(--acc) 25%,transparent);
+  border-radius:var(--r);
+  padding:12px 16px;
+  margin-bottom:18px;
+  line-height:1.45;
+  transition:all .18s;
+}
+[data-v="2"] .announce { font-family:var(--disp); font-style:italic; font-weight:700; font-size:17px }
+[data-v="3"] .announce { border-left:3px solid var(--acc); border-top:none; border-right:none; border-bottom:none; border-radius:0; background:var(--acc-dim); font-family:var(--disp); font-weight:600; letter-spacing:.04em }
+[data-v="5"] .announce { font-family:var(--disp); font-style:italic }
+
+.pill {
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:6px 14px;
+  border-radius:100px;
+  background:var(--acc-dim);
+  border:1px solid color-mix(in srgb,var(--acc) 30%,transparent);
+  font-size:11px;
+  font-weight:600;
+  color:var(--acc);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  margin-bottom:24px;
+}
+[data-v="3"] .pill { border-radius:2px }
+.dot { width:6px; height:6px; border-radius:50%; background:var(--acc); flex-shrink:0 }
+
+/* ── SLOTS ──────────────────────────────────────────────────────────── */
+.slots { display:flex; flex-direction:column; gap:12px }
+
+.slot {
+  background:var(--surf);
+  border:1px solid var(--brd);
+  border-radius:var(--r);
+  padding:20px;
+  transition:all .18s;
+}
+.slot.mine { background:var(--surf-m); border-color:var(--brd-m) }
+[data-v="3"] .slot.mine { border-left-width:3px }
+[data-v="4"] .slot { border-width:1.5px }
+
+.slot-top { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px }
+
+.time {
+  font-family:var(--disp);
+  font-size:clamp(36px,9vw,44px);
+  letter-spacing:var(--trk);
+  color:var(--fg);
+  line-height:1;
+}
+.cnt { font-size:13px; color:var(--fg2); font-variant-numeric:tabular-nums }
+[data-v="3"] .cnt { text-transform:uppercase; letter-spacing:.05em; font-size:12px }
+
+.mine-lbl { font-size:14px; font-weight:600; color:var(--acc); margin-bottom:12px }
+[data-v="3"] .mine-lbl { text-transform:uppercase; letter-spacing:.08em; font-size:12px }
+
+.btns { display:flex; flex-direction:column; gap:8px }
+
+.btn {
+  width:100%;
+  padding:13px 16px;
+  border-radius:calc(var(--r) - 3px);
+  font-family:var(--btn-fam);
+  font-size:var(--btn-sz);
+  font-weight:600;
+  text-transform:var(--btn-up);
+  letter-spacing:var(--btn-trk);
+  cursor:pointer;
+  border:none;
+  line-height:1;
+  text-align:center;
+  transition:opacity .15s;
+}
+.btn:active { opacity:.7 }
+.btn-p { background:var(--acc); color:var(--acc-fg) }
+.btn-s { background:transparent; border:1px solid var(--acc); color:var(--acc) }
+.btn-c { background:var(--red-d); border:1px solid color-mix(in srgb,var(--red) 35%,transparent); color:var(--red) }
+[data-v="4"] .btn-s, [data-v="4"] .btn-c { border-width:1.5px }
+</style>
+
+<div data-v="1" id="root">
+
+  <div class="tabs" id="tabs">
+    <button class="tab on" onclick="setV(1)">Neon Black</button>
+    <button class="tab"    onclick="setV(2)">Deep Forest</button>
+    <button class="tab"    onclick="setV(3)">Carbon Volt</button>
+    <button class="tab"    onclick="setV(4)">Midnight</button>
+    <button class="tab"    onclick="setV(5)">Motion Pro</button>
+  </div>
+
+  <div class="wrap">
+    <h1>Наступне тренування</h1>
+    <p class="date">п'ятниця, 24 жовтня</p>
+
+    <div class="announce">Дівчата, записуємось на ноги сьогодні! 💪🍑</div>
+
+    <div class="pill"><span class="dot"></span>Запис відкрито</div>
+
+    <div class="slots">
+      <div class="slot mine">
+        <div class="slot-top">
+          <span class="time">19:00</span>
+          <span class="cnt">5 / 8 місць</span>
+        </div>
+        <div class="mine-lbl">✓ Моє місце</div>
+        <div class="btns">
+          <button class="btn btn-s">Перейти на 20:00</button>
+          <button class="btn btn-c">Скасувати</button>
+        </div>
+      </div>
+
+      <div class="slot">
+        <div class="slot-top">
+          <span class="time">20:00</span>
+          <span class="cnt">3 / 8 місць</span>
+        </div>
+        <div class="btns">
+          <button class="btn btn-p">Записатись</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function setV(n) {
+  document.getElementById('root').dataset.v = n;
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('on', i+1===n));
+}
+</script>
