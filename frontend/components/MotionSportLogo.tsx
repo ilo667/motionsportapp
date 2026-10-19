@@ -5,13 +5,13 @@ export function MotionSportLogo({ className = "w-[150px] h-[150px]" }: { white?:
   return (
     <Link href="/">
       <Image
-        src="/motion-sport-logo.jpg"
+        src="/motion-sport-logo.png"
         alt="Motion Sport"
         width={150}
         height={150}
         quality={100}
         priority
-        className={`rounded-full object-cover ${className}`}
+        className={className}
       />
     </Link>
   );
