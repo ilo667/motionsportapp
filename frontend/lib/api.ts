@@ -31,6 +31,7 @@ export interface SlotView {
   capacity: number;
   bookedCount: number;
   isMyBooking: boolean;
+  isMyVacancyAlert?: boolean;
 }
 
 export interface ScheduleNext {
@@ -145,4 +146,25 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
+
+  getVapidPublicKey: () =>
+    request<{ publicKey: string }>("/push/vapid-public-key"),
+
+  subscribePush: (sub: { endpoint: string; p256dh: string; auth: string }) =>
+    request<{ ok: boolean }>("/push/subscriptions", {
+      method: "POST",
+      body: JSON.stringify(sub),
+    }),
+
+  unsubscribePush: (endpoint: string) =>
+    request<{ ok: boolean }>("/push/subscriptions", {
+      method: "DELETE",
+      body: JSON.stringify({ endpoint }),
+    }),
+
+  subscribeVacancy: (slotId: string) =>
+    request<{ ok: boolean }>(`/slots/${slotId}/vacancy-alert`, { method: "PUT" }),
+
+  unsubscribeVacancy: (slotId: string) =>
+    request<{ ok: boolean }>(`/slots/${slotId}/vacancy-alert`, { method: "DELETE" }),
 };

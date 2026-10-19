@@ -7,6 +7,7 @@ interface SlotCardProps {
   bookingWindowOpen: boolean;
   afterWindow: boolean;
   onMutate: (fn: () => Promise<unknown>) => void;
+  onRefresh: () => void;
 }
 
 export function SlotCard({
@@ -15,6 +16,7 @@ export function SlotCard({
   bookingWindowOpen,
   afterWindow,
   onMutate,
+  onRefresh,
 }: SlotCardProps) {
   const otherSlot = allSlots.find(
     (s) => s.id !== slot.id && s.status === "ACTIVE"
@@ -85,12 +87,23 @@ export function SlotCard({
       ) : (
         <div className="flex flex-col space-y-2">
           <p className="text-muted text-sm font-medium">Місць немає</p>
-          <button
-            disabled
-            className="w-full py-3 rounded-[8px] border border-line text-muted text-sm cursor-not-allowed"
-          >
-            Сповістити про вільне місце
-          </button>
+          {bookingWindowOpen && (
+            slot.isMyVacancyAlert ? (
+              <button
+                onClick={async () => { await onMutate(() => api.unsubscribeVacancy(slot.id)); onRefresh(); }}
+                className="w-full py-3 rounded-[8px] border border-teal text-teal text-sm hover:bg-teal/10 transition-colors"
+              >
+                🔔 Сповіщення увімкнено
+              </button>
+            ) : (
+              <button
+                onClick={async () => { await onMutate(() => api.subscribeVacancy(slot.id)); onRefresh(); }}
+                className="w-full py-3 rounded-[8px] border border-line text-muted hover:border-teal hover:text-teal text-sm transition-colors"
+              >
+                🔕 Сповістити про вільне місце
+              </button>
+            )
+          )}
         </div>
       )}
     </div>

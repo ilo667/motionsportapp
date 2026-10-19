@@ -6,13 +6,17 @@ import { trainingDays, trainingSlots, bookings, members, attendance } from '../d
 import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
 import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { NotificationService } from '../notifications/notification.service';
 
 const SLOT_TIMES = ['19:00', '20:00'];
 const KY_ZONE = 'Europe/Kyiv';
 
 @Injectable()
 export class AdminScheduleService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly notifications: NotificationService,
+  ) {}
 
   async getSchedule() {
     const now = DateTime.now().setZone(KY_ZONE);
@@ -123,12 +127,18 @@ export class AdminScheduleService {
 
     if (dto.status === 'CANCELLED') {
       const daySlots = await this.database.db
-        .select({ id: trainingSlots.id })
+        .select({ id: trainingSlots.id, slotTime: trainingSlots.slotTime })
         .from(trainingSlots)
         .where(eq(trainingSlots.trainingDayId, day.id));
 
       if (daySlots.length > 0) {
         const daySlotIds = daySlots.map((s) => s.id);
+
+        const affectedBookings = await this.database.db
+          .select({ memberId: bookings.memberId, slotId: bookings.slotId })
+          .from(bookings)
+          .where(and(inArray(bookings.slotId, daySlotIds), eq(bookings.status, 'ACTIVE')));
+
         await this.database.db.transaction(async (tx) => {
           await tx
             .update(bookings)
@@ -140,6 +150,19 @@ export class AdminScheduleService {
             .set({ status: 'CANCELLED', bookedCount: 0, cancelledAt: new Date() })
             .where(inArray(trainingSlots.id, daySlotIds));
         });
+
+        for (const slot of daySlots) {
+          const memberIds = affectedBookings
+            .filter((b) => b.slotId === slot.id)
+            .map((b) => b.memberId);
+          if (memberIds.length > 0) {
+            await this.notifications.enqueueAndProcess('SLOT_CANCELLED', `slot-cancelled:${slot.id}:${date}`, {
+              memberIds,
+              slotTime: slot.slotTime,
+              localDate: date,
+            });
+          }
+        }
       }
     }
 
@@ -162,6 +185,11 @@ export class AdminScheduleService {
     if (!slot) throw new NotFoundException('Slot not found');
 
     if (dto.status === 'CANCELLED' && slot.status === 'ACTIVE') {
+      const affectedBookings = await this.database.db
+        .select({ memberId: bookings.memberId })
+        .from(bookings)
+        .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
+
       await this.database.db.transaction(async (tx) => {
         await tx
           .update(bookings)
@@ -173,6 +201,22 @@ export class AdminScheduleService {
           .set({ status: 'CANCELLED', bookedCount: 0, cancelledAt: new Date() })
           .where(eq(trainingSlots.id, slotId));
       });
+
+      const memberIds = affectedBookings.map((b) => b.memberId);
+      if (memberIds.length > 0) {
+        const [day] = await this.database.db
+          .select({ localDate: trainingDays.localDate })
+          .from(trainingDays)
+          .where(eq(trainingDays.id, slot.trainingDayId))
+          .limit(1);
+        if (day) {
+          await this.notifications.enqueueAndProcess('SLOT_CANCELLED', `slot-cancelled:${slotId}:${day.localDate}`, {
+            memberIds,
+            slotTime: slot.slotTime,
+            localDate: day.localDate,
+          });
+        }
+      }
     } else {
       await this.database.db
         .update(trainingSlots)

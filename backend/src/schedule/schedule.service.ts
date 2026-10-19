@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { and, eq, gte, lte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { trainingDays, trainingSlots, bookings } from '../database/schema';
+import { trainingDays, trainingSlots, bookings, vacancyAlerts } from '../database/schema';
 
 const KY_ZONE = 'Europe/Kyiv';
 const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
@@ -54,6 +54,8 @@ export class ScheduleService {
       .orderBy(trainingSlots.slotTime);
 
     let myBookingSlotId: string | null = null;
+    const myVacancyAlertSlotIds = new Set<string>();
+
     if (memberId) {
       const [mine] = await this.database.db
         .select({ slotId: bookings.slotId })
@@ -67,6 +69,21 @@ export class ScheduleService {
         )
         .limit(1);
       myBookingSlotId = mine?.slotId ?? null;
+
+      const slotIds = slots.map((s) => s.id);
+      if (slotIds.length > 0) {
+        const alerts = await this.database.db
+          .select({ slotId: vacancyAlerts.slotId })
+          .from(vacancyAlerts)
+          .where(
+            and(
+              eq(vacancyAlerts.memberId, memberId),
+              eq(vacancyAlerts.active, true),
+              inArray(vacancyAlerts.slotId, slotIds),
+            ),
+          );
+        alerts.forEach((a) => myVacancyAlertSlotIds.add(a.slotId));
+      }
     }
 
     return {
@@ -82,6 +99,7 @@ export class ScheduleService {
         capacity: s.capacity,
         bookedCount: s.bookedCount,
         isMyBooking: s.id === myBookingSlotId,
+        isMyVacancyAlert: myVacancyAlertSlotIds.has(s.id),
       })),
       serverTime: now.toUTC().toISO(),
     };

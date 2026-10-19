@@ -8,12 +8,16 @@ import { DateTime } from 'luxon';
 import { eq, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { bookings, trainingSlots, trainingDays } from '../database/schema';
+import { NotificationService } from '../notifications/notification.service';
 
 const KY_ZONE = 'Europe/Kyiv';
 
 @Injectable()
 export class BookingService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly notifications: NotificationService,
+  ) {}
 
   async book(memberId: string, slotId: string) {
     const [slot] = await this.database.db
@@ -100,6 +104,14 @@ export class BookingService {
 
     if (day) this.validateBeforeClose(day.localDate);
 
+    const [slotBefore] = await this.database.db
+      .select({ bookedCount: trainingSlots.bookedCount, capacity: trainingSlots.capacity, slotTime: trainingSlots.slotTime })
+      .from(trainingSlots)
+      .where(eq(trainingSlots.id, booking.slotId))
+      .limit(1);
+
+    const wasAtCapacity = slotBefore && slotBefore.bookedCount >= slotBefore.capacity;
+
     await this.database.db.transaction(async (tx) => {
       await tx
         .update(bookings)
@@ -111,6 +123,16 @@ export class BookingService {
         .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - 1, 0)` })
         .where(eq(trainingSlots.id, booking.slotId));
     });
+
+    if (wasAtCapacity && day) {
+      const dedupeKey = `vacancy:${booking.slotId}:${booking.id}`;
+      await this.notifications.enqueueAndProcess('VACANCY', dedupeKey, {
+        slotId: booking.slotId,
+        slotTime: slotBefore.slotTime,
+        localDate: day.localDate,
+        excludeMemberId: booking.memberId,
+      });
+    }
 
     return { ok: true };
   }
