@@ -23,6 +23,7 @@ export function SlotCard({
     !!otherSlot && otherSlot.bookedCount < otherSlot.capacity;
 
   const isFull = slot.bookedCount >= slot.capacity;
+  const hasAnyBooking = allSlots.some((s) => s.isMyBooking);
 
   const cardClass = slot.isMyBooking
     ? "bg-teal/5 border-teal"
@@ -72,6 +73,8 @@ export function SlotCard({
             Скасувати
           </button>
         </div>
+      ) : hasAnyBooking ? (
+        <p className="text-muted text-sm">Ви вже записані на інший час</p>
       ) : !isFull ? (
         <button
           onClick={() => onMutate(() => api.book(slot.id))}
