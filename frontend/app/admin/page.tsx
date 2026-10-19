@@ -125,7 +125,7 @@ export default function AdminPage() {
           {formatLocalDate(schedule.localDate)}
         </p>
 
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center space-x-2 mb-6">
           {schedule.status === "CANCELLED" ? (
             <span className="text-xs text-danger bg-danger/10 border border-danger/30 rounded-full px-2 py-0.5">
               День скасовано
@@ -172,7 +172,7 @@ export default function AdminPage() {
                 <p className="text-danger text-sm">
                   Скасувати тренування {formatLocalDate(schedule.localDate)}? Всі записи буде відмінено.
                 </p>
-                <div className="flex gap-2">
+                <div className="flex space-x-2">
                   <button
                     onClick={handleCancelDay}
                     className="flex-1 py-2.5 rounded-[6px] bg-danger text-white text-sm font-medium hover:opacity-90 transition-colors"

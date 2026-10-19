@@ -75,7 +75,7 @@ export default function RegisterPage() {
 
           <div>
             <p className="text-muted text-xs mb-1">Код відновлення</p>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between space-x-2">
               <span className="font-mono text-sm text-body break-all">
                 {result.recoveryCode}
               </span>

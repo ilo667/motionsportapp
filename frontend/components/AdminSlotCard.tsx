@@ -34,8 +34,7 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
       <div className="flex items-center justify-between mb-3">
         <span className="font-geologica font-semibold text-[22px] text-heading">
           {slot.slotTime}
-        </span>
-        <div className="flex items-center gap-3">
+        </span><div className="flex items-center space-x-3">
           {belowMin && (
             <span className="text-xs text-muted bg-surface border border-line rounded-full px-2 py-0.5">
               мало учасників
@@ -56,7 +55,7 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
           ) : (
             <ul className="mb-3 space-y-2">
               {slot.participants.map((p) => (
-                <li key={p.bookingId} className="flex items-center justify-between gap-2">
+                <li key={p.bookingId} className="flex items-center justify-between space-x-2">
                   <span className="text-body text-sm">{p.displayName}</span>
                   <button
                     onClick={() =>
@@ -74,7 +73,7 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
             </ul>
           )}
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col space-y-2">
             {slot.participants.length > 0 && (
               <button
                 onClick={() => onMutate(() => api.markAllAttendance(slot.id))}
@@ -96,7 +95,7 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
                 <p className="text-danger text-xs">
                   Скасувати слот {slot.slotTime}? Всі записи буде відмінено.
                 </p>
-                <div className="flex gap-2">
+                <div className="flex space-x-2">
                   <button
                     onClick={() => {
                       setConfirmCancel(false);

@@ -55,7 +55,7 @@ export function SlotCard({
           Запис відкриється о 14:00
         </button>
       ) : slot.isMyBooking ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col space-y-2">
           <p className="text-teal font-medium text-sm mb-1">✓ Моє місце</p>
           {canSwitch && (
             <button
@@ -80,7 +80,7 @@ export function SlotCard({
           Записатись
         </button>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col space-y-2">
           <p className="text-muted text-sm font-medium">Місць немає</p>
           <button
             disabled
