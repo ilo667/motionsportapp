@@ -5,7 +5,7 @@ export function MotionGymLogo({ className = "w-[150px] h-[150px]" }: { white?: b
   return (
     <Link href="/">
       <Image
-        src="/motion-sport-logo.png"
+        src="/motion-gym-logo.png"
         alt="Motion Gym"
         width={150}
         height={150}

@@ -6,6 +6,6 @@
   "background_color": "#ffffff",
   "theme_color": "#116a73",
   "icons": [
-    { "src": "/motion-sport-logo.png", "sizes": "1254x1254", "type": "image/png" }
+    { "src": "/motion-gym-logo.png", "sizes": "1254x1254", "type": "image/png" }
   ]
 }
