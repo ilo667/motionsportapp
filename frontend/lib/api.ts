@@ -16,42 +16,75 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export interface Question { id: number; prompt: string; position: number }
-export interface QuizData { versionId: number; questions: Question[] }
-export interface AttemptResult { attemptToken: string; result: "HIGH" | "LOW"; score: number; maxScore: number }
-export interface LatestAttempt { result: "HIGH" | "LOW"; score: number; maxScore: number; completedAt: string }
-interface User { id: number; email: string }
-export interface AuthResponse { user: User; latestAttempt: LatestAttempt | null }
+export interface MeResponse {
+  type: "member" | "admin";
+  id: string;
+  memberCode?: string;
+  displayName?: string;
+  username?: string;
+}
+
+export interface SlotView {
+  id: string;
+  slotTime: "19:00" | "20:00";
+  status: "ACTIVE" | "CANCELLED";
+  capacity: number;
+  bookedCount: number;
+  isMyBooking: boolean;
+}
+
+export interface ScheduleNext {
+  localDate: string;
+  status: string;
+  bookingWindowOpen: boolean;
+  bookingOpenAt: string;
+  bookingCloseAt: string;
+  slots: SlotView[];
+  serverTime: string;
+}
+
+export interface RegisterResponse {
+  memberCode: string;
+  recoveryCode: string;
+}
+
+export interface LoginResponse {
+  memberCode: string;
+  displayName: string;
+}
 
 export const api = {
-  getActiveQuiz: () => request<QuizData>("/quiz/active"),
+  me: () => request<MeResponse>("/auth/me"),
 
-  submitAttempt: (versionId: number, answers: { questionId: number; value: number }[]) =>
-    request<AttemptResult>("/quiz/attempts", {
+  register: (displayName: string, pin: string) =>
+    request<RegisterResponse>("/auth/member/register", {
       method: "POST",
-      body: JSON.stringify({ versionId, answers }),
+      body: JSON.stringify({ displayName, pin }),
     }),
 
-  register: (email: string, password: string, attemptToken?: string) =>
-    request<AuthResponse>("/auth/register", {
+  login: (memberCode: string, pin: string) =>
+    request<LoginResponse>("/auth/member/login", {
       method: "POST",
-      body: JSON.stringify({ email, password, attemptToken }),
-    }),
-
-  login: (email: string, password: string) =>
-    request<AuthResponse>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
-
-  getMe: () => request<AuthResponse>("/auth/customer"),
-
-  linkAttempt: (attemptToken: string) =>
-    request<AuthResponse>("/auth/link-attempt", {
-      method: "POST",
-      body: JSON.stringify({ attemptToken }),
+      body: JSON.stringify({ memberCode, pin }),
     }),
 
   logout: () =>
     request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+
+  getScheduleNext: () => request<ScheduleNext>("/schedule/next"),
+
+  book: (slotId: string) =>
+    request<{ ok: boolean }>("/bookings", {
+      method: "POST",
+      body: JSON.stringify({ slotId }),
+    }),
+
+  cancelBooking: () =>
+    request<{ ok: boolean }>("/bookings/current", { method: "DELETE" }),
+
+  switchSlot: (newSlotId: string) =>
+    request<{ ok: boolean }>("/bookings/current", {
+      method: "PATCH",
+      body: JSON.stringify({ newSlotId }),
+    }),
 };
