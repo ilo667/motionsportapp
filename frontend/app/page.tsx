@@ -133,7 +133,7 @@ export default function SchedulePage() {
           </div>
         )}
 
-        <div className="grid gap-4">
+        <div className="flex flex-col space-y-4">
           {schedule.slots.map((slot) => (
             <SlotCard
               key={slot.id}

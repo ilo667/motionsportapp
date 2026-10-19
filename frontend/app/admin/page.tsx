@@ -145,7 +145,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        <div className="grid gap-4 mb-6">
+        <div className="flex flex-col space-y-4 mb-6">
           {schedule.slots.map((slot) => (
             <AdminSlotCard key={slot.id} slot={slot} onMutate={handleMutate} />
           ))}
