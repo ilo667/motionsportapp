@@ -16,7 +16,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Motion Sport",
+  title: "Motion Gym",
   description: "Запис на тренування",
   manifest: "/manifest.json",
 };
