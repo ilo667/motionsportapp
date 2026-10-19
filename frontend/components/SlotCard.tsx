@@ -1,5 +1,6 @@
 "use client";
 import { api, SlotView } from "@/lib/api";
+import { ensurePushSubscribed } from "@/lib/pushUtils";
 
 interface SlotCardProps {
   slot: SlotView;
@@ -97,7 +98,11 @@ export function SlotCard({
               </button>
             ) : (
               <button
-                onClick={async () => { await onMutate(() => api.subscribeVacancy(slot.id)); onRefresh(); }}
+                onClick={async () => {
+                  await ensurePushSubscribed();
+                  await onMutate(() => api.subscribeVacancy(slot.id));
+                  onRefresh();
+                }}
                 className="w-full py-3 rounded-[8px] border border-line text-muted hover:border-teal hover:text-teal text-sm transition-colors"
               >
                 🔕 Сповістити про вільне місце
