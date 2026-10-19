@@ -3,7 +3,6 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ScheduleNext } from "@/lib/api";
 import { SlotCard } from "@/components/SlotCard";
-import { PushSubscribeButton } from "@/components/PushSubscribeButton";
 
 function formatLocalDate(localDate: string): string {
   const date = new Date(localDate + "T12:00:00");
@@ -117,12 +116,9 @@ export default function SchedulePage() {
           </button>
         </div>
 
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-muted text-sm capitalize">
-            {formatLocalDate(schedule.localDate)}
-          </p>
-          <PushSubscribeButton />
-        </div>
+        <p className="text-muted text-sm mb-6 capitalize">
+          {formatLocalDate(schedule.localDate)}
+        </p>
 
         {beforeWindow && (
           <div className="bg-surface rounded-[10px] px-4 py-3 mb-6 text-sm text-body">
