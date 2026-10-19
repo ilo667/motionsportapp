@@ -29,6 +29,7 @@ export default function SchedulePage() {
     } catch (err: unknown) {
       if ((err as { status?: number }).status === 401 && !authedRef.current) {
         router.push("/login");
+        throw err;
       }
     }
   }, [router]);
@@ -43,7 +44,7 @@ export default function SchedulePage() {
       authedRef.current = true;
       setLoading(false);
       startPolling();
-    });
+    }).catch(() => {});
 
     const onVisibility = () => {
       if (document.hidden) {
