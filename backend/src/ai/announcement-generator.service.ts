@@ -48,7 +48,7 @@ ${topic ? `Тема тренування: ${topic}` : 'Загальне запр
 
     const start = Date.now();
     try {
-      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+      const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
       const result = await model.generateContent(prompt);
       const latencyMs = Date.now() - start;
       const raw = result.response.text().trim().replace(/\n+/g, ' ');
