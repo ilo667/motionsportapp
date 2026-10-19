@@ -2,9 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const FALLBACK_TEXT = 'Записуйтесь на тренування! 💪 Чекаємо вас сьогодні.';
+const GEMINI_MODEL = 'gemini-3.5-flash-lite';
 
 export interface GenerateResult {
   text: string;
+  model: string;
   source: 'ai' | 'fallback';
   latencyMs?: number;
   tokenUsage?: number;
@@ -25,7 +27,7 @@ export class AnnouncementGeneratorService {
   async generate(examples: string[], topic?: string | null): Promise<GenerateResult> {
     const ai = this.ensureInit();
     if (!ai) {
-      return { text: FALLBACK_TEXT, source: 'fallback', fallbackReason: 'GEMINI_API_KEY not set' };
+      return { text: FALLBACK_TEXT, model: GEMINI_MODEL, source: 'fallback', fallbackReason: 'GEMINI_API_KEY not set' };
     }
 
     const examplesText =
@@ -48,21 +50,21 @@ ${topic ? `Тема тренування: ${topic}` : 'Загальне запр
 
     const start = Date.now();
     try {
-      const model = ai.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
-      const result = await model.generateContent(prompt);
+      const geminiModel = ai.getGenerativeModel({ model: GEMINI_MODEL });
+      const result = await geminiModel.generateContent(prompt);
       const latencyMs = Date.now() - start;
       const raw = result.response.text().trim().replace(/\n+/g, ' ');
       const text = raw.substring(0, 300);
       const tokenUsage = result.response.usageMetadata?.totalTokenCount;
 
       if (!text) {
-        return { text: FALLBACK_TEXT, source: 'fallback', fallbackReason: 'empty response', latencyMs };
+        return { text: FALLBACK_TEXT, model: GEMINI_MODEL, source: 'fallback', fallbackReason: 'empty response', latencyMs };
       }
-      return { text, source: 'ai', latencyMs, tokenUsage };
+      return { text, model: GEMINI_MODEL, source: 'ai', latencyMs, tokenUsage };
     } catch (err) {
       const latencyMs = Date.now() - start;
       const fallbackReason = err instanceof Error ? err.message.substring(0, 200) : String(err).substring(0, 200);
-      return { text: FALLBACK_TEXT, source: 'fallback', fallbackReason, latencyMs };
+      return { text: FALLBACK_TEXT, model: GEMINI_MODEL, source: 'fallback', fallbackReason, latencyMs };
     }
   }
 }

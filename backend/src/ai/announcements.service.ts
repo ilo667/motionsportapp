@@ -84,7 +84,7 @@ export class AnnouncementsService {
     await this.database.db.insert(aiGenerations).values({
       announcementId: ann.id,
       provider: 'google',
-      model: 'gemini-3.5-flash-lite',
+      model: result.model,
       promptVersion: 'v1',
       latencyMs: result.latencyMs ?? null,
       tokenUsage: result.tokenUsage ?? null,
@@ -162,7 +162,7 @@ export class AnnouncementsService {
     await this.database.db.insert(aiGenerations).values({
       announcementId: ann.id,
       provider: 'google',
-      model: 'gemini-3.5-flash-lite',
+      model: result.model,
       promptVersion: 'v1',
       latencyMs: result.latencyMs ?? null,
       tokenUsage: result.tokenUsage ?? null,
