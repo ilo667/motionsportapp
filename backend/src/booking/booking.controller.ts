@@ -4,6 +4,7 @@ import { SessionGuard } from '../auth/session.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { SessionUser } from '../auth/session.guard';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { SwitchBookingDto } from './dto/switch-booking.dto';
 
 @Controller('bookings')
@@ -19,15 +20,15 @@ export class BookingController {
 
   @Delete('current')
   @HttpCode(HttpStatus.OK)
-  async cancelCurrent(@CurrentUser() user: SessionUser) {
+  async cancelCurrent(@CurrentUser() user: SessionUser, @Body() dto: CancelBookingDto) {
     if (user.type !== 'member') throw new Error('Members only');
-    return this.bookingService.cancelCurrent(user.id);
+    return this.bookingService.cancelCurrent(user.id, dto.reason, new Date(dto.reasonAt));
   }
 
   @Patch('current')
   @HttpCode(HttpStatus.OK)
   async switchSlot(@CurrentUser() user: SessionUser, @Body() dto: SwitchBookingDto) {
     if (user.type !== 'member') throw new Error('Members only');
-    return this.bookingService.switchSlot(user.id, dto.newSlotId);
+    return this.bookingService.switchSlot(user.id, dto.newSlotId, dto.reason, new Date(dto.reasonAt));
   }
 }

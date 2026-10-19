@@ -87,7 +87,7 @@ export class BookingService {
     return { ok: true };
   }
 
-  async cancelCurrent(memberId: string) {
+  async cancelCurrent(memberId: string, reason: string, reasonAt: Date) {
     const [booking] = await this.database.db
       .select()
       .from(bookings)
@@ -115,7 +115,7 @@ export class BookingService {
     await this.database.db.transaction(async (tx) => {
       await tx
         .update(bookings)
-        .set({ status: 'CANCELLED', cancelledAt: new Date() })
+        .set({ status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason, cancellationReasonAt: reasonAt })
         .where(and(eq(bookings.id, booking.id), eq(bookings.status, 'ACTIVE')));
 
       await tx
@@ -137,7 +137,7 @@ export class BookingService {
     return { ok: true };
   }
 
-  async switchSlot(memberId: string, newSlotId: string) {
+  async switchSlot(memberId: string, newSlotId: string, reason: string, reasonAt: Date) {
     const [current] = await this.database.db
       .select()
       .from(bookings)
@@ -192,7 +192,7 @@ export class BookingService {
 
         await tx
           .update(bookings)
-          .set({ status: 'CANCELLED', cancelledAt: new Date() })
+          .set({ status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason, cancellationReasonAt: reasonAt })
           .where(eq(bookings.id, current.id));
 
         await tx.insert(bookings).values({

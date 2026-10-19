@@ -125,13 +125,16 @@ export const api = {
       body: JSON.stringify({ slotId }),
     }),
 
-  cancelBooking: () =>
-    request<{ ok: boolean }>("/bookings/current", { method: "DELETE" }),
+  cancelBooking: (reason: string, reasonAt: Date) =>
+    request<{ ok: boolean }>("/bookings/current", {
+      method: "DELETE",
+      body: JSON.stringify({ reason, reasonAt: reasonAt.toISOString() }),
+    }),
 
-  switchSlot: (newSlotId: string) =>
+  switchSlot: (newSlotId: string, reason: string, reasonAt: Date) =>
     request<{ ok: boolean }>("/bookings/current", {
       method: "PATCH",
-      body: JSON.stringify({ newSlotId }),
+      body: JSON.stringify({ newSlotId, reason, reasonAt: reasonAt.toISOString() }),
     }),
 
   adminLogin: (username: string, password: string) =>

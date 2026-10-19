@@ -80,6 +80,8 @@ export const bookings = pgTable(
     status: text('status').notNull().default('ACTIVE'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    cancellationReason: text('cancellation_reason'),
+    cancellationReasonAt: timestamp('cancellation_reason_at', { withTimezone: true }),
   },
   (table) => [
     uniqueIndex('bookings_member_day_active_idx')

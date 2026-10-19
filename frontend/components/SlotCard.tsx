@@ -1,6 +1,8 @@
 "use client";
+import { useState } from "react";
 import { api, SlotView } from "@/lib/api";
 import { ensurePushSubscribed } from "@/lib/pushUtils";
+import { CancellationReasonModal } from "./CancellationReasonModal";
 
 interface SlotCardProps {
   slot: SlotView;
@@ -19,6 +21,12 @@ export function SlotCard({
   onMutate,
   onRefresh,
 }: SlotCardProps) {
+  const [modal, setModal] = useState<
+    | { action: "cancel" }
+    | { action: "switch"; targetSlot: SlotView }
+    | null
+  >(null);
+
   const otherSlot = allSlots.find(
     (s) => s.id !== slot.id && s.status === "ACTIVE"
   );
@@ -35,6 +43,7 @@ export function SlotCard({
     : "bg-white border-line";
 
   return (
+    <>
     <div className={`rounded-[12px] border p-5 ${cardClass}`}>
       <div className="flex items-center justify-between mb-4">
         <span className="font-geologica font-semibold text-[22px] text-heading">
@@ -63,14 +72,14 @@ export function SlotCard({
           <p className="text-teal font-medium text-sm mb-1">✓ Моє місце</p>
           {canSwitch && (
             <button
-              onClick={() => onMutate(() => api.switchSlot(otherSlot!.id))}
+              onClick={() => setModal({ action: "switch", targetSlot: otherSlot! })}
               className="w-full py-3 rounded-[8px] border border-teal text-teal hover:bg-teal/10 text-sm transition-colors"
             >
               Перейти на {otherSlot!.slotTime}
             </button>
           )}
           <button
-            onClick={() => onMutate(() => api.cancelBooking())}
+            onClick={() => setModal({ action: "cancel" })}
             className="w-full py-3 rounded-[8px] bg-danger text-white hover:opacity-90 text-sm transition-colors"
           >
             Скасувати
@@ -112,5 +121,23 @@ export function SlotCard({
         </div>
       )}
     </div>
+
+    {modal && (
+      <CancellationReasonModal
+        action={modal.action}
+        switchTime={modal.action === "switch" ? modal.targetSlot.slotTime : undefined}
+        onDismiss={() => setModal(null)}
+        onConfirm={async (reason, reasonAt) => {
+          setModal(null);
+          if (modal.action === "cancel") {
+            await onMutate(() => api.cancelBooking(reason, reasonAt));
+          } else {
+            await onMutate(() => api.switchSlot(modal.targetSlot.id, reason, reasonAt));
+            onRefresh();
+          }
+        }}
+      />
+    )}
+    </>
   );
 }
