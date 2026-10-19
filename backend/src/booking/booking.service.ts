@@ -156,6 +156,15 @@ export class BookingService {
     if (day) this.validateBookingWindow(day.localDate);
 
     const oldSlotId = current.slotId;
+
+    const [oldSlotBefore] = await this.database.db
+      .select({ bookedCount: trainingSlots.bookedCount, capacity: trainingSlots.capacity, slotTime: trainingSlots.slotTime })
+      .from(trainingSlots)
+      .where(eq(trainingSlots.id, oldSlotId))
+      .limit(1);
+
+    const wasAtCapacity = oldSlotBefore && oldSlotBefore.bookedCount >= oldSlotBefore.capacity;
+
     const [firstId, secondId] = [oldSlotId, newSlotId].sort();
 
     try {
@@ -208,6 +217,16 @@ export class BookingService {
         throw new ConflictException('You already have an active booking for this day');
       }
       throw err;
+    }
+
+    if (wasAtCapacity && day) {
+      const dedupeKey = `vacancy:${oldSlotId}:${current.id}`;
+      await this.notifications.enqueueAndProcess('VACANCY', dedupeKey, {
+        slotId: oldSlotId,
+        slotTime: oldSlotBefore!.slotTime,
+        localDate: day.localDate,
+        excludeMemberId: current.memberId,
+      });
     }
 
     return { ok: true };
