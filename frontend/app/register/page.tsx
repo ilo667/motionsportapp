@@ -110,7 +110,7 @@ export default function RegisterPage() {
       <h1 className="font-geologica font-semibold text-[28px] sm:text-[40px] text-heading mb-2">
         Реєстрація
       </h1>
-      <p className="text-muted text-sm mb-8">
+      <p className="text-body text-sm mb-8">
         Вже є код?{" "}
         <Link href="/login" className="text-accent hover:underline">
           Увійти

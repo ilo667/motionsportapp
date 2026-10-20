@@ -37,7 +37,7 @@ export default function LoginPage() {
       <h1 className="font-geologica font-semibold text-[28px] sm:text-[40px] text-heading mb-2">
         Вхід
       </h1>
-      <p className="text-muted text-sm mb-8">
+      <p className="text-body text-sm mb-8">
         Ще немає коду?{" "}
         <Link href="/register" className="text-accent hover:underline">
           Зареєструватись
