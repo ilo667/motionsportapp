@@ -1,12 +1,12 @@
 export function GymLoader() {
   return (
-    <div className="gym-loader">
+    <div className="flex-1 flex flex-col items-center pt-10 gap-7">
       <div className="gym-loader__circle">
         <div className="gym-loader__outer"></div>
         <div className="gym-loader__inner"></div>
         <div className="gym-loader__center"></div>
       </div>
-      <span className="gym-loader__text">LOADING</span>
+      <span className="gym-loader__text">ЗАЧЕКАЙТЕ</span>
     </div>
   );
 }

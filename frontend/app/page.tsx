@@ -24,6 +24,7 @@ export default function SchedulePage() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [mutateError, setMutateError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const authedRef = useRef(false);
 
   const fetchSchedule = useCallback(async () => {
