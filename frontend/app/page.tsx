@@ -95,23 +95,20 @@ export default function SchedulePage() {
 
   if (authed === false) {
     return (
-      <main className="flex-1 flex flex-col items-center px-5 text-center">
-        <h1 className="font-geologica font-semibold text-display text-heading mb-3">
-          Motion Gym
-        </h1>
-        <p className="text-body text-sm mb-10">Запис на тренування</p>
-        <div className="flex flex-col w-full max-w-xs gap-3">
-          <Link href="/login" className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center">
-            Увійти як учасник
-          </Link>
-          <Link href="/register" className="btn-secondary w-full py-4 rounded-lg border font-medium text-sm transition-colors text-center">
-            Зареєструватись
-          </Link>
-          <Link href="/admin/login" className="text-muted text-xs mt-2 hover:text-body transition-colors">
-            Вхід для тренера
-          </Link>
-        </div>
-      </main>
+      <div className="flex flex-col items-center text-center">
+          <h1 className="font-geologica font-semibold text-display text-heading mb-3">
+            Motion Gym
+          </h1>
+          <p className="text-body text-sm mb-10">Запис на тренування</p>
+          <div className="flex flex-col w-full max-w-xs gap-3">
+            <Link href="/login" className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center">
+              Увійти як клієнт
+            </Link>
+            <Link href="/admin/login" className="btn-secondary w-full py-4 rounded-lg border font-medium text-sm transition-colors text-center">
+              Вхід для тренера
+            </Link>
+          </div>
+      </div>
     );
   }
 
@@ -120,11 +117,7 @@ export default function SchedulePage() {
   }
 
   if (!schedule) {
-    return (
-      <main className="flex-1 flex">
-        <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>
-      </main>
-    );
+    return <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>;
   }
 
   const now = new Date(schedule.serverTime);
@@ -135,9 +128,7 @@ export default function SchedulePage() {
 
   return (
     <>
-    <main className={`flex-1 px-5 ${schedule.isDemoMode ? "pb-28" : "pb-12"}`}>
-      <div className="w-full max-w-xl mx-auto pt-8 sm:pt-12">
-        <div className="flex items-start justify-between mb-1">
+      <div className="flex items-start justify-between mb-1">
           <h1 className="font-geologica font-semibold text-title sm:text-display text-heading">
             Наступне тренування
           </h1>
@@ -189,9 +180,7 @@ export default function SchedulePage() {
         {mutateError && (
           <p className="text-danger text-sm mt-4 text-center">{mutateError}</p>
         )}
-      </div>
-    </main>
-    {schedule.isDemoMode && <DemoControls onRefresh={fetchSchedule} />}
+      {schedule.isDemoMode && <DemoControls onRefresh={fetchSchedule} />}
     </>
   );
 }

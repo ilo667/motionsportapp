@@ -32,7 +32,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="text-base sm:text-sm min-h-full flex flex-col">
         <Header />
-        {children}
+        <main className="flex-1 px-5">
+          <div className="w-full max-w-xl mx-auto pt-8 sm:pt-12 pb-12">
+            {children}
+          </div>
+        </main>
         <SwRegister />
       </body>
     </html>

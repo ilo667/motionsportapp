@@ -104,11 +104,7 @@ export default function AdminPage() {
   }
 
   if (!schedule) {
-    return (
-      <main className="flex-1 flex">
-        <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>
-      </main>
-    );
+    return <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>;
   }
 
   const now = new Date(schedule.serverTime);
@@ -117,9 +113,7 @@ export default function AdminPage() {
 
   return (
     <>
-    <main className={`flex-1 px-5 ${schedule.isDemoMode ? "pb-28" : "pb-12"}`}>
-      <div className="w-full max-w-xl mx-auto pt-8 sm:pt-12">
-        <div className="flex items-start justify-between mb-1">
+      <div className="flex items-start justify-between mb-1">
           <h1 className="font-geologica font-semibold text-title sm:text-display text-heading">
             Панель тренера
           </h1>
@@ -330,9 +324,7 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
-      </div>
-    </main>
-    {schedule.isDemoMode && <DemoControls onRefresh={fetchSchedule} />}
+      {schedule.isDemoMode && <DemoControls onRefresh={fetchSchedule} />}
     </>
   );
 }
