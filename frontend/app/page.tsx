@@ -107,7 +107,7 @@ export default function SchedulePage() {
 
   if (authed === false) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-center">
+      <div className="flex flex-col items-center text-center">
           <h1 className="font-geologica font-semibold text-display text-heading mb-3">
             Motion Gym
           </h1>
