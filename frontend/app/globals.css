@@ -16,7 +16,7 @@
 
   /* Brand */
   --color-teal: #93d23c;
-  --color-teal-dark: #7ab82e;
+  --color-teal-light: #a5e048;
   --color-on-teal: #070910;
   --color-accent: #93d23c;
   --color-navy: #1a2040;
@@ -57,7 +57,7 @@ h1, h2, h3, h4, h5, h6 {
     background-color: var(--color-teal);
     color: var(--color-on-teal);
   }
-  .btn-primary:hover:not(:disabled) { background-color: var(--color-teal-dark); }
+  .btn-primary:hover:not(:disabled) { background-color: var(--color-teal-light); }
 
   /* Outlined teal button — add `border` class for border-width */
   .btn-secondary {
@@ -66,7 +66,7 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--color-teal);
   }
   .btn-secondary:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--color-teal) 10%, transparent);
+    background-color: color-mix(in srgb, var(--color-teal) 18%, transparent);
   }
 
   /* Solid destructive button */
@@ -74,7 +74,7 @@ h1, h2, h3, h4, h5, h6 {
     background-color: var(--color-danger);
     color: #ffffff;
   }
-  .btn-danger:hover:not(:disabled) { opacity: 0.9; }
+  .btn-danger:hover:not(:disabled) { filter: brightness(1.15); }
 
   /* Outlined muted button — add `border` class for border-width */
   .btn-ghost {
