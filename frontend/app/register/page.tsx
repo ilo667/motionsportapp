@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { PageLayout } from "@/components/PageLayout";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -48,7 +49,7 @@ export default function RegisterPage() {
 
   if (result) {
     return (
-    <>
+    <PageLayout>
         <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
           Вітаємо!
         </h1>
@@ -100,12 +101,12 @@ export default function RegisterPage() {
         >
           Продовжити →
         </button>
-    </>
+    </PageLayout>
     );
   }
 
   return (
-    <>
+    <PageLayout>
       <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
         Реєстрація
       </h1>
@@ -167,6 +168,6 @@ export default function RegisterPage() {
           {loading ? "Зачекайте..." : "Зареєструватись"}
         </button>
       </form>
-    </>
+    </PageLayout>
   );
 }

@@ -3,7 +3,9 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ScheduleNext } from "@/lib/api";
+import { PageLayout } from "@/components/PageLayout";
 import { SlotCard } from "@/components/SlotCard";
+
 import { GymLoader } from "@/components/GymLoader";
 import DemoControls from "@/components/DemoControls";
 
@@ -107,8 +109,8 @@ export default function SchedulePage() {
 
   if (authed === false) {
     return (
-      <div className="flex flex-col items-center text-center">
-          <h1 className="font-geologica font-semibold text-display text-heading mb-3">
+      <PageLayout className="items-center text-center">
+          <h1 className="font-geologica font-semibold text-display text-heading mb-3 uppercase">
             Motion Gym
           </h1>
           <div className="flex flex-col w-full max-w-xs gap-3 mt-10">
@@ -119,7 +121,7 @@ export default function SchedulePage() {
               Вхід для тренера
             </Link>
           </div>
-      </div>
+      </PageLayout>
     );
   }
 
@@ -138,18 +140,14 @@ export default function SchedulePage() {
   const afterWindow = now >= closeAt;
 
   return (
-    <>
-      <div className="flex items-start justify-between mb-1">
-          <h1 className="font-geologica font-semibold text-title sm:text-display text-heading">
-            Наступне тренування
-          </h1>
-          <button
-            onClick={handleLogout}
-            className="text-muted text-sm hover:text-body transition-colors mt-1 ml-4 shrink-0"
-          >
-            Вийти
-          </button>
-        </div>
+    <PageLayout variant="top" action={
+      <button onClick={handleLogout} className="text-muted text-sm hover:text-body transition-colors">
+        Вийти
+      </button>
+    }>
+        <h1 className="font-geologica font-semibold text-title sm:text-display text-heading mb-1">
+          Наступне тренування
+        </h1>
 
         <p className="text-muted text-sm mb-4 capitalize">
           {formatLocalDate(schedule.localDate)}
@@ -172,8 +170,8 @@ export default function SchedulePage() {
             </span>
           ) : (
             <span className="text-xs font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-3 py-1 flex items-center gap-1.5">
-              <span className="relative flex w-1.5 h-1.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal opacity-60"></span>
+              <span className="relative flex w-3 h-3 shrink-0 items-center justify-center">
+                <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-teal opacity-75"></span>
                 <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-teal"></span>
               </span>
               Запис відкрито
@@ -199,6 +197,6 @@ export default function SchedulePage() {
           <p className="text-danger text-sm mt-4 text-center">{mutateError}</p>
         )}
       {schedule.isDemoMode && <DemoControls onRefresh={fetchSchedule} />}
-    </>
+    </PageLayout>
   );
 }

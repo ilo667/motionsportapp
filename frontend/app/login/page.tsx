@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { PageLayout } from "@/components/PageLayout";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function LoginPage() {
   };
 
   return (
-    <>
+    <PageLayout>
       <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
         Вхід
       </h1>
@@ -87,6 +88,6 @@ export default function LoginPage() {
           {loading ? "Зачекайте..." : "Увійти"}
         </button>
       </form>
-    </>
+    </PageLayout>
   );
 }

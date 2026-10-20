@@ -1,9 +1,11 @@
+import type { ReactNode } from "react";
 import { MotionGymLogo } from "./MotionGymLogo";
 
-export function Header() {
+export function Header({ action }: { action?: ReactNode }) {
   return (
-    <header className="p-[19px] sm:px-16 sm:py-[27px] flex items-center justify-center sm:justify-start">
-      <MotionGymLogo />
+    <header className="flex items-center justify-between py-3 mb-4">
+      <MotionGymLogo className="w-[48px] h-[48px]" />
+      {action}
     </header>
   );
 }
