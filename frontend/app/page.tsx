@@ -20,14 +20,8 @@ function formatLocalDate(localDate: string): string {
 export default function SchedulePage() {
   const router = useRouter();
   const [schedule, setSchedule] = useState<ScheduleNext | null>(null);
-  const [authed, setAuthed] = useState<boolean | null>(() => {
-    if (typeof window === 'undefined') return null;
-    try { return localStorage.getItem('mg_authed') === '1' ? null : false; } catch { return null; }
-  });
-  const [loading, setLoading] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    try { return localStorage.getItem('mg_authed') === '1'; } catch { return true; }
-  });
+  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(true);
   const [mutateError, setMutateError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -53,7 +47,15 @@ export default function SchedulePage() {
   }, [fetchSchedule]);
 
   useEffect(() => {
-    if (authed === false) return;
+    const hasFlag = (() => {
+      try { return localStorage.getItem('mg_authed') === '1'; } catch { return true; }
+    })();
+
+    if (!hasFlag) {
+      setAuthed(false);
+      setLoading(false);
+      return;
+    }
 
     fetchSchedule().then(() => {
       authedRef.current = true;
