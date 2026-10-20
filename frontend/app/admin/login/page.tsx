@@ -38,10 +38,9 @@ export default function AdminLoginPage() {
       <Link href="/" className="inline-flex items-center text-sm text-muted hover:text-body transition-colors mb-6">
         ← Назад
       </Link>
-      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
-        Адмін
+      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-8">
+        Тренер
       </h1>
-      <p className="text-muted text-sm mb-8">Вхід для тренера</p>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
