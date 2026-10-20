@@ -69,12 +69,15 @@ h1, h2, h3, h4, h5, h6 {
     background-color: color-mix(in srgb, var(--color-teal) 18%, transparent);
   }
 
-  /* Solid destructive button */
+  /* Outlined semi-transparent destructive button */
   .btn-danger {
-    background-color: var(--color-danger);
-    color: #ffffff;
+    background-color: color-mix(in srgb, var(--color-danger) 12%, transparent);
+    border: 1px solid var(--color-danger);
+    color: var(--color-danger);
   }
-  .btn-danger:hover:not(:disabled) { filter: brightness(1.15); }
+  .btn-danger:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-danger) 22%, transparent);
+  }
 
   /* Outlined muted button — add `border` class for border-width */
   .btn-ghost {
@@ -99,6 +102,10 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   /* Hover-modifier classes — compose with btn-ghost */
+  .hover-danger {
+    border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-line));
+    color: color-mix(in srgb, var(--color-danger) 65%, var(--color-muted));
+  }
   .hover-danger:hover:not(:disabled) { border-color: var(--color-danger); color: var(--color-danger); }
   .hover-accent:hover:not(:disabled) { border-color: var(--color-teal);   color: var(--color-teal); }
 }
