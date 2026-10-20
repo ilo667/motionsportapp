@@ -95,7 +95,7 @@ export default function SchedulePage() {
 
   if (authed === false) {
     return (
-      <main className="flex-1 flex flex-col items-center justify-center px-5 text-center">
+      <main className="flex-1 flex flex-col items-center px-5 text-center">
         <h1 className="font-geologica font-semibold text-display text-heading mb-3">
           Motion Gym
         </h1>
@@ -121,7 +121,7 @@ export default function SchedulePage() {
 
   if (!schedule) {
     return (
-      <main className="flex-1 flex items-center justify-center">
+      <main className="flex-1 flex">
         <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>
       </main>
     );

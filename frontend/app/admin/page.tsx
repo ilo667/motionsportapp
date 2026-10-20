@@ -105,7 +105,7 @@ export default function AdminPage() {
 
   if (!schedule) {
     return (
-      <main className="flex-1 flex items-center justify-center">
+      <main className="flex-1 flex">
         <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>
       </main>
     );
