@@ -2,7 +2,7 @@ import { Injectable, ForbiddenException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { eq, and } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { demoState, trainingDays, trainingSlots, bookings, members } from '../database/schema';
+import { demoState, trainingDays, trainingSlots, bookings, members, attendance } from '../database/schema';
 
 const KY_ZONE = 'Europe/Kyiv';
 
@@ -92,6 +92,15 @@ export class DemoService {
   ) {
     const today = clockAt.toISODate()!;
 
+    // Ensure training day exists for today
+    await this.database.db
+      .insert(trainingDays)
+      .values({ localDate: today, status: 'SCHEDULED', isException: true, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: trainingDays.localDate,
+        set: { status: 'SCHEDULED', updatedAt: new Date() },
+      });
+
     const [day] = await this.database.db
       .select()
       .from(trainingDays)
@@ -99,6 +108,17 @@ export class DemoService {
       .limit(1);
 
     if (!day) return;
+
+    // Ensure slots exist for today
+    for (const slotTime of ['19:00', '20:00']) {
+      await this.database.db
+        .insert(trainingSlots)
+        .values({ trainingDayId: day.id, slotTime, status: 'ACTIVE', capacity: 8, bookedCount: 0 })
+        .onConflictDoUpdate({
+          target: [trainingSlots.trainingDayId, trainingSlots.slotTime],
+          set: { status: 'ACTIVE', bookedCount: 0 },
+        });
+    }
 
     const slots = await this.database.db
       .select()
@@ -110,7 +130,16 @@ export class DemoService {
 
     const [slot1, slot2] = slots;
 
-    // Delete all existing bookings for this day
+    // Delete attendance first (FK constraint), then bookings
+    const dayBookings = await this.database.db
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(eq(bookings.trainingDayId, day.id));
+
+    for (const b of dayBookings) {
+      await this.database.db.delete(attendance).where(eq(attendance.bookingId, b.id));
+    }
+
     await this.database.db
       .delete(bookings)
       .where(eq(bookings.trainingDayId, day.id));
