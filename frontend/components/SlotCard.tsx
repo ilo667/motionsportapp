@@ -61,12 +61,7 @@ export function SlotCard({
       ) : afterWindow ? (
         <p className="text-muted text-sm">Запис закрито</p>
       ) : !bookingWindowOpen ? (
-        <button
-          disabled
-          className="w-full py-3 rounded-[8px] bg-surface text-muted text-sm cursor-not-allowed"
-        >
-          Запис відкриється о 14:00
-        </button>
+        <p className="text-muted text-sm">Запис відкриється о 14:00</p>
       ) : slot.isMyBooking ? (
         <div className="flex flex-col space-y-2">
           <p className="text-teal font-medium text-sm mb-1">✓ Моє місце</p>
