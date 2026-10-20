@@ -70,7 +70,7 @@ export default function AdminLoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors disabled:opacity-60"
         >
           {loading ? "Зачекайте..." : "Увійти"}
         </button>
