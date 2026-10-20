@@ -32,8 +32,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="text-base sm:text-sm min-h-full flex flex-col">
         <Header />
-        <main className="flex-1 px-5">
-          <div className="w-full max-w-xl mx-auto pb-12">
+        <main className="flex-1 flex flex-col px-5">
+          <div className="w-full max-w-xl mx-auto pb-12 flex-1 flex flex-col">
             {children}
           </div>
         </main>

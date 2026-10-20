@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-export function MotionGymLogo({ className = "w-[150px] h-[150px]" }: { white?: boolean; className?: string }) {
+export function MotionGymLogo({ className = "w-[120px] h-[120px] sm:w-[150px] sm:h-[150px]" }: { white?: boolean; className?: string }) {
   return (
     <Link href="/">
       <Image
