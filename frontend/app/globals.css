@@ -15,8 +15,10 @@
   --text-sm--line-height: 28px;
 
   /* Heading scale */
-  --text-display: 2.75rem;   /* 44px — page title (sm+) */
-  --text-title: 2.375rem;    /* 38px — card heading */
+  --text-display: 2.75rem;              /* 44px — page title (sm+) */
+  --text-display--line-height: 38px;
+  --text-title: 2.375rem;               /* 38px — card heading */
+  --text-title--line-height: 32px;
 
   /* Brand */
   --color-teal: #93d23c;
