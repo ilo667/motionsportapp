@@ -88,12 +88,12 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
                 onClick={() => setConfirmCancel(true)}
                 className="btn-ghost hover-danger w-full py-2.5 rounded-[8px] border text-sm transition-colors"
               >
-                Скасувати слот
+                Відмінити тренування
               </button>
             ) : (
               <div className="rounded-[8px] border border-danger bg-danger/5 p-3 space-y-2">
                 <p className="text-danger text-xs">
-                  Скасувати слот {slot.slotTime}? Всі записи буде відмінено.
+                  Відмінити тренування о {slot.slotTime}? Всі записи буде скасовано.
                 </p>
                 <div className="flex space-x-2">
                   <button
@@ -103,7 +103,7 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
                     }}
                     className="btn-danger flex-1 py-2 rounded-[6px] text-xs font-medium transition-colors"
                   >
-                    Скасувати
+                    Відмінити
                   </button>
                   <button
                     onClick={() => setConfirmCancel(false)}
