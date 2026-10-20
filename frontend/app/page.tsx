@@ -5,8 +5,6 @@ import Link from "next/link";
 import { api, ScheduleNext } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { SlotCard } from "@/components/SlotCard";
-
-import { GymLoader } from "@/components/GymLoader";
 import DemoControls from "@/components/DemoControls";
 
 function formatLocalDate(localDate: string): string {
@@ -125,78 +123,84 @@ export default function SchedulePage() {
     );
   }
 
-  if (loading) {
-    return <GymLoader />;
+  const scheduleAction = (
+    <button onClick={handleLogout} className="text-muted text-sm hover:text-body transition-colors">
+      Вийти
+    </button>
+  );
+
+  if (!loading && !schedule) {
+    return (
+      <PageLayout variant="top" action={scheduleAction}>
+        <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>
+      </PageLayout>
+    );
   }
 
-  if (!schedule) {
-    return <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>;
-  }
-
-  const now = new Date(schedule.serverTime);
-  const openAt = new Date(schedule.bookingOpenAt);
-  const closeAt = new Date(schedule.bookingCloseAt);
-  const beforeWindow = now < openAt;
-  const afterWindow = now >= closeAt;
+  const now = schedule ? new Date(schedule.serverTime) : null;
+  const openAt = schedule ? new Date(schedule.bookingOpenAt) : null;
+  const closeAt = schedule ? new Date(schedule.bookingCloseAt) : null;
+  const beforeWindow = now && openAt ? now < openAt : false;
+  const afterWindow = now && closeAt ? now >= closeAt : false;
 
   return (
-    <PageLayout variant="top" action={
-      <button onClick={handleLogout} className="text-muted text-sm hover:text-body transition-colors">
-        Вийти
-      </button>
-    }>
-        <h1 className="font-geologica font-semibold text-title sm:text-display text-heading mb-1">
-          Наступне тренування
-        </h1>
+    <PageLayout variant="top" loading={loading} action={scheduleAction}>
+      {schedule && (
+        <>
+          <h1 className="font-geologica font-semibold text-title sm:text-display text-heading mb-1">
+            Наступне тренування
+          </h1>
 
-        <p className="text-muted text-sm mb-4 capitalize">
-          {formatLocalDate(schedule.localDate)}
-        </p>
+          <p className="text-muted text-sm mb-4 capitalize">
+            {formatLocalDate(schedule.localDate)}
+          </p>
 
-        {schedule.announcement && (
-          <div className="bg-teal/8 border border-teal/20 rounded-xl px-4 py-3 mb-5 text-sm text-body">
-            {schedule.announcement}
-          </div>
-        )}
-
-        <div className="flex items-center mb-6">
-          {beforeWindow ? (
-            <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
-              До 14:00
-            </span>
-          ) : afterWindow ? (
-            <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
-              Запис закрито
-            </span>
-          ) : (
-            <span className="text-xs font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-3 py-1 flex items-center gap-1.5">
-              <span className="relative flex w-3 h-3 shrink-0 items-center justify-center">
-                <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-teal opacity-75"></span>
-                <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-teal"></span>
-              </span>
-              Запис відкрито
-            </span>
+          {schedule.announcement && (
+            <div className="bg-teal/8 border border-teal/20 rounded-xl px-4 py-3 mb-5 text-sm text-body">
+              {schedule.announcement}
+            </div>
           )}
-        </div>
 
-        <div className="rounded-2xl border border-line p-3 flex flex-col space-y-3">
-          {schedule.slots.map((slot) => (
-            <SlotCard
-              key={slot.id}
-              slot={slot}
-              allSlots={schedule.slots}
-              bookingWindowOpen={schedule.bookingWindowOpen}
-              afterWindow={afterWindow}
-              onMutate={handleMutate}
-              onRefresh={fetchSchedule}
-            />
-          ))}
-        </div>
+          <div className="flex items-center mb-6">
+            {beforeWindow ? (
+              <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
+                До 14:00
+              </span>
+            ) : afterWindow ? (
+              <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
+                Запис закрито
+              </span>
+            ) : (
+              <span className="text-xs font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-3 py-1 flex items-center gap-1.5">
+                <span className="relative flex w-3 h-3 shrink-0 items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-teal opacity-75"></span>
+                  <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-teal"></span>
+                </span>
+                Запис відкрито
+              </span>
+            )}
+          </div>
 
-        {mutateError && (
-          <p className="text-danger text-sm mt-4 text-center">{mutateError}</p>
-        )}
-      {schedule.isDemoMode && <DemoControls onRefresh={fetchSchedule} />}
+          <div className="rounded-2xl border border-line p-3 flex flex-col space-y-3">
+            {schedule.slots.map((slot) => (
+              <SlotCard
+                key={slot.id}
+                slot={slot}
+                allSlots={schedule.slots}
+                bookingWindowOpen={schedule.bookingWindowOpen}
+                afterWindow={afterWindow}
+                onMutate={handleMutate}
+                onRefresh={fetchSchedule}
+              />
+            ))}
+          </div>
+
+          {mutateError && (
+            <p className="text-danger text-sm mt-4 text-center">{mutateError}</p>
+          )}
+          {schedule.isDemoMode && <DemoControls onRefresh={fetchSchedule} />}
+        </>
+      )}
     </PageLayout>
   );
 }

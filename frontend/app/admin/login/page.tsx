@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { PageLayout } from "@/components/PageLayout";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <>
+    <PageLayout>
       <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
         Адмін
       </h1>
@@ -75,6 +76,6 @@ export default function AdminLoginPage() {
           {loading ? "Зачекайте..." : "Увійти"}
         </button>
       </form>
-    </>
+    </PageLayout>
   );
 }
