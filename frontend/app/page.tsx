@@ -105,13 +105,17 @@ export default function SchedulePage() {
     router.push("/login");
   };
 
+  if (authed === null) {
+    return <PageLayout loading />;
+  }
+
   if (authed === false) {
     return (
       <PageLayout className="items-center text-center">
           <h1 className="font-geologica font-semibold text-display text-heading mb-3 uppercase">
             Motion Gym
           </h1>
-          <div className="flex flex-col w-full max-w-xs gap-3 mt-10">
+          <div className="flex flex-col w-full max-w-xs space-y-3 mt-10">
             <Link href="/login" className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center">
               Увійти як клієнт
             </Link>
@@ -171,7 +175,7 @@ export default function SchedulePage() {
                 Запис закрито
               </span>
             ) : (
-              <span className="text-xs font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-3 py-1 flex items-center gap-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-3 py-1 flex items-center space-x-1.5">
                 <span className="relative flex w-3 h-3 shrink-0 items-center justify-center">
                   <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-teal opacity-75"></span>
                   <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-teal"></span>

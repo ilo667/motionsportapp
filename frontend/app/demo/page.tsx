@@ -55,7 +55,7 @@ export default function DemoPage() {
         {/* Credentials */}
         <section className="mb-8">
           <h2 className="text-xs font-mono uppercase tracking-widest text-white/40 mb-3">Облікові дані</h2>
-          <div className="grid gap-3">
+          <div className="flex flex-col space-y-3">
             <CredCard
               label="Учасник"
               rows={[
@@ -80,7 +80,7 @@ export default function DemoPage() {
         {/* Scenarios */}
         <section className="mb-8">
           <h2 className="text-xs font-mono uppercase tracking-widest text-white/40 mb-3">Сценарії</h2>
-          <div className="grid gap-2">
+          <div className="flex flex-col space-y-2">
             {SCENARIOS.map((s) => (
               <button
                 key={s.key}
@@ -129,7 +129,7 @@ function CredCard({
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
       <p className="text-xs text-white/40 mb-2">{label}</p>
-      <div className="grid gap-1 mb-3">
+      <div className="flex flex-col space-y-1 mb-3">
         {rows.map((r) => (
           <div key={r.name} className="flex justify-between items-center">
             <span className="text-sm text-white/60">{r.name}</span>

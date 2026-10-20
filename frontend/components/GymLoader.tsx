@@ -1,6 +1,6 @@
-export function GymLoader() {
+export function GymLoader({ className = "flex-1 flex flex-col items-center pt-10 space-y-7" }: { className?: string }) {
   return (
-    <div className="flex-1 flex flex-col items-center pt-10 gap-7">
+    <div className={className}>
       <div className="gym-loader__circle">
         <div className="gym-loader__outer"></div>
         <div className="gym-loader__inner"></div>

@@ -22,13 +22,19 @@ export function PageLayout({ children, variant = "centered", className, action, 
   }
 
   if (loading) {
-    return <div className="flex-1 flex items-center justify-center"><GymLoader /></div>;
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <GymLoader className="flex flex-col items-center space-y-7" />
+      </div>
+    );
   }
 
   return (
-    <div className={`flex-1 flex flex-col justify-center pb-[30vh]${className ? ` ${className}` : ""}`}>
-      <MotionGymLogo className="w-[100px] h-[100px] mx-auto mb-8" />
-      {children}
+    <div className={`flex-1 flex flex-col justify-center${className ? ` ${className}` : ""}`}>
+      <div className="-mt-5">
+        <MotionGymLogo className="w-[100px] h-[100px] mx-auto mb-8" />
+        {children}
+      </div>
     </div>
   );
 }

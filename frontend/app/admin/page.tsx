@@ -135,7 +135,7 @@ export default function AdminPage() {
               День скасовано
             </span>
           ) : schedule.bookingWindowOpen ? (
-            <span className="text-xs font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-3 py-1 flex items-center gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-3 py-1 flex items-center space-x-1.5">
               <span className="relative flex w-3 h-3 shrink-0 items-center justify-center">
                 <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-teal opacity-75"></span>
                 <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-teal"></span>
@@ -249,7 +249,7 @@ export default function AdminPage() {
           ) : null}
 
           {/* Actions */}
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="-m-1 flex flex-wrap mb-4">
             <button
               disabled={generating}
               onClick={async () => {
@@ -257,7 +257,7 @@ export default function AdminPage() {
                 await handleMutate(() => api.generateAnnouncement(schedule.localDate));
                 setGenerating(false);
               }}
-              className="btn-secondary py-2 px-3 rounded-lg border text-sm transition-colors disabled:opacity-50"
+              className="m-1 btn-secondary py-2 px-3 rounded-lg border text-sm transition-colors disabled:opacity-50"
             >
               {generating ? "Генерую..." : "✨ Згенерувати AI"}
             </button>
@@ -265,13 +265,13 @@ export default function AdminPage() {
               <>
                 <button
                   onClick={() => setEditingText(announcement.text ?? "")}
-                  className="btn-ghost py-2 px-3 rounded-lg border text-sm transition-colors"
+                  className="m-1 btn-ghost py-2 px-3 rounded-lg border text-sm transition-colors"
                 >
                   Редагувати
                 </button>
                 <button
                   onClick={() => handleMutate(() => api.publishAnnouncement(schedule.localDate))}
-                  className="btn-primary py-2 px-3 rounded-lg text-sm transition-colors"
+                  className="m-1 btn-primary py-2 px-3 rounded-lg text-sm transition-colors"
                 >
                   Опублікувати
                 </button>
@@ -280,7 +280,7 @@ export default function AdminPage() {
             {announcement?.publishedAt && (
               <button
                 onClick={() => handleMutate(() => api.unpublishAnnouncement(schedule.localDate))}
-                className="btn-ghost hover-danger py-2 px-3 rounded-lg border text-sm transition-colors"
+                className="m-1 btn-ghost hover-danger py-2 px-3 rounded-lg border text-sm transition-colors"
               >
                 Зняти з публікації
               </button>
