@@ -42,25 +42,43 @@ Frontend (`/api/*`) → Next.js rewrite → `BACKEND_URL` (dev: `localhost:3001`
 
 ### Auth
 
-JWT in an `httpOnly` cookie (`token`). `JwtAuthGuard` reads it on protected routes. `ValidationPipe(whitelist: true)` is global. Auth endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/customer`.
+JWT in an `httpOnly` cookie (`token`). `JwtAuthGuard` reads it on protected routes. `ValidationPipe(whitelist: true)` is global.
+
+Auth endpoints:
+- `POST /auth/member/register` — displayName + PIN → memberCode + recoveryCode
+- `POST /auth/member/login` — memberCode + PIN
+- `POST /auth/member/forgot` — memberCode + recoveryCode + newPin → new recoveryCode
+- `POST /auth/admin/login` — username + password
+- `POST /auth/logout`
+- `GET /auth/me`
 
 ### Backend modules
 
-- `DatabaseModule` — global `pg.Pool` provider, reads `DATABASE_URL`
-- `AuthModule` — register/login/logout/me, bcrypt passwords, JWT signing
-- `QuizModule` — `GET /quiz/active`, `POST /quiz/attempts`
+- `DatabaseModule` — global Drizzle ORM provider, reads `DATABASE_URL`
+- `AuthModule` — member + admin auth, bcrypt passwords, JWT signing, PIN recovery
+- `ScheduleModule` — `GET /schedule/next` — next training day with slots
+- `BookingModule` — book / cancel / switch slot
+- `AdminModule` — admin schedule management, slot cancellation, attendance
+- `NotificationsModule` — push subscriptions, vacancy alerts, internal cron
+- `AiModule` — AI announcement generation
+- `DemoModule` — demo mode time override (`DEMO_MODE=true` env only)
+- `HealthModule` — `GET /health`
 
 ### Database
 
-Raw SQL via `pg` (no ORM). Schema in `backend/sql/schema.sql`, seed in `backend/sql/seed.sql`. Run both with `npm run db:setup`. Anonymous-first flow: attempts carry a UUID `attempt_token` stored in `localStorage`, linked to a user on registration via `POST /auth/link-attempt`.
+Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts`, SQL migrations in `backend/sql/`. Run `npm run db:setup` to apply schema + seed.
 
 ### Frontend conventions
 
 - All backend calls go through `frontend/lib/api.ts` (typed fetch wrapper, `credentials: 'include'`)
 - Tailwind CSS v4 — design tokens defined inline in `globals.css` under `@theme`. Use named tokens (`text-accent`, `bg-teal`, `text-muted`, etc.), not arbitrary hex values
-- Fonts: Inter (body, `--font-inter`), Geologica (headings, `--font-geologica`). Use `font-geologica` utility class for headings
+- **No `gap-*`** — use `space-y-*` (flex-col), `space-x-*` (inline), or `-m-1`/`m-1` trick for flex-wrap. Pre-commit hook enforces this.
+- Fonts: Inter (body, `--font-inter`), Rubik 700 (headings, `--font-geologica`). Use `font-geologica` utility class for headings.
 - Logo component: `MotionGymLogo`
-- Page container (`max-w-xl`, `px-5`, `pt-8 sm:pt-12 pb-12`) lives once in `app/layout.tsx` — pages return content directly, no `<main>` wrappers
+- Layout: `app/layout.tsx` provides the outer flex container (`max-w-xl`, `px-5`). Pages use `PageLayout` component:
+  - `variant="centered"` (default) — logo + vertically centered content (auth/landing pages)
+  - `variant="top"` — mini `Header` (logo + optional `action`) + content below (schedule/admin pages)
+  - `loading` prop — shows `GymLoader` instead of children
 - Auth state: `mg_authed` in `localStorage` — set on login, cleared on logout/401. Home page skips API call when flag is absent (avoids 401 in console for unauthenticated users)
 
 ## Vercel deployment
