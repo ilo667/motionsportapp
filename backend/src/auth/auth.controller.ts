@@ -56,7 +56,7 @@ export class AuthController {
     return { memberCode, displayName };
   }
 
-  @Post('member/recover')
+  @Post('member/forgot')
   @HttpCode(HttpStatus.OK)
   async recoverMember(
     @Body() dto: RecoverMemberDto,

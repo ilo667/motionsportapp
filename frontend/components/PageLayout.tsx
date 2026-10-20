@@ -4,7 +4,7 @@ import { Header } from "./Header";
 import { GymLoader } from "./GymLoader";
 
 interface PageLayoutProps {
-  children: ReactNode;
+  children?: ReactNode;
   variant?: "centered" | "top";
   className?: string;
   action?: ReactNode;

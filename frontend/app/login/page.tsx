@@ -87,6 +87,12 @@ export default function LoginPage() {
         >
           {loading ? "Зачекайте..." : "Увійти"}
         </button>
+
+        <p className="text-center text-sm text-muted">
+          <Link href="/forgot" className="text-accent hover:underline">
+            Забули PIN?
+          </Link>
+        </p>
       </form>
     </PageLayout>
   );

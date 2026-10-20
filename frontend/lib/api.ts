@@ -119,6 +119,12 @@ export const api = {
   logout: () =>
     request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
 
+  forgotPin: (memberCode: string, recoveryCode: string, newPin: string) =>
+    request<RegisterResponse>("/auth/member/forgot", {
+      method: "POST",
+      body: JSON.stringify({ memberCode, recoveryCode, newPin }),
+    }),
+
   getScheduleNext: () => request<ScheduleNext>("/schedule/next"),
 
   book: (slotId: string) =>
