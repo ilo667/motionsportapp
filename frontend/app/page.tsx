@@ -70,7 +70,14 @@ export default function SchedulePage() {
       await fn();
       await fetchSchedule();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Помилка. Спробуйте ще раз.";
+      const raw = err instanceof Error ? err.message : "";
+      const msg =
+        raw.includes("Slot is full") ? "Місць вже немає, хтось встиг раніше" :
+        raw.includes("Booking opens at 14:00") ? "Запис відкривається о 14:00" :
+        raw.includes("Booking window has closed") ? "Час запису вже минув" :
+        raw.includes("already have an active booking") ? "Ви вже записані на цей день" :
+        raw.includes("Slot is cancelled") ? "Цей час скасовано тренером" :
+        raw || "Помилка. Спробуйте ще раз.";
       setMutateError(msg);
     }
   };
