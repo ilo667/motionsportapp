@@ -3,6 +3,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, AdminSchedule, Announcement, AnnouncementExample } from "@/lib/api";
 import { SlotCard as AdminSlotCard } from "@/components/admin/SlotCard";
+import { GymLoader } from "@/components/GymLoader";
 import DemoControls from "@/components/DemoControls";
 
 function formatLocalDate(localDate: string): string {
@@ -99,11 +100,7 @@ export default function AdminPage() {
   };
 
   if (loading) {
-    return (
-      <main className="flex-1 flex items-center justify-center">
-        <p className="text-muted text-sm">Завантаження...</p>
-      </main>
-    );
+    return <GymLoader />;
   }
 
   if (!schedule) {

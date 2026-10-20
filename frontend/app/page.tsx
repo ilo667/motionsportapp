@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ScheduleNext } from "@/lib/api";
 import { SlotCard } from "@/components/SlotCard";
+import { GymLoader } from "@/components/GymLoader";
 import DemoControls from "@/components/DemoControls";
 
 function formatLocalDate(localDate: string): string {
@@ -114,11 +115,7 @@ export default function SchedulePage() {
   }
 
   if (loading) {
-    return (
-      <main className="flex-1 flex items-center justify-center">
-        <p className="text-muted text-sm">Завантаження...</p>
-      </main>
-    );
+    return <GymLoader />;
   }
 
   if (!schedule) {
