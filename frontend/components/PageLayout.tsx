@@ -24,14 +24,14 @@ export function PageLayout({ children, variant = "centered", className, action, 
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <GymLoader className="flex flex-col items-center space-y-7" />
+        <GymLoader className="flex flex-col items-center space-y-7 -mt-8" />
       </div>
     );
   }
 
   return (
     <div className={`flex-1 flex flex-col justify-center${className ? ` ${className}` : ""}`}>
-      <div className="-mt-5">
+      <div className="-mt-8">
         <MotionGymLogo className="w-[100px] h-[100px] mx-auto mb-8" />
         {children}
       </div>

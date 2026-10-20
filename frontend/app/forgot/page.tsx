@@ -108,7 +108,7 @@ export default function ForgotPage() {
             onChange={(e) => setMemberCode(e.target.value.toUpperCase())}
             required
             autoComplete="username"
-            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="GYM-12345"
           />
         </div>
@@ -121,7 +121,7 @@ export default function ForgotPage() {
             onChange={(e) => setRecoveryCode(e.target.value)}
             required
             autoComplete="off"
-            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent font-mono"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none font-mono"
             placeholder="xxxx-xxxx-xxxx"
           />
         </div>
@@ -139,7 +139,7 @@ export default function ForgotPage() {
             }}
             required
             autoComplete="new-password"
-            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="••••••"
           />
           {pinError && <p className="text-danger text-xs mt-1">{pinError}</p>}

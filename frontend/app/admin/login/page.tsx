@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 
@@ -34,6 +35,9 @@ export default function AdminLoginPage() {
 
   return (
     <PageLayout>
+      <Link href="/" className="inline-flex items-center text-sm text-muted hover:text-body transition-colors mb-6">
+        ← Назад
+      </Link>
       <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
         Адмін
       </h1>
@@ -48,7 +52,7 @@ export default function AdminLoginPage() {
             onChange={(e) => setUsername(e.target.value)}
             required
             autoComplete="username"
-            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="admin"
           />
         </div>
@@ -61,7 +65,7 @@ export default function AdminLoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
-            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="••••••••"
           />
         </div>

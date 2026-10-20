@@ -128,7 +128,7 @@ export default function RegisterPage() {
             onChange={(e) => setDisplayName(e.target.value)}
             required
             autoComplete="name"
-            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="Іван"
           />
         </div>
@@ -148,7 +148,7 @@ export default function RegisterPage() {
             }}
             required
             autoComplete="new-password"
-            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="••••••"
           />
           {pinError && (

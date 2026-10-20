@@ -35,6 +35,9 @@ export default function LoginPage() {
 
   return (
     <PageLayout>
+      <Link href="/" className="inline-flex items-center text-sm text-muted hover:text-body transition-colors mb-6">
+        ← Назад
+      </Link>
       <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
         Вхід
       </h1>
@@ -56,7 +59,7 @@ export default function LoginPage() {
             }
             required
             autoComplete="username"
-            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="GYM-12345"
           />
         </div>
@@ -73,7 +76,7 @@ export default function LoginPage() {
             }
             required
             autoComplete="current-password"
-            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="••••••"
           />
         </div>
