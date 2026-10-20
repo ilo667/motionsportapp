@@ -44,9 +44,9 @@ export function SlotCard({
 
   return (
     <>
-    <div className={`rounded-xl border p-5 ${cardClass}`}>
+    <div className={`rounded-xl border-2 p-5 ${cardClass}`}>
       <div className="flex items-center justify-between mb-4">
-        <span className="font-geologica font-semibold text-2xl text-heading">
+        <span className="font-geologica font-semibold text-title text-heading">
           {slot.slotTime}
         </span>
         <span className="text-muted text-sm">
@@ -62,7 +62,6 @@ export function SlotCard({
         <p className="text-muted text-sm">Запис відкриється о 14:00</p>
       ) : slot.isMyBooking ? (
         <div className="flex flex-col space-y-2">
-          <p className="text-teal font-medium text-sm mb-1">✓ Моє місце</p>
           {canSwitch && (
             <button
               onClick={() => setModal({ action: "switch", targetSlot: otherSlot! })}

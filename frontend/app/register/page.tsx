@@ -49,7 +49,7 @@ export default function RegisterPage() {
   if (result) {
     return (
       <main className="flex-1 flex justify-center px-5">
-      <div className="w-full max-w-4xl px-4 sm:px-8 pt-11">
+      <div className="w-full max-w-4xl px-4 sm:px-8">
         <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
           Вітаємо!
         </h1>
@@ -108,7 +108,7 @@ export default function RegisterPage() {
 
   return (
     <main className="flex-1 flex justify-center px-5">
-      <div className="w-full max-w-4xl px-4 sm:px-8 pt-11">
+      <div className="w-full max-w-4xl px-4 sm:px-8">
       <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
         Реєстрація
       </h1>

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api, ScheduleNext } from "@/lib/api";
 import { SlotCard } from "@/components/SlotCard";
 import DemoControls from "@/components/DemoControls";
@@ -19,6 +20,7 @@ export default function SchedulePage() {
   const router = useRouter();
   const [schedule, setSchedule] = useState<ScheduleNext | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authed, setAuthed] = useState<boolean | null>(null);
   const [mutateError, setMutateError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const authedRef = useRef(false);
@@ -29,11 +31,12 @@ export default function SchedulePage() {
       setSchedule(data);
     } catch (err: unknown) {
       if ((err as { status?: number }).status === 401 && !authedRef.current) {
-        router.push("/login");
+        setAuthed(false);
+        setLoading(false);
         throw err;
       }
     }
-  }, [router]);
+  }, []);
 
   const startPolling = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -43,6 +46,7 @@ export default function SchedulePage() {
   useEffect(() => {
     fetchSchedule().then(() => {
       authedRef.current = true;
+      setAuthed(true);
       setLoading(false);
       startPolling();
     }).catch(() => {});
@@ -87,6 +91,28 @@ export default function SchedulePage() {
     router.push("/login");
   };
 
+  if (authed === false) {
+    return (
+      <main className="flex-1 flex flex-col items-center justify-center px-5 text-center">
+        <h1 className="font-geologica font-semibold text-display text-heading mb-3">
+          Motion Gym
+        </h1>
+        <p className="text-body text-sm mb-10">Запис на тренування</p>
+        <div className="flex flex-col w-full max-w-xs gap-3">
+          <Link href="/login" className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center">
+            Увійти як учасник
+          </Link>
+          <Link href="/register" className="btn-secondary w-full py-4 rounded-lg border font-medium text-sm transition-colors text-center">
+            Зареєструватись
+          </Link>
+          <Link href="/admin/login" className="text-muted text-xs mt-2 hover:text-body transition-colors">
+            Вхід для тренера
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (loading) {
     return (
       <main className="flex-1 flex items-center justify-center">
@@ -114,7 +140,7 @@ export default function SchedulePage() {
     <main className={`flex-1 px-5 ${schedule.isDemoMode ? "pb-28" : "pb-12"}`}>
       <div className="w-full max-w-xl mx-auto pt-8 sm:pt-12">
         <div className="flex items-start justify-between mb-1">
-          <h1 className="font-geologica font-semibold text-2xl sm:text-3xl text-heading">
+          <h1 className="font-geologica font-semibold text-title sm:text-display text-heading">
             Наступне тренування
           </h1>
           <button

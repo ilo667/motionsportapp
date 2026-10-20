@@ -30,9 +30,9 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
   const belowMin = slot.status === "ACTIVE" && slot.bookedCount < 3;
 
   return (
-    <div className={`rounded-xl border p-5 ${slot.status === "CANCELLED" ? "bg-surface border-line opacity-60" : "bg-surface border-line"}`}>
+    <div className={`rounded-xl border-2 p-5 ${slot.status === "CANCELLED" ? "bg-surface border-line opacity-60" : "bg-surface border-line"}`}>
       <div className="flex items-center justify-between mb-3">
-        <span className="font-geologica font-semibold text-2xl text-heading">
+        <span className="font-geologica font-semibold text-title text-heading">
           {slot.slotTime}
         </span><div className="flex items-center space-x-3">
           {belowMin && (

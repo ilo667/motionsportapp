@@ -123,7 +123,7 @@ export default function AdminPage() {
     <main className={`flex-1 px-5 ${schedule.isDemoMode ? "pb-28" : "pb-12"}`}>
       <div className="w-full max-w-xl mx-auto pt-8 sm:pt-12">
         <div className="flex items-start justify-between mb-1">
-          <h1 className="font-geologica font-semibold text-2xl sm:text-3xl text-heading">
+          <h1 className="font-geologica font-semibold text-title sm:text-display text-heading">
             Панель тренера
           </h1>
           <button
