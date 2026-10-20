@@ -16,6 +16,7 @@ export default function AdminLoginPage() {
     setLoading(true);
     try {
       await api.adminLogin(username.trim(), password);
+      try { localStorage.setItem('mg_authed', '1'); } catch {}
       router.push("/admin");
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;

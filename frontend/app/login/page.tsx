@@ -17,6 +17,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await api.login(memberCode.trim().toUpperCase(), pin);
+      try { localStorage.setItem('mg_authed', '1'); } catch {}
       router.push("/");
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;

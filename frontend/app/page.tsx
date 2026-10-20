@@ -20,8 +20,14 @@ function formatLocalDate(localDate: string): string {
 export default function SchedulePage() {
   const router = useRouter();
   const [schedule, setSchedule] = useState<ScheduleNext | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [authed, setAuthed] = useState<boolean | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try { return localStorage.getItem('mg_authed') === '1' ? null : false; } catch { return null; }
+  });
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try { return localStorage.getItem('mg_authed') === '1'; } catch { return true; }
+  });
   const [mutateError, setMutateError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -33,6 +39,7 @@ export default function SchedulePage() {
       setSchedule(data);
     } catch (err: unknown) {
       if ((err as { status?: number }).status === 401 && !authedRef.current) {
+        try { localStorage.removeItem('mg_authed'); } catch {}
         setAuthed(false);
         setLoading(false);
         throw err;
@@ -46,6 +53,8 @@ export default function SchedulePage() {
   }, [fetchSchedule]);
 
   useEffect(() => {
+    if (authed === false) return;
+
     fetchSchedule().then(() => {
       authedRef.current = true;
       setAuthed(true);
@@ -90,6 +99,7 @@ export default function SchedulePage() {
 
   const handleLogout = async () => {
     await api.logout().catch(() => {});
+    try { localStorage.removeItem('mg_authed'); } catch {}
     router.push("/login");
   };
 
