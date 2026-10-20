@@ -86,7 +86,7 @@ export default function DemoPage() {
                 key={s.key}
                 onClick={() => apply(s.key)}
                 disabled={busy}
-                className={`text-left rounded-[10px] border px-4 py-3 transition-colors ${
+                className={`text-left rounded-xl border px-4 py-3 transition-colors ${
                   applied === s.key
                     ? "border-teal bg-teal/10"
                     : "border-white/10 bg-white/5 hover:bg-white/10"
@@ -127,7 +127,7 @@ function CredCard({
   cta: string;
 }) {
   return (
-    <div className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-3">
+    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
       <p className="text-xs text-white/40 mb-2">{label}</p>
       <div className="grid gap-1 mb-3">
         {rows.map((r) => (

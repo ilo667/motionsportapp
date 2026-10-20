@@ -2,7 +2,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AuthCard } from "@/components/AuthCard";
 import { api } from "@/lib/api";
 
 export default function RegisterPage() {
@@ -49,19 +48,20 @@ export default function RegisterPage() {
 
   if (result) {
     return (
-      <AuthCard>
-        <h1 className="font-geologica font-semibold text-[28px] sm:text-[40px] text-heading mb-2">
+      <main className="flex-1 flex justify-center px-5">
+      <div className="w-full max-w-4xl px-4 sm:px-8 pt-11">
+        <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
           Вітаємо!
         </h1>
         <p className="text-muted text-sm mb-6">
           Збережіть ці дані — ви більше не побачите код відновлення.
         </p>
 
-        <div className="bg-surface rounded-[12px] p-5 mb-4 space-y-4">
+        <div className="bg-surface rounded-xl p-5 mb-4 space-y-4">
           <div>
             <p className="text-muted text-xs mb-1">Ваш код учасника</p>
             <div className="flex items-center justify-between">
-              <span className="font-geologica font-semibold text-[20px] text-heading">
+              <span className="font-geologica font-semibold text-xl text-heading">
                 {result.memberCode}
               </span>
               <button
@@ -97,17 +97,19 @@ export default function RegisterPage() {
 
         <button
           onClick={() => router.push("/")}
-          className="btn-primary w-full py-[15px] rounded-[8px] font-medium text-sm transition-colors"
+          className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors"
         >
           Продовжити →
         </button>
-      </AuthCard>
+        </div>
+    </main>
     );
   }
 
   return (
-    <AuthCard>
-      <h1 className="font-geologica font-semibold text-[28px] sm:text-[40px] text-heading mb-2">
+    <main className="flex-1 flex justify-center px-5">
+      <div className="w-full max-w-4xl px-4 sm:px-8 pt-11">
+      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
         Реєстрація
       </h1>
       <p className="text-body text-sm mb-8">
@@ -128,7 +130,7 @@ export default function RegisterPage() {
             onChange={(e) => setDisplayName(e.target.value)}
             required
             autoComplete="name"
-            className="input-field w-full border rounded-[8px] px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
             placeholder="Іван"
           />
         </div>
@@ -148,7 +150,7 @@ export default function RegisterPage() {
             }}
             required
             autoComplete="new-password"
-            className="input-field w-full border rounded-[8px] px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
             placeholder="••••••"
           />
           {pinError && (
@@ -163,11 +165,12 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={loading}
-          className="btn-primary w-full py-[15px] rounded-[8px] font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loading ? "Зачекайте..." : "Зареєструватись"}
         </button>
       </form>
-    </AuthCard>
+      </div>
+    </main>
   );
 }

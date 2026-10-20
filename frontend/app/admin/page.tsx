@@ -2,7 +2,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, AdminSchedule, Announcement, AnnouncementExample } from "@/lib/api";
-import { AdminSlotCard } from "@/components/AdminSlotCard";
+import { SlotCard as AdminSlotCard } from "@/components/admin/SlotCard";
 import DemoControls from "@/components/DemoControls";
 
 function formatLocalDate(localDate: string): string {
@@ -120,10 +120,10 @@ export default function AdminPage() {
 
   return (
     <>
-    <main className={`flex-1 px-[19px] ${schedule.isDemoMode ? "pb-28" : "pb-12"}`}>
-      <div className="w-full max-w-[600px] mx-auto pt-[32px] sm:pt-[48px]">
+    <main className={`flex-1 px-5 ${schedule.isDemoMode ? "pb-28" : "pb-12"}`}>
+      <div className="w-full max-w-xl mx-auto pt-8 sm:pt-12">
         <div className="flex items-start justify-between mb-1">
-          <h1 className="font-geologica font-semibold text-[24px] sm:text-[32px] text-heading">
+          <h1 className="font-geologica font-semibold text-2xl sm:text-3xl text-heading">
             Панель тренера
           </h1>
           <button
@@ -176,25 +176,25 @@ export default function AdminPage() {
             {!confirmCancelDay ? (
               <button
                 onClick={() => setConfirmCancelDay(true)}
-                className="btn-ghost hover-danger w-full py-3 rounded-[8px] border text-sm transition-colors"
+                className="btn-ghost hover-danger w-full py-3 rounded-lg border text-sm transition-colors"
               >
                 Скасувати весь день
               </button>
             ) : (
-              <div className="rounded-[8px] border border-danger bg-danger/5 p-4 space-y-3">
+              <div className="rounded-lg border border-danger bg-danger/5 p-4 space-y-3">
                 <p className="text-danger text-sm">
                   Скасувати тренування {formatLocalDate(schedule.localDate)}? Всі записи буде відмінено.
                 </p>
                 <div className="flex space-x-2">
                   <button
                     onClick={handleCancelDay}
-                    className="btn-danger flex-1 py-2.5 rounded-[6px] text-sm font-medium transition-colors"
+                    className="btn-danger flex-1 py-2.5 rounded-md text-sm font-medium transition-colors"
                   >
                     Скасувати день
                   </button>
                   <button
                     onClick={() => setConfirmCancelDay(false)}
-                    className="btn-ghost flex-1 py-2.5 rounded-[6px] border text-sm transition-colors"
+                    className="btn-ghost flex-1 py-2.5 rounded-md border text-sm transition-colors"
                   >
                     Ні
                   </button>
@@ -212,12 +212,12 @@ export default function AdminPage() {
 
           {/* Published status */}
           {announcement?.publishedAt ? (
-            <div className="bg-teal/8 border border-teal/20 rounded-[10px] px-4 py-3 mb-4 text-sm text-body">
+            <div className="bg-teal/8 border border-teal/20 rounded-xl px-4 py-3 mb-4 text-sm text-body">
               <p className="font-medium text-teal mb-1 text-xs">✓ Опубліковано</p>
               {announcement.text}
             </div>
           ) : announcement?.text ? (
-            <div className="bg-surface border border-line rounded-[10px] px-4 py-3 mb-4 text-sm text-muted">
+            <div className="bg-surface border border-line rounded-xl px-4 py-3 mb-4 text-sm text-muted">
               <p className="font-medium text-xs mb-1">Чернетка (не опубліковано)</p>
               {announcement.text}
             </div>
@@ -230,7 +230,7 @@ export default function AdminPage() {
                 value={editingText}
                 onChange={(e) => setEditingText(e.target.value)}
                 rows={3}
-                className="input-field w-full rounded-[8px] border px-3 py-2 text-sm resize-none focus:outline-none focus:border-teal"
+                className="input-field w-full rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:border-teal"
                 placeholder="Текст оголошення..."
               />
               <div className="flex space-x-2">
@@ -239,13 +239,13 @@ export default function AdminPage() {
                     await handleMutate(() => api.updateAnnouncementText(schedule.localDate, editingText));
                     setEditingText(null);
                   }}
-                  className="btn-primary flex-1 py-2 rounded-[6px] text-sm transition-colors"
+                  className="btn-primary flex-1 py-2 rounded-md text-sm transition-colors"
                 >
                   Зберегти
                 </button>
                 <button
                   onClick={() => setEditingText(null)}
-                  className="btn-ghost flex-1 py-2 rounded-[6px] border text-sm transition-colors"
+                  className="btn-ghost flex-1 py-2 rounded-md border text-sm transition-colors"
                 >
                   Скасувати
                 </button>
@@ -262,7 +262,7 @@ export default function AdminPage() {
                 await handleMutate(() => api.generateAnnouncement(schedule.localDate));
                 setGenerating(false);
               }}
-              className="btn-secondary py-2 px-3 rounded-[8px] border text-sm transition-colors disabled:opacity-50"
+              className="btn-secondary py-2 px-3 rounded-lg border text-sm transition-colors disabled:opacity-50"
             >
               {generating ? "Генерую..." : "✨ Згенерувати AI"}
             </button>
@@ -270,13 +270,13 @@ export default function AdminPage() {
               <>
                 <button
                   onClick={() => setEditingText(announcement.text ?? "")}
-                  className="btn-ghost py-2 px-3 rounded-[8px] border text-sm transition-colors"
+                  className="btn-ghost py-2 px-3 rounded-lg border text-sm transition-colors"
                 >
                   Редагувати
                 </button>
                 <button
                   onClick={() => handleMutate(() => api.publishAnnouncement(schedule.localDate))}
-                  className="btn-primary py-2 px-3 rounded-[8px] text-sm transition-colors"
+                  className="btn-primary py-2 px-3 rounded-lg text-sm transition-colors"
                 >
                   Опублікувати
                 </button>
@@ -285,7 +285,7 @@ export default function AdminPage() {
             {announcement?.publishedAt && (
               <button
                 onClick={() => handleMutate(() => api.unpublishAnnouncement(schedule.localDate))}
-                className="btn-ghost hover-danger py-2 px-3 rounded-[8px] border text-sm transition-colors"
+                className="btn-ghost hover-danger py-2 px-3 rounded-lg border text-sm transition-colors"
               >
                 Зняти з публікації
               </button>
@@ -296,7 +296,7 @@ export default function AdminPage() {
           <p className="text-muted text-xs mb-2 font-medium">Приклади стилю для AI</p>
           <div className="space-y-2 mb-3">
             {examples.map((ex) => (
-              <div key={ex.id} className="flex items-start space-x-2 bg-surface rounded-[8px] px-3 py-2">
+              <div key={ex.id} className="flex items-start space-x-2 bg-surface rounded-lg px-3 py-2">
                 <p className="flex-1 text-sm text-body">{ex.text}</p>
                 <button
                   onClick={() => handleMutate(() => api.deleteAnnouncementExample(ex.id))}
@@ -313,7 +313,7 @@ export default function AdminPage() {
               value={newExampleText}
               onChange={(e) => setNewExampleText(e.target.value)}
               placeholder="Додати приклад оголошення..."
-              className="input-field flex-1 rounded-[8px] border px-3 py-2 text-sm focus:outline-none focus:border-teal"
+              className="input-field flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:border-teal"
               onKeyDown={async (e) => {
                 if (e.key === "Enter" && newExampleText.trim()) {
                   await handleMutate(() => api.addAnnouncementExample(newExampleText.trim()));
@@ -327,7 +327,7 @@ export default function AdminPage() {
                 await handleMutate(() => api.addAnnouncementExample(newExampleText.trim()));
                 setNewExampleText("");
               }}
-              className="btn-primary py-2 px-3 rounded-[8px] text-sm transition-colors"
+              className="btn-primary py-2 px-3 rounded-lg text-sm transition-colors"
             >
               +
             </button>

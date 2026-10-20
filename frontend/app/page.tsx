@@ -111,10 +111,10 @@ export default function SchedulePage() {
 
   return (
     <>
-    <main className={`flex-1 px-[19px] ${schedule.isDemoMode ? "pb-28" : "pb-12"}`}>
-      <div className="w-full max-w-[600px] mx-auto pt-[32px] sm:pt-[48px]">
+    <main className={`flex-1 px-5 ${schedule.isDemoMode ? "pb-28" : "pb-12"}`}>
+      <div className="w-full max-w-xl mx-auto pt-8 sm:pt-12">
         <div className="flex items-start justify-between mb-1">
-          <h1 className="font-geologica font-semibold text-[24px] sm:text-[32px] text-heading">
+          <h1 className="font-geologica font-semibold text-2xl sm:text-3xl text-heading">
             Наступне тренування
           </h1>
           <button
@@ -130,20 +130,20 @@ export default function SchedulePage() {
         </p>
 
         {schedule.announcement && (
-          <div className="bg-teal/8 border border-teal/20 rounded-[10px] px-4 py-3 mb-5 text-sm text-body">
+          <div className="bg-teal/8 border border-teal/20 rounded-xl px-4 py-3 mb-5 text-sm text-body">
             {schedule.announcement}
           </div>
         )}
 
         {beforeWindow && (
-          <div className="bg-surface rounded-[10px] px-4 py-3 mb-6 text-sm text-body">
+          <div className="bg-surface rounded-xl px-4 py-3 mb-6 text-sm text-body">
             Запис відкриється о{" "}
             <span className="font-medium text-heading">14:00</span>
           </div>
         )}
 
         {afterWindow && (
-          <div className="bg-surface rounded-[10px] px-4 py-3 mb-6 text-sm text-body">
+          <div className="bg-surface rounded-xl px-4 py-3 mb-6 text-sm text-body">
             Запис на цей день закрито
           </div>
         )}

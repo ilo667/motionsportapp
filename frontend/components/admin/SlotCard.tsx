@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { api, AdminSlotView, AttendanceStatus } from "@/lib/api";
 
-interface AdminSlotCardProps {
+interface SlotCardProps {
   slot: AdminSlotView;
   onMutate: (fn: () => Promise<unknown>) => Promise<void>;
 }
@@ -25,14 +25,14 @@ function nextStatus(current: AttendanceStatus): AttendanceStatus {
   return "UNMARKED";
 }
 
-export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
+export function SlotCard({ slot, onMutate }: SlotCardProps) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const belowMin = slot.status === "ACTIVE" && slot.bookedCount < 3;
 
   return (
-    <div className={`rounded-[12px] border p-5 ${slot.status === "CANCELLED" ? "bg-surface border-line opacity-60" : "bg-surface border-line"}`}>
+    <div className={`rounded-xl border p-5 ${slot.status === "CANCELLED" ? "bg-surface border-line opacity-60" : "bg-surface border-line"}`}>
       <div className="flex items-center justify-between mb-3">
-        <span className="font-geologica font-semibold text-[22px] text-heading">
+        <span className="font-geologica font-semibold text-2xl text-heading">
           {slot.slotTime}
         </span><div className="flex items-center space-x-3">
           {belowMin && (
@@ -77,7 +77,7 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
             {slot.participants.length > 0 && (
               <button
                 onClick={() => onMutate(() => api.markAllAttendance(slot.id))}
-                className="btn-secondary w-full py-2.5 rounded-[8px] border text-sm transition-colors"
+                className="btn-secondary w-full py-2.5 rounded-lg border text-sm transition-colors"
               >
                 Підтвердити всіх
               </button>
@@ -86,12 +86,12 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
             {!confirmCancel ? (
               <button
                 onClick={() => setConfirmCancel(true)}
-                className="btn-ghost hover-danger w-full py-2.5 rounded-[8px] border text-sm transition-colors"
+                className="btn-ghost hover-danger w-full py-2.5 rounded-lg border text-sm transition-colors"
               >
                 Відмінити тренування
               </button>
             ) : (
-              <div className="rounded-[8px] border border-danger bg-danger/5 p-3 space-y-2">
+              <div className="rounded-lg border border-danger bg-danger/5 p-3 space-y-2">
                 <p className="text-danger text-xs">
                   Відмінити тренування о {slot.slotTime}? Всі записи буде скасовано.
                 </p>
@@ -101,13 +101,13 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
                       setConfirmCancel(false);
                       onMutate(() => api.cancelSlot(slot.id));
                     }}
-                    className="btn-danger flex-1 py-2 rounded-[6px] text-xs font-medium transition-colors"
+                    className="btn-danger flex-1 py-2 rounded-md text-xs font-medium transition-colors"
                   >
                     Відмінити
                   </button>
                   <button
                     onClick={() => setConfirmCancel(false)}
-                    className="btn-ghost flex-1 py-2 rounded-[6px] border text-xs transition-colors"
+                    className="btn-ghost flex-1 py-2 rounded-md border text-xs transition-colors"
                   >
                     Ні
                   </button>

@@ -42,8 +42,8 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
       onClick={(e) => { if (e.target === e.currentTarget) onDismiss(); }}
     >
       <div className="absolute inset-0 bg-black/40" />
-      <div className="relative w-full max-w-[480px] mx-auto bg-surface rounded-t-[20px] sm:rounded-[16px] px-5 pt-6 pb-8 shadow-xl border border-line">
-        <h2 className="font-geologica font-semibold text-[18px] text-heading mb-1">
+      <div className="relative w-full max-w-[480px] mx-auto bg-surface rounded-t-[20px] sm:rounded-2xl px-5 pt-6 pb-8 shadow-xl border border-line">
+        <h2 className="font-geologica font-semibold text-lg text-heading mb-1">
           {title}
         </h2>
         <p className="text-muted text-sm mb-4">{prompt}</p>
@@ -54,14 +54,14 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
           onChange={(e) => setReason(e.target.value)}
           rows={3}
           placeholder="Напишіть причину..."
-          className="w-full rounded-[10px] border border-line bg-surface px-3 py-2.5 text-sm text-body resize-none focus:outline-none focus:border-teal"
+          className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-body resize-none focus:outline-none focus:border-teal"
         />
 
         <div className="flex flex-col space-y-2 mt-4">
           <button
             disabled={!canSubmit}
             onClick={handleSubmit}
-            className={`w-full py-3 rounded-[10px] text-sm font-medium transition-colors disabled:opacity-40 ${
+            className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 ${
               action === "switch" ? "btn-primary" : "btn-danger"
             }`}
           >
@@ -69,7 +69,7 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
           </button>
           <button
             onClick={onDismiss}
-            className="btn-ghost w-full py-3 rounded-[10px] border text-sm transition-colors"
+            className="btn-ghost w-full py-3 rounded-xl border text-sm transition-colors"
           >
             Назад
           </button>

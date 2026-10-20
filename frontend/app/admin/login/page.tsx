@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AuthCard } from "@/components/AuthCard";
 import { api } from "@/lib/api";
 
 export default function AdminLoginPage() {
@@ -32,8 +31,9 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <AuthCard>
-      <h1 className="font-geologica font-semibold text-[28px] sm:text-[40px] text-heading mb-2">
+    <main className="flex-1 flex justify-center px-5">
+      <div className="w-full max-w-4xl px-4 sm:px-8 pt-11">
+      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
         Адмін
       </h1>
       <p className="text-muted text-sm mb-8">Вхід для тренера</p>
@@ -47,7 +47,7 @@ export default function AdminLoginPage() {
             onChange={(e) => setUsername(e.target.value)}
             required
             autoComplete="username"
-            className="input-field w-full border rounded-[8px] px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
             placeholder="admin"
           />
         </div>
@@ -60,7 +60,7 @@ export default function AdminLoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
-            className="input-field w-full border rounded-[8px] px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
             placeholder="••••••••"
           />
         </div>
@@ -70,11 +70,12 @@ export default function AdminLoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="btn-primary w-full py-[15px] rounded-[8px] font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loading ? "Зачекайте..." : "Увійти"}
         </button>
       </form>
-    </AuthCard>
+      </div>
+    </main>
   );
 }

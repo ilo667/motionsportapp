@@ -20,8 +20,7 @@ export const metadata: Metadata = {
   description: "Запис на тренування",
   manifest: "/manifest.json",
   icons: {
-    icon: "/motion-gym-logo.png",
-    apple: "/motion-gym-logo.png",
+    icon: "/favicon.ico",
   },
 };
 

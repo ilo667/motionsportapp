@@ -44,9 +44,9 @@ export function SlotCard({
 
   return (
     <>
-    <div className={`rounded-[12px] border p-5 ${cardClass}`}>
+    <div className={`rounded-xl border p-5 ${cardClass}`}>
       <div className="flex items-center justify-between mb-4">
-        <span className="font-geologica font-semibold text-[22px] text-heading">
+        <span className="font-geologica font-semibold text-2xl text-heading">
           {slot.slotTime}
         </span>
         <span className="text-muted text-sm">
@@ -66,14 +66,14 @@ export function SlotCard({
           {canSwitch && (
             <button
               onClick={() => setModal({ action: "switch", targetSlot: otherSlot! })}
-              className="btn-secondary w-full py-3 rounded-[8px] border text-sm transition-colors"
+              className="btn-secondary w-full py-3 rounded-lg border text-sm transition-colors"
             >
               Перейти на {otherSlot!.slotTime}
             </button>
           )}
           <button
             onClick={() => setModal({ action: "cancel" })}
-            className="btn-danger w-full py-3 rounded-[8px] text-sm transition-colors"
+            className="btn-danger w-full py-3 rounded-lg text-sm transition-colors"
           >
             Скасувати
           </button>
@@ -83,7 +83,7 @@ export function SlotCard({
       ) : !isFull ? (
         <button
           onClick={() => onMutate(() => api.book(slot.id))}
-          className="btn-primary w-full py-3 rounded-[8px] text-sm transition-colors"
+          className="btn-primary w-full py-3 rounded-lg text-sm transition-colors"
         >
           Записатись
         </button>
@@ -94,7 +94,7 @@ export function SlotCard({
             slot.isMyVacancyAlert ? (
               <button
                 onClick={async () => { await onMutate(() => api.unsubscribeVacancy(slot.id)); onRefresh(); }}
-                className="btn-secondary w-full py-3 rounded-[8px] border text-sm transition-colors"
+                className="btn-secondary w-full py-3 rounded-lg border text-sm transition-colors"
               >
                 🔔 Сповіщення увімкнено
               </button>
@@ -105,7 +105,7 @@ export function SlotCard({
                   await onMutate(() => api.subscribeVacancy(slot.id));
                   onRefresh();
                 }}
-                className="btn-ghost hover-accent w-full py-3 rounded-[8px] border text-sm transition-colors"
+                className="btn-ghost hover-accent w-full py-3 rounded-lg border text-sm transition-colors"
               >
                 🔕 Сповістити про вільне місце
               </button>
