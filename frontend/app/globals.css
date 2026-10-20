@@ -177,6 +177,13 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--color-muted);
     opacity: 0.6;
   }
+  .input-field:-webkit-autofill,
+  .input-field:-webkit-autofill:hover,
+  .input-field:-webkit-autofill:focus {
+    font-size: 0.875rem;
+    -webkit-text-fill-color: var(--color-body);
+    box-shadow: 0 0 0 1000px var(--color-surface) inset;
+  }
 
   /* Hover-modifier classes — compose with btn-ghost */
   .hover-danger {
