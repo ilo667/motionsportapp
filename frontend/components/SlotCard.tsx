@@ -112,7 +112,7 @@ export function SlotCard({
                   await onMutate(() => api.subscribeVacancy(slot.id));
                   onRefresh();
                 }}
-                className="w-full py-3 rounded-[8px] border border-line text-muted hover:border-teal hover:text-teal text-sm transition-colors"
+                className="btn-ghost hover-accent w-full py-3 rounded-[8px] border text-sm transition-colors"
               >
                 🔕 Сповістити про вільне місце
               </button>

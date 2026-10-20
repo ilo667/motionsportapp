@@ -97,4 +97,8 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--color-muted);
     opacity: 0.6;
   }
+
+  /* Hover-modifier classes — compose with btn-ghost */
+  .hover-danger:hover:not(:disabled) { border-color: var(--color-danger); color: var(--color-danger); }
+  .hover-accent:hover:not(:disabled) { border-color: var(--color-teal);   color: var(--color-teal); }
 }

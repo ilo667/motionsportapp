@@ -86,7 +86,7 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
             {!confirmCancel ? (
               <button
                 onClick={() => setConfirmCancel(true)}
-                className="w-full py-2.5 rounded-[8px] border border-line text-muted hover:border-danger hover:text-danger text-sm transition-colors"
+                className="btn-ghost hover-danger w-full py-2.5 rounded-[8px] border text-sm transition-colors"
               >
                 Скасувати слот
               </button>

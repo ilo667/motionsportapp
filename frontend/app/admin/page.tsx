@@ -176,7 +176,7 @@ export default function AdminPage() {
             {!confirmCancelDay ? (
               <button
                 onClick={() => setConfirmCancelDay(true)}
-                className="w-full py-3 rounded-[8px] border border-line text-muted hover:border-danger hover:text-danger text-sm transition-colors"
+                className="btn-ghost hover-danger w-full py-3 rounded-[8px] border text-sm transition-colors"
               >
                 Скасувати весь день
               </button>
@@ -285,7 +285,7 @@ export default function AdminPage() {
             {announcement?.publishedAt && (
               <button
                 onClick={() => handleMutate(() => api.unpublishAnnouncement(schedule.localDate))}
-                className="py-2 px-3 rounded-[8px] border border-line text-muted text-sm hover:border-danger hover:text-danger transition-colors"
+                className="btn-ghost hover-danger py-2 px-3 rounded-[8px] border text-sm transition-colors"
               >
                 Зняти з публікації
               </button>
