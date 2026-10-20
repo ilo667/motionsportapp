@@ -7,6 +7,7 @@ import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
 import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { NotificationService } from '../notifications/notification.service';
+import { DemoService } from '../demo/demo.service';
 
 const SLOT_TIMES = ['19:00', '20:00'];
 const KY_ZONE = 'Europe/Kyiv';
@@ -16,10 +17,11 @@ export class AdminScheduleService {
   constructor(
     private readonly database: DatabaseService,
     private readonly notifications: NotificationService,
+    private readonly demoService: DemoService,
   ) {}
 
   async getSchedule() {
-    const now = DateTime.now().setZone(KY_ZONE);
+    const now = await this.demoService.getNow();
     const today = now.toISODate()!;
 
     const upcoming = await this.database.db
@@ -72,6 +74,7 @@ export class AdminScheduleService {
       bookingOpenAt: openAt.toUTC().toISO(),
       bookingCloseAt: closeAt.toUTC().toISO(),
       serverTime: now.toUTC().toISO(),
+      isDemoMode: this.demoService.isDemoMode(),
       slots: slots.map((s) => {
         const participants = participantRows
           .filter((p) => p.slotId === s.id)

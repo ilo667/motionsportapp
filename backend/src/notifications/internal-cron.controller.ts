@@ -10,6 +10,7 @@ import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { NotificationService } from './notification.service';
 import { AnnouncementsService } from '../ai/announcements.service';
+import { DemoService } from '../demo/demo.service';
 import { trainingDays } from '../database/schema';
 
 const KY_ZONE = 'Europe/Kyiv';
@@ -20,6 +21,7 @@ export class InternalCronController {
     private readonly database: DatabaseService,
     private readonly notifications: NotificationService,
     private readonly announcementsService: AnnouncementsService,
+    private readonly demoService: DemoService,
   ) {}
 
   @Post('cron/booking-open')
@@ -28,7 +30,7 @@ export class InternalCronController {
     this.verifyCronSecret(auth);
 
 
-    const now = DateTime.now().setZone(KY_ZONE);
+    const now = await this.demoService.getNow();
     const today = now.toISODate()!;
 
     // Find today's scheduled training day
@@ -70,21 +72,21 @@ export class InternalCronController {
   @HttpCode(200)
   async generateAnnouncement(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);
-    const now = DateTime.now().setZone(KY_ZONE);
-    const today = now.toISODate()!;
+    const nowAnn = await this.demoService.getNow();
+    const todayAnn = nowAnn.toISODate()!;
 
     const [day] = await this.database.db
       .select()
       .from(trainingDays)
-      .where(eq(trainingDays.localDate, today))
+      .where(eq(trainingDays.localDate, todayAnn))
       .limit(1);
 
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
     }
 
-    await this.announcementsService.autoGenerate(today);
-    return { ok: true, localDate: today };
+    await this.announcementsService.autoGenerate(todayAnn);
+    return { ok: true, localDate: todayAnn };
   }
 
   private verifyCronSecret(auth: string) {

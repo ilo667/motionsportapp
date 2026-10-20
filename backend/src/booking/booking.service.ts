@@ -9,6 +9,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { bookings, trainingSlots, trainingDays } from '../database/schema';
 import { NotificationService } from '../notifications/notification.service';
+import { DemoService } from '../demo/demo.service';
 
 const KY_ZONE = 'Europe/Kyiv';
 
@@ -17,6 +18,7 @@ export class BookingService {
   constructor(
     private readonly database: DatabaseService,
     private readonly notifications: NotificationService,
+    private readonly demoService: DemoService,
   ) {}
 
   async book(memberId: string, slotId: string) {
@@ -37,7 +39,7 @@ export class BookingService {
 
     if (!day || day.status !== 'SCHEDULED') throw new ConflictException('Training day is not scheduled');
 
-    this.validateBookingWindow(day.localDate);
+    await this.validateBookingWindow(day.localDate);
 
     try {
       await this.database.db.transaction(async (tx) => {
@@ -102,7 +104,7 @@ export class BookingService {
       .where(eq(trainingDays.id, booking.trainingDayId))
       .limit(1);
 
-    if (day) this.validateBeforeClose(day.localDate);
+    if (day) await this.validateBeforeClose(day.localDate);
 
     const [slotBefore] = await this.database.db
       .select({ bookedCount: trainingSlots.bookedCount, capacity: trainingSlots.capacity, slotTime: trainingSlots.slotTime })
@@ -153,7 +155,7 @@ export class BookingService {
       .where(eq(trainingDays.id, current.trainingDayId))
       .limit(1);
 
-    if (day) this.validateBookingWindow(day.localDate);
+    if (day) await this.validateBookingWindow(day.localDate);
 
     const oldSlotId = current.slotId;
 
@@ -232,16 +234,16 @@ export class BookingService {
     return { ok: true };
   }
 
-  private validateBookingWindow(localDate: string) {
-    const now = DateTime.now().setZone(KY_ZONE);
+  private async validateBookingWindow(localDate: string) {
+    const now = await this.demoService.getNow();
     const openAt = DateTime.fromISO(`${localDate}T14:00:00`, { zone: KY_ZONE });
     const closeAt = DateTime.fromISO(`${localDate}T21:00:00`, { zone: KY_ZONE });
     if (now < openAt) throw new BadRequestException('Booking opens at 14:00');
     if (now >= closeAt) throw new BadRequestException('Booking window has closed');
   }
 
-  private validateBeforeClose(localDate: string) {
-    const now = DateTime.now().setZone(KY_ZONE);
+  private async validateBeforeClose(localDate: string) {
+    const now = await this.demoService.getNow();
     const closeAt = DateTime.fromISO(`${localDate}T21:00:00`, { zone: KY_ZONE });
     if (now >= closeAt) throw new BadRequestException('Booking window has closed');
   }

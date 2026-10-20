@@ -1,0 +1,180 @@
+import { Injectable, ForbiddenException } from '@nestjs/common';
+import { DateTime } from 'luxon';
+import { eq, and } from 'drizzle-orm';
+import { DatabaseService } from '../database/database.service';
+import { demoState, trainingDays, trainingSlots, bookings, members } from '../database/schema';
+
+const KY_ZONE = 'Europe/Kyiv';
+
+export const DEMO_SCENARIOS = {
+  before_14: { label: 'До 14:00', hour: 10, slot1Count: 0, slot2Count: 0 },
+  booking_open: { label: 'Запис відкрито', hour: 15, slot1Count: 7, slot2Count: 3 },
+  one_full: { label: 'Один слот повний', hour: 15, slot1Count: 8, slot2Count: 3 },
+  after_21: { label: 'Після 21:00', hour: 22, slot1Count: 7, slot2Count: 3 },
+} as const;
+
+export type ScenarioName = keyof typeof DEMO_SCENARIOS;
+
+// Fixed UUIDs for demo background members (deterministic seed)
+export const DEMO_MEMBER_IDS = [
+  'a1000000-0000-0000-0000-000000000001',
+  'a1000000-0000-0000-0000-000000000002',
+  'a1000000-0000-0000-0000-000000000003',
+  'a1000000-0000-0000-0000-000000000004',
+  'a1000000-0000-0000-0000-000000000005',
+  'a1000000-0000-0000-0000-000000000006',
+  'a1000000-0000-0000-0000-000000000007',
+  'a1000000-0000-0000-0000-000000000008',
+  'a1000000-0000-0000-0000-000000000009',
+  'a1000000-0000-0000-0000-000000000010',
+];
+
+@Injectable()
+export class DemoService {
+  constructor(private readonly database: DatabaseService) {}
+
+  requireDemoMode() {
+    if (process.env.DEMO_MODE !== 'true') throw new ForbiddenException('Demo mode is not enabled');
+  }
+
+  async getNow(): Promise<DateTime> {
+    if (process.env.DEMO_MODE !== 'true') return DateTime.now().setZone(KY_ZONE);
+    const [row] = await this.database.db.select().from(demoState).limit(1);
+    if (row?.clockOverrideAt) return DateTime.fromJSDate(row.clockOverrideAt).setZone(KY_ZONE);
+    return DateTime.now().setZone(KY_ZONE);
+  }
+
+  isDemoMode(): boolean {
+    return process.env.DEMO_MODE === 'true';
+  }
+
+  async getInfo() {
+    this.requireDemoMode();
+    const [row] = await this.database.db.select().from(demoState).limit(1);
+    return {
+      isDemoMode: true,
+      scenarioName: row?.scenarioName ?? null,
+      clockOverrideAt: row?.clockOverrideAt?.toISOString() ?? null,
+      scenarios: Object.entries(DEMO_SCENARIOS).map(([key, val]) => ({
+        name: key,
+        label: val.label,
+      })),
+    };
+  }
+
+  async setScenario(scenarioName: ScenarioName) {
+    this.requireDemoMode();
+    const scenario = DEMO_SCENARIOS[scenarioName];
+
+    const now = DateTime.now().setZone(KY_ZONE);
+    const clockAt = now.set({ hour: scenario.hour, minute: 0, second: 0, millisecond: 0 });
+
+    await this.database.db
+      .update(demoState)
+      .set({ clockOverrideAt: clockAt.toJSDate(), scenarioName })
+      .where(eq(demoState.id, 1));
+
+    await this.resetBookingsForScenario(clockAt, scenario.slot1Count, scenario.slot2Count);
+
+    return { ok: true, scenarioName, clockAt: clockAt.toISO() };
+  }
+
+  async reset() {
+    this.requireDemoMode();
+    await this.setScenario('booking_open');
+    return { ok: true };
+  }
+
+  private async resetBookingsForScenario(
+    clockAt: DateTime,
+    slot1Count: number,
+    slot2Count: number,
+  ) {
+    const today = clockAt.toISODate()!;
+
+    const [day] = await this.database.db
+      .select()
+      .from(trainingDays)
+      .where(eq(trainingDays.localDate, today))
+      .limit(1);
+
+    if (!day) return;
+
+    const slots = await this.database.db
+      .select()
+      .from(trainingSlots)
+      .where(and(eq(trainingSlots.trainingDayId, day.id), eq(trainingSlots.status, 'ACTIVE')))
+      .orderBy(trainingSlots.slotTime);
+
+    if (slots.length < 2) return;
+
+    const [slot1, slot2] = slots;
+
+    // Delete all existing bookings for this day
+    await this.database.db
+      .delete(bookings)
+      .where(eq(bookings.trainingDayId, day.id));
+
+    // Reset counts
+    await this.database.db
+      .update(trainingSlots)
+      .set({ bookedCount: 0 })
+      .where(eq(trainingSlots.trainingDayId, day.id));
+
+    // Verify demo members exist
+    const demoMembers = await this.database.db
+      .select({ id: members.id })
+      .from(members)
+      .where(
+        eq(members.memberCode, 'GYM-DEMO0001'),
+      )
+      .limit(1);
+
+    // Only seed bookings if demo members are seeded
+    const existingMembers = await this.database.db
+      .select({ id: members.id })
+      .from(members);
+
+    const demoMemberIds = existingMembers
+      .map((m) => m.id)
+      .filter((id) => DEMO_MEMBER_IDS.includes(id));
+
+    if (demoMemberIds.length === 0) return;
+
+    // Insert bookings for slot1
+    const slot1Members = demoMemberIds.slice(0, slot1Count);
+    const slot2Members = demoMemberIds.slice(slot1Count, slot1Count + slot2Count);
+
+    if (slot1Members.length > 0) {
+      await this.database.db.insert(bookings).values(
+        slot1Members.map((memberId) => ({
+          memberId,
+          trainingDayId: day.id,
+          slotId: slot1.id,
+          status: 'ACTIVE' as const,
+        })),
+      );
+      await this.database.db
+        .update(trainingSlots)
+        .set({ bookedCount: slot1Members.length })
+        .where(eq(trainingSlots.id, slot1.id));
+    }
+
+    if (slot2Members.length > 0) {
+      await this.database.db.insert(bookings).values(
+        slot2Members.map((memberId) => ({
+          memberId,
+          trainingDayId: day.id,
+          slotId: slot2.id,
+          status: 'ACTIVE' as const,
+        })),
+      );
+      await this.database.db
+        .update(trainingSlots)
+        .set({ bookedCount: slot2Members.length })
+        .where(eq(trainingSlots.id, slot2.id));
+    }
+
+    void demoMembers; // suppress unused warning
+  }
+}

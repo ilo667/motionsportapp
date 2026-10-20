@@ -3,6 +3,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, AdminSchedule, Announcement, AnnouncementExample } from "@/lib/api";
 import { AdminSlotCard } from "@/components/AdminSlotCard";
+import DemoControls from "@/components/DemoControls";
 
 function formatLocalDate(localDate: string): string {
   const date = new Date(localDate + "T12:00:00");
@@ -118,7 +119,8 @@ export default function AdminPage() {
   const afterWindow = now >= closeAt;
 
   return (
-    <main className="flex-1 px-[19px] pb-12">
+    <>
+    <main className={`flex-1 px-[19px] ${schedule.isDemoMode ? "pb-28" : "pb-12"}`}>
       <div className="w-full max-w-[600px] mx-auto pt-[32px] sm:pt-[48px]">
         <div className="flex items-start justify-between mb-1">
           <h1 className="font-geologica font-semibold text-[24px] sm:text-[32px] text-heading">
@@ -333,5 +335,7 @@ export default function AdminPage() {
         </div>
       </div>
     </main>
+    {schedule.isDemoMode && <DemoControls onRefresh={fetchSchedule} />}
+    </>
   );
 }

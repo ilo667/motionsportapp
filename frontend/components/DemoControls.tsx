@@ -1,0 +1,77 @@
+"use client";
+
+import { useState } from "react";
+import { api } from "@/lib/api";
+
+const SCENARIOS = [
+  { key: "before_14", label: "До 14:00" },
+  { key: "booking_open", label: "Запис відкрито" },
+  { key: "one_full", label: "Один слот повний" },
+  { key: "after_21", label: "Після 21:00" },
+] as const;
+
+interface DemoControlsProps {
+  onRefresh: () => void;
+}
+
+export default function DemoControls({ onRefresh }: DemoControlsProps) {
+  const [busy, setBusy] = useState(false);
+  const [active, setActive] = useState<string | null>(null);
+
+  async function applyScenario(scenario: string) {
+    setBusy(true);
+    try {
+      await api.setDemoScenario(scenario);
+      setActive(scenario);
+      onRefresh();
+    } catch {
+      // ignore
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reset() {
+    setBusy(true);
+    try {
+      await api.resetDemo();
+      setActive(null);
+      onRefresh();
+    } catch {
+      // ignore
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0f2027] border-t border-white/10 px-4 py-3">
+      <div className="max-w-lg mx-auto">
+        <p className="text-xs text-white/50 mb-2 font-mono uppercase tracking-widest">Demo controls</p>
+        <div className="flex flex-wrap gap-2">
+          {SCENARIOS.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => applyScenario(s.key)}
+              disabled={busy}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                active === s.key
+                  ? "bg-teal text-white"
+                  : "bg-white/10 text-white hover:bg-white/20"
+              } disabled:opacity-50`}
+            >
+              {s.label}
+            </button>
+          ))}
+          <button
+            onClick={reset}
+            disabled={busy}
+            className="px-3 py-1.5 rounded-md text-sm font-medium bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-50 ml-auto"
+          >
+            Скинути
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

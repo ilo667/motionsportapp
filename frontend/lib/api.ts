@@ -43,6 +43,7 @@ export interface ScheduleNext {
   slots: SlotView[];
   serverTime: string;
   announcement?: string | null;
+  isDemoMode?: boolean;
 }
 
 export interface AnnouncementExample {
@@ -97,6 +98,7 @@ export interface AdminSchedule {
   bookingCloseAt: string;
   slots: AdminSlotView[];
   serverTime: string;
+  isDemoMode?: boolean;
 }
 
 export const api = {
@@ -224,4 +226,16 @@ export const api = {
 
   unpublishAnnouncement: (date: string) =>
     request<Announcement>(`/admin/announcements/${date}/unpublish`, { method: "POST" }),
+
+  getDemoInfo: () =>
+    request<{ isDemoMode: boolean; scenario: string | null; clockOverride: string | null }>("/demo/info"),
+
+  setDemoScenario: (scenario: string) =>
+    request<{ ok: boolean; scenario: string }>("/demo/scenario", {
+      method: "POST",
+      body: JSON.stringify({ scenario }),
+    }),
+
+  resetDemo: () =>
+    request<{ ok: boolean }>("/demo/reset", { method: "POST" }),
 };

@@ -8,6 +8,7 @@ import {
   date,
   jsonb,
   uniqueIndex,
+  serial,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -174,4 +175,10 @@ export const aiGenerations = pgTable('ai_generations', {
   status: text('status').notNull(),
   fallbackReason: text('fallback_reason'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const demoState = pgTable('demo_state', {
+  id: serial('id').primaryKey(),
+  clockOverrideAt: timestamp('clock_override_at', { withTimezone: true }),
+  scenarioName: text('scenario_name'),
 });

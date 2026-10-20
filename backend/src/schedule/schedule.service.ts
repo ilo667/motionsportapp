@@ -3,6 +3,7 @@ import { DateTime } from 'luxon';
 import { and, eq, gte, lte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { trainingDays, trainingSlots, bookings, vacancyAlerts, announcements } from '../database/schema';
+import { DemoService } from '../demo/demo.service';
 
 const KY_ZONE = 'Europe/Kyiv';
 const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
@@ -10,12 +11,15 @@ const SLOT_TIMES = ['19:00', '20:00'];
 
 @Injectable()
 export class ScheduleService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly demoService: DemoService,
+  ) {}
 
   async getNext(memberId?: string) {
     await this.materializeUpcoming(21);
 
-    const now = DateTime.now().setZone(KY_ZONE);
+    const now = await this.demoService.getNow();
     const today = now.toISODate()!;
 
     const upcoming = await this.database.db
@@ -111,11 +115,12 @@ export class ScheduleService {
       })),
       serverTime: now.toUTC().toISO(),
       announcement,
+      isDemoMode: this.demoService.isDemoMode(),
     };
   }
 
   async materializeUpcoming(days: number) {
-    const now = DateTime.now().setZone(KY_ZONE);
+    const now = await this.demoService.getNow();
     const today = now.toISODate()!;
     const endDate = now.plus({ days }).toISODate()!;
 
