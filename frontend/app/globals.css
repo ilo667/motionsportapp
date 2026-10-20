@@ -49,3 +49,52 @@ button { cursor: pointer; }
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-geologica), Arial, Helvetica, sans-serif;
 }
+
+/* ── Semantic component classes — all color decisions in one place ── */
+@layer components {
+  /* Filled primary button */
+  .btn-primary {
+    background-color: var(--color-teal);
+    color: var(--color-on-teal);
+  }
+  .btn-primary:hover:not(:disabled) { background-color: var(--color-teal-dark); }
+
+  /* Outlined teal button — add `border` class for border-width */
+  .btn-secondary {
+    background-color: transparent;
+    border-color: var(--color-teal);
+    color: var(--color-teal);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-teal) 10%, transparent);
+  }
+
+  /* Solid destructive button */
+  .btn-danger {
+    background-color: var(--color-danger);
+    color: #ffffff;
+  }
+  .btn-danger:hover:not(:disabled) { opacity: 0.9; }
+
+  /* Outlined muted button — add `border` class for border-width */
+  .btn-ghost {
+    background-color: transparent;
+    border-color: var(--color-line);
+    color: var(--color-muted);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background-color: var(--color-surface);
+    color: var(--color-body);
+  }
+
+  /* Form inputs / textareas — add `border` class for border-width */
+  .input-field {
+    background-color: var(--color-surface);
+    border-color: var(--color-line);
+    color: var(--color-body);
+  }
+  .input-field::placeholder {
+    color: var(--color-muted);
+    opacity: 0.6;
+  }
+}

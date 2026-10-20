@@ -188,13 +188,13 @@ export default function AdminPage() {
                 <div className="flex space-x-2">
                   <button
                     onClick={handleCancelDay}
-                    className="flex-1 py-2.5 rounded-[6px] bg-danger text-white text-sm font-medium hover:opacity-90 transition-colors"
+                    className="btn-danger flex-1 py-2.5 rounded-[6px] text-sm font-medium transition-colors"
                   >
                     Скасувати день
                   </button>
                   <button
                     onClick={() => setConfirmCancelDay(false)}
-                    className="flex-1 py-2.5 rounded-[6px] border border-line text-muted text-sm hover:bg-surface transition-colors"
+                    className="btn-ghost flex-1 py-2.5 rounded-[6px] border text-sm transition-colors"
                   >
                     Ні
                   </button>
@@ -230,7 +230,7 @@ export default function AdminPage() {
                 value={editingText}
                 onChange={(e) => setEditingText(e.target.value)}
                 rows={3}
-                className="w-full rounded-[8px] border border-line bg-surface px-3 py-2 text-sm text-body resize-none focus:outline-none focus:border-teal"
+                className="input-field w-full rounded-[8px] border px-3 py-2 text-sm resize-none focus:outline-none focus:border-teal"
                 placeholder="Текст оголошення..."
               />
               <div className="flex space-x-2">
@@ -239,13 +239,13 @@ export default function AdminPage() {
                     await handleMutate(() => api.updateAnnouncementText(schedule.localDate, editingText));
                     setEditingText(null);
                   }}
-                  className="flex-1 py-2 rounded-[6px] bg-teal text-on-teal text-sm hover:opacity-90 transition-colors"
+                  className="btn-primary flex-1 py-2 rounded-[6px] text-sm transition-colors"
                 >
                   Зберегти
                 </button>
                 <button
                   onClick={() => setEditingText(null)}
-                  className="flex-1 py-2 rounded-[6px] border border-line text-muted text-sm hover:bg-surface transition-colors"
+                  className="btn-ghost flex-1 py-2 rounded-[6px] border text-sm transition-colors"
                 >
                   Скасувати
                 </button>
@@ -262,7 +262,7 @@ export default function AdminPage() {
                 await handleMutate(() => api.generateAnnouncement(schedule.localDate));
                 setGenerating(false);
               }}
-              className="py-2 px-3 rounded-[8px] border border-teal text-teal text-sm hover:bg-teal/10 transition-colors disabled:opacity-50"
+              className="btn-secondary py-2 px-3 rounded-[8px] border text-sm transition-colors disabled:opacity-50"
             >
               {generating ? "Генерую..." : "✨ Згенерувати AI"}
             </button>
@@ -270,13 +270,13 @@ export default function AdminPage() {
               <>
                 <button
                   onClick={() => setEditingText(announcement.text ?? "")}
-                  className="py-2 px-3 rounded-[8px] border border-line text-muted text-sm hover:bg-surface transition-colors"
+                  className="btn-ghost py-2 px-3 rounded-[8px] border text-sm transition-colors"
                 >
                   Редагувати
                 </button>
                 <button
                   onClick={() => handleMutate(() => api.publishAnnouncement(schedule.localDate))}
-                  className="py-2 px-3 rounded-[8px] bg-teal text-on-teal text-sm hover:opacity-90 transition-colors"
+                  className="btn-primary py-2 px-3 rounded-[8px] text-sm transition-colors"
                 >
                   Опублікувати
                 </button>
@@ -313,7 +313,7 @@ export default function AdminPage() {
               value={newExampleText}
               onChange={(e) => setNewExampleText(e.target.value)}
               placeholder="Додати приклад оголошення..."
-              className="flex-1 rounded-[8px] border border-line bg-surface px-3 py-2 text-sm text-body focus:outline-none focus:border-teal"
+              className="input-field flex-1 rounded-[8px] border px-3 py-2 text-sm focus:outline-none focus:border-teal"
               onKeyDown={async (e) => {
                 if (e.key === "Enter" && newExampleText.trim()) {
                   await handleMutate(() => api.addAnnouncementExample(newExampleText.trim()));
@@ -327,7 +327,7 @@ export default function AdminPage() {
                 await handleMutate(() => api.addAnnouncementExample(newExampleText.trim()));
                 setNewExampleText("");
               }}
-              className="py-2 px-3 rounded-[8px] bg-teal text-on-teal text-sm hover:opacity-90 transition-colors"
+              className="btn-primary py-2 px-3 rounded-[8px] text-sm transition-colors"
             >
               +
             </button>

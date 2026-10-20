@@ -56,7 +56,7 @@ export default function DemoControls({ onRefresh }: DemoControlsProps) {
               disabled={busy}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 active === s.key
-                  ? "bg-teal text-on-teal"
+                  ? "btn-primary"
                   : "bg-white/10 text-white hover:bg-white/20"
               } disabled:opacity-50`}
             >

@@ -61,17 +61,15 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
           <button
             disabled={!canSubmit}
             onClick={handleSubmit}
-            className={`w-full py-3 rounded-[10px] text-sm font-medium transition-colors ${
-              action === "switch"
-                ? "bg-teal text-on-teal hover:opacity-90 disabled:opacity-40"
-                : "bg-danger text-white hover:opacity-90 disabled:opacity-40"
+            className={`w-full py-3 rounded-[10px] text-sm font-medium transition-colors disabled:opacity-40 ${
+              action === "switch" ? "btn-primary" : "btn-danger"
             }`}
           >
             {submitLabel}
           </button>
           <button
             onClick={onDismiss}
-            className="w-full py-3 rounded-[10px] border border-line text-muted text-sm hover:bg-surface transition-colors"
+            className="btn-ghost w-full py-3 rounded-[10px] border text-sm transition-colors"
           >
             Назад
           </button>

@@ -97,7 +97,7 @@ export default function RegisterPage() {
 
         <button
           onClick={() => router.push("/")}
-          className="w-full py-[15px] rounded-[8px] bg-teal text-on-teal font-medium text-sm hover:bg-teal-dark transition-colors"
+          className="btn-primary w-full py-[15px] rounded-[8px] font-medium text-sm transition-colors"
         >
           Продовжити →
         </button>
@@ -128,7 +128,7 @@ export default function RegisterPage() {
             onChange={(e) => setDisplayName(e.target.value)}
             required
             autoComplete="name"
-            className="w-full border border-line rounded-[8px] px-4 py-3 text-sm text-body bg-surface focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-[8px] px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
             placeholder="Іван"
           />
         </div>
@@ -148,7 +148,7 @@ export default function RegisterPage() {
             }}
             required
             autoComplete="new-password"
-            className="w-full border border-line rounded-[8px] px-4 py-3 text-sm text-body bg-surface focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-[8px] px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
             placeholder="••••••"
           />
           {pinError && (
@@ -163,7 +163,7 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-[15px] rounded-[8px] bg-teal text-on-teal font-medium text-sm hover:bg-teal-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-primary w-full py-[15px] rounded-[8px] font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loading ? "Зачекайте..." : "Зареєструватись"}
         </button>

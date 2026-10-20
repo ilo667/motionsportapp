@@ -73,14 +73,14 @@ export function SlotCard({
           {canSwitch && (
             <button
               onClick={() => setModal({ action: "switch", targetSlot: otherSlot! })}
-              className="w-full py-3 rounded-[8px] border border-teal text-teal hover:bg-teal/10 text-sm transition-colors"
+              className="btn-secondary w-full py-3 rounded-[8px] border text-sm transition-colors"
             >
               Перейти на {otherSlot!.slotTime}
             </button>
           )}
           <button
             onClick={() => setModal({ action: "cancel" })}
-            className="w-full py-3 rounded-[8px] bg-danger text-white hover:opacity-90 text-sm transition-colors"
+            className="btn-danger w-full py-3 rounded-[8px] text-sm transition-colors"
           >
             Скасувати
           </button>
@@ -90,7 +90,7 @@ export function SlotCard({
       ) : !isFull ? (
         <button
           onClick={() => onMutate(() => api.book(slot.id))}
-          className="w-full py-3 rounded-[8px] bg-teal text-on-teal hover:bg-teal-dark text-sm transition-colors"
+          className="btn-primary w-full py-3 rounded-[8px] text-sm transition-colors"
         >
           Записатись
         </button>
@@ -101,7 +101,7 @@ export function SlotCard({
             slot.isMyVacancyAlert ? (
               <button
                 onClick={async () => { await onMutate(() => api.unsubscribeVacancy(slot.id)); onRefresh(); }}
-                className="w-full py-3 rounded-[8px] border border-teal text-teal text-sm hover:bg-teal/10 transition-colors"
+                className="btn-secondary w-full py-3 rounded-[8px] border text-sm transition-colors"
               >
                 🔔 Сповіщення увімкнено
               </button>

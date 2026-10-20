@@ -77,7 +77,7 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
             {slot.participants.length > 0 && (
               <button
                 onClick={() => onMutate(() => api.markAllAttendance(slot.id))}
-                className="w-full py-2.5 rounded-[8px] border border-teal text-teal hover:bg-teal/10 text-sm transition-colors"
+                className="btn-secondary w-full py-2.5 rounded-[8px] border text-sm transition-colors"
               >
                 Підтвердити всіх
               </button>
@@ -101,13 +101,13 @@ export function AdminSlotCard({ slot, onMutate }: AdminSlotCardProps) {
                       setConfirmCancel(false);
                       onMutate(() => api.cancelSlot(slot.id));
                     }}
-                    className="flex-1 py-2 rounded-[6px] bg-danger text-white text-xs font-medium hover:opacity-90 transition-colors"
+                    className="btn-danger flex-1 py-2 rounded-[6px] text-xs font-medium transition-colors"
                   >
                     Скасувати
                   </button>
                   <button
                     onClick={() => setConfirmCancel(false)}
-                    className="flex-1 py-2 rounded-[6px] border border-line text-muted text-xs hover:bg-surface transition-colors"
+                    className="btn-ghost flex-1 py-2 rounded-[6px] border text-xs transition-colors"
                   >
                     Ні
                   </button>

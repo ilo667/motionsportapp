@@ -47,7 +47,7 @@ export default function AdminLoginPage() {
             onChange={(e) => setUsername(e.target.value)}
             required
             autoComplete="username"
-            className="w-full border border-line rounded-[8px] px-4 py-3 text-sm text-body bg-surface focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-[8px] px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
             placeholder="admin"
           />
         </div>
@@ -60,7 +60,7 @@ export default function AdminLoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
-            className="w-full border border-line rounded-[8px] px-4 py-3 text-sm text-body bg-surface focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className="input-field w-full border rounded-[8px] px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
             placeholder="••••••••"
           />
         </div>
@@ -70,7 +70,7 @@ export default function AdminLoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-[15px] rounded-[8px] bg-teal text-on-teal font-medium text-sm hover:bg-teal-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-primary w-full py-[15px] rounded-[8px] font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loading ? "Зачекайте..." : "Увійти"}
         </button>
