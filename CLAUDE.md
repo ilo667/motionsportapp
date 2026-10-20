@@ -60,6 +60,8 @@ Raw SQL via `pg` (no ORM). Schema in `backend/sql/schema.sql`, seed in `backend/
 - Tailwind CSS v4 — design tokens defined inline in `globals.css` under `@theme`. Use named tokens (`text-accent`, `bg-teal`, `text-muted`, etc.), not arbitrary hex values
 - Fonts: Inter (body, `--font-inter`), Geologica (headings, `--font-geologica`). Use `font-geologica` utility class for headings
 - Logo component: `MotionGymLogo`
+- Page container (`max-w-xl`, `px-5`, `pt-8 sm:pt-12 pb-12`) lives once in `app/layout.tsx` — pages return content directly, no `<main>` wrappers
+- Auth state: `mg_authed` in `localStorage` — set on login, cleared on logout/401. Home page skips API call when flag is absent (avoids 401 in console for unauthenticated users)
 
 ## Vercel deployment
 

@@ -5,6 +5,10 @@
 Next.js 16 App Router PWA. Backend API runs on port 3001 (proxied via `/api` rewrites in `next.config.ts`).
 
 Key files:
-- `app/` — pages (landing, quiz, register, login, report)
-- `components/` — shared UI (Header, Footer, MotionGymLogo, AuthCard, SignOutButton)
+- `app/` — pages: `/` (schedule + unauthenticated landing), `/login`, `/register`, `/admin`, `/admin/login`, `/demo`
+- `components/` — `Header`, `MotionGymLogo`, `SwRegister`, `SlotCard`, `GymLoader`, `DemoControls`, `admin/SlotCard`
 - `lib/api.ts` — typed fetch wrapper for all backend calls
+
+Page container (`max-w-xl`, `px-5`, `pt-8 sm:pt-12 pb-12`) is defined once in `app/layout.tsx`. Pages return content directly without wrapper `<main>` tags.
+
+Auth state: `mg_authed` key in `localStorage` — set on login, cleared on logout or 401. Used on `/` to skip the API call for unauthenticated users (avoids 401 in console).
