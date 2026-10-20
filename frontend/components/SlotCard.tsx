@@ -40,7 +40,7 @@ export function SlotCard({
     ? "bg-teal/5 border-teal"
     : isFull
     ? "bg-surface border-line"
-    : "bg-white border-line";
+    : "bg-surface border-line";
 
   return (
     <>
@@ -90,7 +90,7 @@ export function SlotCard({
       ) : !isFull ? (
         <button
           onClick={() => onMutate(() => api.book(slot.id))}
-          className="w-full py-3 rounded-[8px] bg-teal text-white hover:bg-teal-dark text-sm transition-colors"
+          className="w-full py-3 rounded-[8px] bg-teal text-on-teal hover:bg-teal-dark text-sm transition-colors"
         >
           Записатись
         </button>

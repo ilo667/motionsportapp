@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Geologica, Inter } from "next/font/google";
+import { Russo_One, Inter } from "next/font/google";
 import { Header } from "../components/Header";
-import { BodyBg } from "../components/BodyBg";
 import { SwRegister } from "../components/SwRegister";
 import "./globals.css";
 
-const geologica = Geologica({
+const russoOne = Russo_One({
+  weight: "400",
   variable: "--font-geologica",
   subsets: ["latin", "cyrillic"],
 });
@@ -23,12 +23,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="uk" className={`${geologica.variable} ${inter.variable} h-full antialiased`}>
+    <html lang="uk" className={`${russoOne.variable} ${inter.variable} h-full antialiased`}>
       <head>
-        <meta name="theme-color" content="#116a73" />
+        <meta name="theme-color" content="#93d23c" />
       </head>
       <body className="text-base sm:text-sm min-h-full flex flex-col">
-        <BodyBg />
         <Header />
         {children}
         <SwRegister />

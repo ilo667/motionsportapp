@@ -230,7 +230,7 @@ export default function AdminPage() {
                 value={editingText}
                 onChange={(e) => setEditingText(e.target.value)}
                 rows={3}
-                className="w-full rounded-[8px] border border-line bg-white px-3 py-2 text-sm text-body resize-none focus:outline-none focus:border-teal"
+                className="w-full rounded-[8px] border border-line bg-surface px-3 py-2 text-sm text-body resize-none focus:outline-none focus:border-teal"
                 placeholder="Текст оголошення..."
               />
               <div className="flex space-x-2">
@@ -239,7 +239,7 @@ export default function AdminPage() {
                     await handleMutate(() => api.updateAnnouncementText(schedule.localDate, editingText));
                     setEditingText(null);
                   }}
-                  className="flex-1 py-2 rounded-[6px] bg-teal text-white text-sm hover:opacity-90 transition-colors"
+                  className="flex-1 py-2 rounded-[6px] bg-teal text-on-teal text-sm hover:opacity-90 transition-colors"
                 >
                   Зберегти
                 </button>
@@ -276,7 +276,7 @@ export default function AdminPage() {
                 </button>
                 <button
                   onClick={() => handleMutate(() => api.publishAnnouncement(schedule.localDate))}
-                  className="py-2 px-3 rounded-[8px] bg-teal text-white text-sm hover:opacity-90 transition-colors"
+                  className="py-2 px-3 rounded-[8px] bg-teal text-on-teal text-sm hover:opacity-90 transition-colors"
                 >
                   Опублікувати
                 </button>
@@ -313,7 +313,7 @@ export default function AdminPage() {
               value={newExampleText}
               onChange={(e) => setNewExampleText(e.target.value)}
               placeholder="Додати приклад оголошення..."
-              className="flex-1 rounded-[8px] border border-line bg-white px-3 py-2 text-sm text-body focus:outline-none focus:border-teal"
+              className="flex-1 rounded-[8px] border border-line bg-surface px-3 py-2 text-sm text-body focus:outline-none focus:border-teal"
               onKeyDown={async (e) => {
                 if (e.key === "Enter" && newExampleText.trim()) {
                   await handleMutate(() => api.addAnnouncementExample(newExampleText.trim()));
@@ -327,7 +327,7 @@ export default function AdminPage() {
                 await handleMutate(() => api.addAnnouncementExample(newExampleText.trim()));
                 setNewExampleText("");
               }}
-              className="py-2 px-3 rounded-[8px] bg-teal text-white text-sm hover:opacity-90 transition-colors"
+              className="py-2 px-3 rounded-[8px] bg-teal text-on-teal text-sm hover:opacity-90 transition-colors"
             >
               +
             </button>

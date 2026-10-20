@@ -45,7 +45,7 @@ export default function DemoControls({ onRefresh }: DemoControlsProps) {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0f2027] border-t border-white/10 px-4 py-3">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0d1019] border-t border-[#1a2040] px-4 py-3">
       <div className="max-w-lg mx-auto">
         <p className="text-xs text-white/50 mb-2 font-mono uppercase tracking-widest">Demo controls</p>
         <div className="flex flex-wrap gap-2">
@@ -56,7 +56,7 @@ export default function DemoControls({ onRefresh }: DemoControlsProps) {
               disabled={busy}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 active === s.key
-                  ? "bg-teal text-white"
+                  ? "bg-teal text-on-teal"
                   : "bg-white/10 text-white hover:bg-white/20"
               } disabled:opacity-50`}
             >

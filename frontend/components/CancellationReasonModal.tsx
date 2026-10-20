@@ -42,7 +42,7 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
       onClick={(e) => { if (e.target === e.currentTarget) onDismiss(); }}
     >
       <div className="absolute inset-0 bg-black/40" />
-      <div className="relative w-full max-w-[480px] mx-auto bg-white rounded-t-[20px] sm:rounded-[16px] px-5 pt-6 pb-8 shadow-xl">
+      <div className="relative w-full max-w-[480px] mx-auto bg-surface rounded-t-[20px] sm:rounded-[16px] px-5 pt-6 pb-8 shadow-xl border border-line">
         <h2 className="font-geologica font-semibold text-[18px] text-heading mb-1">
           {title}
         </h2>
@@ -63,7 +63,7 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
             onClick={handleSubmit}
             className={`w-full py-3 rounded-[10px] text-sm font-medium transition-colors ${
               action === "switch"
-                ? "bg-teal text-white hover:opacity-90 disabled:opacity-40"
+                ? "bg-teal text-on-teal hover:opacity-90 disabled:opacity-40"
                 : "bg-danger text-white hover:opacity-90 disabled:opacity-40"
             }`}
           >

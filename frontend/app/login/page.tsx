@@ -55,7 +55,7 @@ export default function LoginPage() {
             }
             required
             autoComplete="username"
-            className="w-full border border-line rounded-[8px] px-4 py-3 text-sm text-body bg-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className="w-full border border-line rounded-[8px] px-4 py-3 text-sm text-body bg-surface focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             placeholder="GYM-12345"
           />
         </div>
@@ -72,7 +72,7 @@ export default function LoginPage() {
             }
             required
             autoComplete="current-password"
-            className="w-full border border-line rounded-[8px] px-4 py-3 text-sm text-body bg-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className="w-full border border-line rounded-[8px] px-4 py-3 text-sm text-body bg-surface focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             placeholder="••••••"
           />
         </div>
@@ -82,7 +82,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-[15px] rounded-[8px] bg-teal text-white font-medium text-sm hover:bg-teal-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full py-[15px] rounded-[8px] bg-teal text-on-teal font-medium text-sm hover:bg-teal-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loading ? "Зачекайте..." : "Увійти"}
         </button>

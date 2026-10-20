@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #04182c;
+  --background: #070910;
+  --foreground: #d8e4f8;
 }
 
 @theme inline {
@@ -15,22 +15,23 @@
   --text-sm--line-height: 28px;
 
   /* Brand */
-  --color-teal: #116a73;
-  --color-teal-dark: #0d5a61;
-  --color-accent: #1066b9;
-  --color-navy: #18334d;
+  --color-teal: #93d23c;
+  --color-teal-dark: #7ab82e;
+  --color-on-teal: #070910;
+  --color-accent: #93d23c;
+  --color-navy: #1a2040;
 
   /* Text */
-  --color-heading: #04182c;
-  --color-body: #1c2d3f;
-  --color-muted: #485664;
+  --color-heading: #d8e4f8;
+  --color-body: #c8d4ec;
+  --color-muted: #4a5a80;
 
   /* UI */
-  --color-surface: #f1f4f7;
-  --color-line: #b4cce3;
-  --color-highlight: #87b3dc;
-  --color-danger: #aa3a3d;
-  --color-danger-ring: #d65050;
+  --color-surface: #0d1019;
+  --color-line: #1a2040;
+  --color-highlight: #93d23c;
+  --color-danger: #f87171;
+  --color-danger-ring: #f87171;
 }
 
 @utility font-geologica {
@@ -39,6 +40,7 @@
 
 body {
   color: var(--foreground);
+  background-color: var(--background);
   font-family: var(--font-inter), Arial, Helvetica, sans-serif;
 }
 
