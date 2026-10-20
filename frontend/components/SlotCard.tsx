@@ -55,9 +55,7 @@ export function SlotCard({
       </div>
 
       {slot.status === "CANCELLED" ? (
-        <span className="inline-block bg-danger/10 text-danger text-sm px-3 py-1 rounded-full">
-          Скасовано
-        </span>
+        <p className="text-danger text-sm font-medium">Скасовано</p>
       ) : afterWindow ? (
         <p className="text-muted text-sm">Запис закрито</p>
       ) : !bookingWindowOpen ? (
