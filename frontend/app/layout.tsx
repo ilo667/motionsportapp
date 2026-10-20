@@ -19,6 +19,10 @@ export const metadata: Metadata = {
   title: "Motion Gym",
   description: "Запис на тренування",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/motion-gym-logo.png",
+    apple: "/motion-gym-logo.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
