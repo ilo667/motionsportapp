@@ -1,4 +1,4 @@
-# MotionSport — Sports Performance PWA
+# Motion Gym — Sports Performance PWA
 
 Full-stack sports performance app. Users complete a short assessment and receive a personalised performance result.
 

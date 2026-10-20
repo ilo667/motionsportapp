@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**MotionSport** — gym class-booking PWA. Full spec at `PROJECT_SPEC.md` (read before implementing anything). The spec uses "GymFlow" as a codename — the product name is **MotionSport**.
+**Motion Gym** — gym class-booking PWA. Full spec at `PROJECT_SPEC.md` (read before implementing anything). The spec uses "GymFlow" as a codename — the product name is **Motion Gym**.
 
 ## Structure
 
@@ -59,7 +59,7 @@ Raw SQL via `pg` (no ORM). Schema in `backend/sql/schema.sql`, seed in `backend/
 - All backend calls go through `frontend/lib/api.ts` (typed fetch wrapper, `credentials: 'include'`)
 - Tailwind CSS v4 — design tokens defined inline in `globals.css` under `@theme`. Use named tokens (`text-accent`, `bg-teal`, `text-muted`, etc.), not arbitrary hex values
 - Fonts: Inter (body, `--font-inter`), Geologica (headings, `--font-geologica`). Use `font-geologica` utility class for headings
-- Logo component: `MotionSportLogo` (placeholder PNGs — replace before launch)
+- Logo component: `MotionGymLogo`
 
 ## Vercel deployment
 

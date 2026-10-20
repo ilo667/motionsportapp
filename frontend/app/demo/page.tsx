@@ -47,7 +47,7 @@ export default function DemoPage() {
     <main className="min-h-screen bg-[#0f2027] text-white px-4 py-10">
       <div className="max-w-lg mx-auto">
         <p className="text-xs font-mono uppercase tracking-widest text-white/40 mb-1">Demo</p>
-        <h1 className="font-geologica text-3xl font-bold mb-2">MotionSport</h1>
+        <h1 className="font-geologica text-3xl font-bold mb-2">Motion Gym</h1>
         <p className="text-white/60 mb-10 text-sm">
           Демо-середовище для перегляду всіх сценаріїв запису на тренування.
         </p>
