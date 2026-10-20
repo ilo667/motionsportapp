@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Exo_2, Inter } from "next/font/google";
+import { Rubik, Inter } from "next/font/google";
 import { Header } from "../components/Header";
 import { SwRegister } from "../components/SwRegister";
 import "./globals.css";
 
-const exo2 = Exo_2({
-  weight: ["600", "700"],
+const rubik = Rubik({
+  weight: ["700"],
   variable: "--font-geologica",
   subsets: ["latin", "cyrillic"],
 });
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="uk" className={`${exo2.variable} ${inter.variable} h-full antialiased`}>
+    <html lang="uk" className={`${rubik.variable} ${inter.variable} h-full antialiased`}>
       <head>
         <meta name="theme-color" content="#93d23c" />
       </head>
