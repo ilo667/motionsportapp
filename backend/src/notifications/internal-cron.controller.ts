@@ -6,12 +6,12 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { DateTime } from 'luxon';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { NotificationService } from './notification.service';
 import { AnnouncementsService } from '../ai/announcements.service';
 import { DemoService } from '../demo/demo.service';
-import { trainingDays } from '../database/schema';
+import { trainingDays, trainingSlots, bookings, attendance, admins } from '../database/schema';
 
 const KY_ZONE = 'Europe/Kyiv';
 
@@ -87,6 +87,67 @@ export class InternalCronController {
 
     await this.announcementsService.autoGenerate(todayAnn);
     return { ok: true, localDate: todayAnn };
+  }
+
+  @Post('cron/auto-confirm-attendance')
+  @HttpCode(200)
+  async autoConfirmAttendance(@Headers('authorization') auth: string) {
+    this.verifyCronSecret(auth);
+
+    const now = await this.demoService.getNow();
+    const today = now.toISODate()!;
+
+    const [day] = await this.database.db
+      .select()
+      .from(trainingDays)
+      .where(eq(trainingDays.localDate, today))
+      .limit(1);
+
+    if (!day || day.status === 'CANCELLED') {
+      return { ok: true, skipped: 'no active day today' };
+    }
+
+    const [admin] = await this.database.db
+      .select({ id: admins.id })
+      .from(admins)
+      .limit(1);
+
+    if (!admin) {
+      return { ok: true, skipped: 'no admin found' };
+    }
+
+    const slots = await this.database.db
+      .select({ id: trainingSlots.id })
+      .from(trainingSlots)
+      .where(and(eq(trainingSlots.trainingDayId, day.id), eq(trainingSlots.status, 'ACTIVE')));
+
+    const unmarkedBookings = await this.database.db
+      .select({ id: bookings.id })
+      .from(bookings)
+      .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
+      .where(
+        and(
+          eq(bookings.trainingDayId, day.id),
+          eq(bookings.status, 'ACTIVE'),
+          isNull(attendance.bookingId),
+        ),
+      );
+
+    if (unmarkedBookings.length === 0) {
+      return { ok: true, marked: 0 };
+    }
+
+    const markedAt = now.toJSDate();
+    await this.database.db.transaction(async (tx) => {
+      for (const booking of unmarkedBookings) {
+        await tx
+          .insert(attendance)
+          .values({ bookingId: booking.id, status: 'PRESENT', markedAt, markedByAdminId: admin.id })
+          .onConflictDoNothing();
+      }
+    });
+
+    return { ok: true, marked: unmarkedBookings.length, slots: slots.length };
   }
 
   private verifyCronSecret(auth: string) {

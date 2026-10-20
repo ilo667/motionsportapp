@@ -126,7 +126,7 @@ export default function AdminPage() {
         Панель тренера
       </h1>
 
-        <p className="text-body text-sm mb-1 capitalize">
+        <p className="text-muted text-sm mb-1 capitalize">
           {formatLocalDate(schedule.localDate)}
         </p>
 

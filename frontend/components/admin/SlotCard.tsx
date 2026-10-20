@@ -28,6 +28,7 @@ function nextStatus(current: AttendanceStatus): AttendanceStatus {
 export function SlotCard({ slot, onMutate }: SlotCardProps) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const belowMin = slot.status === "ACTIVE" && slot.bookedCount < 3;
+  const allPresent = slot.participants.length > 0 && slot.participants.every(p => p.attendanceStatus === "PRESENT");
 
   return (
     <div className={`rounded-xl border-2 p-5 ${slot.status === "CANCELLED" ? "bg-surface border-line opacity-60" : "bg-surface border-line"}`}>
@@ -58,13 +59,14 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                 <li key={p.bookingId} className="flex items-center justify-between space-x-2">
                   <span className="text-body text-sm">{p.displayName}</span>
                   <button
+                    disabled={allPresent}
                     onClick={() =>
                       onMutate(() =>
                         api.updateAttendance(p.bookingId, nextStatus(p.attendanceStatus))
                       )
                     }
                     title={`Змінити відвідуваність: ${p.attendanceStatus}`}
-                    className={`w-8 h-8 rounded-full border text-xs font-bold shrink-0 transition-colors ${ATTENDANCE_COLORS[p.attendanceStatus]}`}
+                    className={`w-8 h-8 rounded-full border text-xs font-bold shrink-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${ATTENDANCE_COLORS[p.attendanceStatus]}`}
                   >
                     {ATTENDANCE_LABELS[p.attendanceStatus]}
                   </button>
@@ -75,12 +77,16 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
 
           <div className="flex flex-col space-y-2">
             {slot.participants.length > 0 && (
-              <button
-                onClick={() => onMutate(() => api.markAllAttendance(slot.id))}
-                className="btn-secondary w-full py-2.5 rounded-lg border text-sm transition-colors"
-              >
-                Підтвердити всіх
-              </button>
+              allPresent ? (
+                <p className="text-teal text-sm text-center py-2">✓ Всі учасники підтверджені</p>
+              ) : (
+                <button
+                  onClick={() => onMutate(() => api.markAllAttendance(slot.id))}
+                  className="btn-secondary w-full py-2.5 rounded-lg border text-sm transition-colors"
+                >
+                  Підтвердити всіх
+                </button>
+              )
             )}
 
             {!confirmCancel ? (
