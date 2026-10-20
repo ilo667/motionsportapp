@@ -111,8 +111,7 @@ export default function SchedulePage() {
           <h1 className="font-geologica font-semibold text-display text-heading mb-3">
             Motion Gym
           </h1>
-          <p className="text-body text-sm mb-10">Запис на тренування</p>
-          <div className="flex flex-col w-full max-w-xs gap-3">
+          <div className="flex flex-col w-full max-w-xs gap-3 mt-10">
             <Link href="/login" className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center">
               Увійти як клієнт
             </Link>
