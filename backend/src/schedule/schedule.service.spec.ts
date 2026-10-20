@@ -1,0 +1,112 @@
+import { DateTime } from 'luxon';
+import { ScheduleService } from './schedule.service';
+
+const KY_ZONE = 'Europe/Kyiv';
+
+function kyivAt(hour: number): DateTime {
+  return DateTime.fromObject({ year: 2026, month: 10, day: 20, hour }, { zone: KY_ZONE });
+}
+
+function makeDb(results: unknown[][] = []) {
+  let idx = 0;
+  const next = () => results[idx++] ?? [];
+
+  function readLink(): any {
+    const then = (resolve: (v: unknown) => void) => resolve(next());
+    const chain: any = { then };
+    for (const m of ['from', 'where', 'for', 'orderBy', 'limit', 'inArray']) {
+      chain[m] = jest.fn().mockImplementation(() => readLink());
+    }
+    return chain;
+  }
+
+  function writeLink(): any {
+    const then = (resolve: (v: void) => void) => resolve();
+    const chain: any = { then };
+    for (const m of ['set', 'where', 'values', 'onConflictDoNothing']) {
+      chain[m] = jest.fn().mockImplementation(() => writeLink());
+    }
+    return chain;
+  }
+
+  const db: any = {
+    select: jest.fn().mockImplementation(() => readLink()),
+    insert: jest.fn().mockImplementation(() => writeLink()),
+    update: jest.fn().mockImplementation(() => writeLink()),
+    transaction: jest.fn().mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(db)),
+  };
+  return { db };
+}
+
+const TODAY = '2026-10-20';
+
+const trainingDay = { id: 'day-1', localDate: TODAY, status: 'SCHEDULED', isException: false };
+const slots = [
+  { id: 'slot-1', slotTime: '19:00', status: 'ACTIVE', capacity: 8, bookedCount: 5 },
+  { id: 'slot-2', slotTime: '20:00', status: 'ACTIVE', capacity: 8, bookedCount: 3 },
+];
+const publishedAnnouncement = { text: 'Записуйтесь сьогодні! 💪', publishedAt: new Date() };
+const unpublishedAnnouncement = { text: 'Записуйтесь сьогодні! 💪', publishedAt: null };
+
+function makeService(db: any, now: DateTime) {
+  const mockDemoService = {
+    getNow: jest.fn().mockResolvedValue(now),
+    isDemoMode: jest.fn().mockReturnValue(false),
+  };
+  const service = new ScheduleService({ db } as any, mockDemoService as any);
+  // Skip materializeUpcoming — it's a maintenance operation, not business logic under test
+  jest.spyOn(service as any, 'materializeUpcoming').mockResolvedValue(undefined);
+  return service;
+}
+
+describe('ScheduleService — announcement visibility', () => {
+  it('shows announcement when window is open and ann is published', async () => {
+    const { db } = makeDb([[trainingDay], slots, [publishedAnnouncement]]);
+    const result = await makeService(db, kyivAt(15)).getNext();
+    expect(result?.announcement).toBe(publishedAnnouncement.text);
+  });
+
+  it('hides announcement before 14:00 even if published', async () => {
+    const { db } = makeDb([[trainingDay], slots, [publishedAnnouncement]]);
+    const result = await makeService(db, kyivAt(10)).getNext();
+    expect(result?.announcement).toBeNull();
+  });
+
+  it('hides announcement after 21:00', async () => {
+    const { db } = makeDb([[trainingDay], slots, [publishedAnnouncement]]);
+    const result = await makeService(db, kyivAt(22)).getNext();
+    expect(result?.announcement).toBeNull();
+  });
+
+  it('hides announcement when publishedAt is null (draft)', async () => {
+    const { db } = makeDb([[trainingDay], slots, [unpublishedAnnouncement]]);
+    const result = await makeService(db, kyivAt(15)).getNext();
+    expect(result?.announcement).toBeNull();
+  });
+
+  it('hides announcement when no announcement exists', async () => {
+    const { db } = makeDb([[trainingDay], slots, []]);
+    const result = await makeService(db, kyivAt(15)).getNext();
+    expect(result?.announcement).toBeNull();
+  });
+});
+
+describe('ScheduleService — booking window flag', () => {
+  it('bookingWindowOpen is false before 14:00', async () => {
+    const { db } = makeDb([[trainingDay], slots, []]);
+    const result = await makeService(db, kyivAt(13)).getNext();
+    expect(result?.bookingWindowOpen).toBe(false);
+  });
+
+  it('bookingWindowOpen is true between 14:00 and 21:00', async () => {
+    const { db } = makeDb([[trainingDay], slots, []]);
+    const result = await makeService(db, kyivAt(17)).getNext();
+    expect(result?.bookingWindowOpen).toBe(true);
+  });
+
+  it('bookingWindowOpen is false after 21:00', async () => {
+    const { db } = makeDb([[trainingDay], slots, []]);
+    const result = await makeService(db, kyivAt(21)).getNext();
+    expect(result?.bookingWindowOpen).toBe(false);
+  });
+});
