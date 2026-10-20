@@ -161,20 +161,24 @@ export default function SchedulePage() {
           </div>
         )}
 
-        {beforeWindow && (
-          <div className="bg-surface rounded-xl px-4 py-3 mb-6 text-sm text-body">
-            Запис відкриється о{" "}
-            <span className="font-medium text-heading">14:00</span>
-          </div>
-        )}
+        <div className="flex items-center mb-6">
+          {beforeWindow ? (
+            <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
+              До 14:00
+            </span>
+          ) : afterWindow ? (
+            <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
+              Запис закрито
+            </span>
+          ) : (
+            <span className="text-xs font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-3 py-1 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal shrink-0"></span>
+              Запис відкрито
+            </span>
+          )}
+        </div>
 
-        {afterWindow && (
-          <div className="bg-surface rounded-xl px-4 py-3 mb-6 text-sm text-body">
-            Запис на цей день закрито
-          </div>
-        )}
-
-        <div className="flex flex-col space-y-4">
+        <div className="rounded-2xl border border-line p-3 flex flex-col space-y-3">
           {schedule.slots.map((slot) => (
             <SlotCard
               key={slot.id}

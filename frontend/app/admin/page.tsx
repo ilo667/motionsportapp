@@ -135,7 +135,8 @@ export default function AdminPage() {
               День скасовано
             </span>
           ) : schedule.bookingWindowOpen ? (
-            <span className="text-xs text-teal bg-teal/10 border border-teal/30 rounded-full px-2 py-0.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-3 py-1 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal shrink-0"></span>
               Запис відкрито
             </span>
           ) : afterWindow ? (
