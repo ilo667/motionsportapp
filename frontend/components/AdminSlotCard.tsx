@@ -16,7 +16,7 @@ const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
 const ATTENDANCE_COLORS: Record<AttendanceStatus, string> = {
   PRESENT: "bg-teal/10 text-teal border-teal",
   ABSENT: "bg-danger/10 text-danger border-danger",
-  UNMARKED: "bg-surface text-muted border-line",
+  UNMARKED: "bg-surface text-body border-muted",
 };
 
 function nextStatus(current: AttendanceStatus): AttendanceStatus {

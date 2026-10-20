@@ -128,13 +128,13 @@ export default function AdminPage() {
           </h1>
           <button
             onClick={handleLogout}
-            className="text-muted text-sm hover:text-body transition-colors mt-1 ml-4 shrink-0"
+            className="text-body text-sm hover:text-heading transition-colors mt-1 ml-4 shrink-0"
           >
             Вийти
           </button>
         </div>
 
-        <p className="text-muted text-sm mb-1 capitalize">
+        <p className="text-body text-sm mb-1 capitalize">
           {formatLocalDate(schedule.localDate)}
         </p>
 
