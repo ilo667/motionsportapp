@@ -3,6 +3,7 @@ import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { AiModule } from '../ai/ai.module';
 import { DemoModule } from '../demo/demo.module';
+import { PaymentModule } from '../payment/payment.module';
 import { PushService } from './push.service';
 import { PushSubscriptionsService } from './push-subscriptions.service';
 import { VacancyAlertsService } from './vacancy-alerts.service';
@@ -12,7 +13,7 @@ import { VacancyAlertsController } from './vacancy-alerts.controller';
 import { InternalCronController } from './internal-cron.controller';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, AiModule, DemoModule],
+  imports: [DatabaseModule, AuthModule, AiModule, DemoModule, PaymentModule],
   controllers: [PushSubscriptionsController, VacancyAlertsController, InternalCronController],
   providers: [PushService, PushSubscriptionsService, VacancyAlertsService, NotificationService],
   exports: [NotificationService, VacancyAlertsService],

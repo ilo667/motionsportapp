@@ -8,8 +8,9 @@ import { AdminScheduleModule } from './admin/admin-schedule.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AiModule } from './ai/ai.module';
 import { DemoModule } from './demo/demo.module';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
-  imports: [DatabaseModule, HealthModule, AuthModule, ScheduleModule, BookingModule, AdminScheduleModule, NotificationsModule, AiModule, DemoModule],
+  imports: [DatabaseModule, HealthModule, AuthModule, ScheduleModule, BookingModule, AdminScheduleModule, NotificationsModule, AiModule, DemoModule, PaymentModule],
 })
 export class AppModule {}

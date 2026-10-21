@@ -11,6 +11,7 @@ import { DatabaseService } from '../database/database.service';
 import { NotificationService } from './notification.service';
 import { AnnouncementsService } from '../ai/announcements.service';
 import { DemoService } from '../demo/demo.service';
+import { PaymentService } from '../payment/payment.service';
 import { trainingDays, trainingSlots, bookings, attendance, admins } from '../database/schema';
 
 const KY_ZONE = 'Europe/Kyiv';
@@ -22,6 +23,7 @@ export class InternalCronController {
     private readonly notifications: NotificationService,
     private readonly announcementsService: AnnouncementsService,
     private readonly demoService: DemoService,
+    private readonly paymentService: PaymentService,
   ) {}
 
   @Post('cron/booking-open')
@@ -148,6 +150,13 @@ export class InternalCronController {
     });
 
     return { ok: true, marked: unmarkedBookings.length, slots: slots.length };
+  }
+
+  @Post('cron/expire-payments')
+  @HttpCode(200)
+  async expirePayments(@Headers('authorization') auth: string) {
+    this.verifyCronSecret(auth);
+    return this.paymentService.expireStale();
   }
 
   private verifyCronSecret(auth: string) {

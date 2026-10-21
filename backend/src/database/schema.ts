@@ -85,6 +85,7 @@ export const bookings = pgTable(
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancellationReason: text('cancellation_reason'),
     cancellationReasonAt: timestamp('cancellation_reason_at', { withTimezone: true }),
+    paymentStatus: text('payment_status'), // null = free | 'PENDING' | 'PAID'
   },
   (table) => [
     uniqueIndex('bookings_member_day_active_idx')
@@ -177,6 +178,19 @@ export const aiGenerations = pgTable('ai_generations', {
   status: text('status').notNull(),
   fallbackReason: text('fallback_reason'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const payments = pgTable('payments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  bookingId: uuid('booking_id').notNull().references(() => bookings.id),
+  orderId: text('order_id').notNull().unique(),
+  amount: integer('amount').notNull(),
+  currency: text('currency').notNull().default('UAH'),
+  status: text('status').notNull().default('PENDING'), // PENDING | PAID | FAILED | EXPIRED
+  liqpayPaymentId: text('liqpay_payment_id'),
+  rawCallback: jsonb('raw_callback'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const demoState = pgTable('demo_state', {

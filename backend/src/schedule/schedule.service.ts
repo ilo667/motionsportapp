@@ -60,9 +60,11 @@ export class ScheduleService {
     let myBookingSlotId: string | null = null;
     const myVacancyAlertSlotIds = new Set<string>();
 
+    let myPaymentStatus: string | null = null;
+
     if (memberId) {
       const [mine] = await this.database.db
-        .select({ slotId: bookings.slotId })
+        .select({ slotId: bookings.slotId, paymentStatus: bookings.paymentStatus })
         .from(bookings)
         .where(
           and(
@@ -73,6 +75,7 @@ export class ScheduleService {
         )
         .limit(1);
       myBookingSlotId = mine?.slotId ?? null;
+      myPaymentStatus = mine?.paymentStatus ?? null;
 
       const slotIds = slots.map((s) => s.id);
       if (slotIds.length > 0) {
@@ -108,9 +111,11 @@ export class ScheduleService {
         id: s.id,
         slotTime: s.slotTime,
         status: s.status,
+        trainingType: s.trainingType,
         capacity: s.capacity,
         bookedCount: s.bookedCount,
         isMyBooking: s.id === myBookingSlotId,
+        myPaymentStatus: s.id === myBookingSlotId ? myPaymentStatus : null,
         isMyVacancyAlert: myVacancyAlertSlotIds.has(s.id),
       })),
       serverTime: now.toUTC().toISO(),

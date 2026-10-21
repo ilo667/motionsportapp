@@ -4,6 +4,27 @@ import { api, SlotView } from "@/lib/api";
 import { ensurePushSubscribed } from "@/lib/pushUtils";
 import { CancellationReasonModal } from "./CancellationReasonModal";
 
+const LIQPAY_URL = "https://www.liqpay.ua/api/3/checkout";
+const PAYMENT_TYPES = ["індивідуальні", "спліт"];
+const PRICE_UAH = 700;
+
+async function redirectToLiqPay(slotId: string) {
+  const { data, signature } = await api.createCheckout(slotId);
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = LIQPAY_URL;
+  form.style.display = "none";
+  [["data", data], ["signature", signature]].forEach(([name, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  });
+  document.body.appendChild(form);
+  form.submit();
+}
+
 interface SlotCardProps {
   slot: SlotView;
   allSlots: SlotView[];
@@ -21,6 +42,22 @@ export function SlotCard({
   onMutate,
   onRefresh,
 }: SlotCardProps) {
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState("");
+
+  const handlePay = async () => {
+    setPaying(true);
+    setPayError("");
+    try {
+      await redirectToLiqPay(slot.id);
+    } catch {
+      setPayError("Помилка оплати. Спробуйте ще раз.");
+      setPaying(false);
+    }
+  };
+
+  const needsPayment = PAYMENT_TYPES.includes(slot.trainingType);
+
   const [modal, setModal] = useState<
     | { action: "cancel" }
     | { action: "switch"; targetSlot: SlotView }
@@ -62,30 +99,62 @@ export function SlotCard({
         <p className="text-muted text-sm">Запис відкриється о 14:00</p>
       ) : slot.isMyBooking ? (
         <div className="flex flex-col space-y-2">
-          {canSwitch && (
-            <button
-              onClick={() => setModal({ action: "switch", targetSlot: otherSlot! })}
-              className="btn-secondary w-full py-3 rounded-lg border text-sm transition-colors"
-            >
-              Перейти на {otherSlot!.slotTime}
-            </button>
+          {slot.myPaymentStatus === "PENDING" ? (
+            <>
+              <p className="text-xs text-amber-400 text-center">Очікує оплати</p>
+              <button
+                onClick={handlePay}
+                disabled={paying}
+                className="btn-primary w-full py-3 rounded-lg text-sm transition-colors disabled:opacity-60"
+              >
+                {paying ? "Завантаження..." : `Оплатити ${PRICE_UAH} ₴`}
+              </button>
+            </>
+          ) : (
+            <>
+              {slot.myPaymentStatus === "PAID" && (
+                <p className="text-xs text-teal text-center mb-1">✓ Оплачено</p>
+              )}
+              {canSwitch && (
+                <button
+                  onClick={() => setModal({ action: "switch", targetSlot: otherSlot! })}
+                  className="btn-secondary w-full py-3 rounded-lg border text-sm transition-colors"
+                >
+                  Перейти на {otherSlot!.slotTime}
+                </button>
+              )}
+              <button
+                onClick={() => setModal({ action: "cancel" })}
+                className="btn-danger w-full py-3 rounded-lg text-sm transition-colors"
+              >
+                Скасувати
+              </button>
+            </>
           )}
-          <button
-            onClick={() => setModal({ action: "cancel" })}
-            className="btn-danger w-full py-3 rounded-lg text-sm transition-colors"
-          >
-            Скасувати
-          </button>
+          {payError && <p className="text-danger text-xs text-center">{payError}</p>}
         </div>
       ) : hasAnyBooking ? (
         <p className="text-muted text-sm">Ви вже записані на інший час</p>
       ) : !isFull ? (
-        <button
-          onClick={() => onMutate(() => api.book(slot.id))}
-          className="btn-primary w-full py-3 rounded-lg text-sm transition-colors"
-        >
-          Записатись
-        </button>
+        needsPayment ? (
+          <div className="flex flex-col space-y-1">
+            <button
+              onClick={handlePay}
+              disabled={paying}
+              className="btn-primary w-full py-3 rounded-lg text-sm transition-colors disabled:opacity-60"
+            >
+              {paying ? "Завантаження..." : `Оплатити ${PRICE_UAH} ₴`}
+            </button>
+            {payError && <p className="text-danger text-xs text-center">{payError}</p>}
+          </div>
+        ) : (
+          <button
+            onClick={() => onMutate(() => api.book(slot.id))}
+            className="btn-primary w-full py-3 rounded-lg text-sm transition-colors"
+          >
+            Записатись
+          </button>
+        )
       ) : (
         <div className="flex flex-col space-y-2">
           <p className="text-muted text-sm font-medium">Місць немає</p>

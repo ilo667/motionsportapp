@@ -16,6 +16,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export type TrainingType = "групові" | "індивідуальні" | "спліт";
+
 export interface MeResponse {
   type: "member" | "admin";
   id: string;
@@ -28,9 +30,11 @@ export interface SlotView {
   id: string;
   slotTime: "19:00" | "20:00";
   status: "ACTIVE" | "CANCELLED";
+  trainingType: TrainingType;
   capacity: number;
   bookedCount: number;
   isMyBooking: boolean;
+  myPaymentStatus?: "PENDING" | "PAID" | null;
   isMyVacancyAlert?: boolean;
 }
 
@@ -100,8 +104,6 @@ export interface AdminSchedule {
   serverTime: string;
   isDemoMode?: boolean;
 }
-
-export type TrainingType = "групові" | "індивідуальні" | "спліт";
 
 export interface CalendarSlot {
   localDate: string;
@@ -183,6 +185,12 @@ export const api = {
     request<{ ok: boolean }>(`/admin/training-days/${date}`, {
       method: "PUT",
       body: JSON.stringify(body),
+    }),
+
+  createCheckout: (slotId: string) =>
+    request<{ data: string; signature: string }>("/payments/checkout", {
+      method: "POST",
+      body: JSON.stringify({ slotId }),
     }),
 
   getCalendar: (month: string) =>
