@@ -53,7 +53,8 @@ function makeService(db: any, now: DateTime) {
     getNow: jest.fn().mockResolvedValue(now),
     isDemoMode: jest.fn().mockReturnValue(false),
   };
-  const service = new ScheduleService({ db } as any, mockDemoService as any);
+  const mockPaymentService = { expireStale: jest.fn().mockResolvedValue(undefined) };
+  const service = new ScheduleService({ db } as any, mockDemoService as any, mockPaymentService as any);
   // Skip materializeUpcoming — it's a maintenance operation, not business logic under test
   jest.spyOn(service as any, 'materializeUpcoming').mockResolvedValue(undefined);
   return service;
