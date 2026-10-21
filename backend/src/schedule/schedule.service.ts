@@ -102,7 +102,7 @@ export class ScheduleService {
       .where(eq(announcements.trainingDayId, targetDay.id))
       .limit(1);
 
-    const announcement = bookingWindowOpen && ann?.publishedAt && ann.text ? ann.text : null;
+    const announcement = ann?.publishedAt && ann.text ? ann.text : null;
 
     return {
       localDate: targetDay.localDate,
