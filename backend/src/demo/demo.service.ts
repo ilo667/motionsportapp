@@ -7,10 +7,11 @@ import { demoState, trainingDays, trainingSlots, bookings, members, attendance }
 const KY_ZONE = 'Europe/Kyiv';
 
 export const DEMO_SCENARIOS = {
-  before_14: { label: 'До 14:00', hour: 10, slot1Count: 0, slot2Count: 0 },
-  booking_open: { label: 'Запис відкрито', hour: 15, slot1Count: 7, slot2Count: 3 },
-  one_full: { label: 'Один слот повний', hour: 15, slot1Count: 8, slot2Count: 3 },
-  after_21: { label: 'Після 21:00', hour: 22, slot1Count: 7, slot2Count: 3 },
+  before_14:    { label: 'До 14:00',         hour: 10, slot1Count: 0, slot2Count: 0, slot1Type: 'групові', slot2Type: 'групові' },
+  booking_open: { label: 'Запис відкрито',   hour: 15, slot1Count: 7, slot2Count: 3, slot1Type: 'групові', slot2Type: 'групові' },
+  one_full:     { label: 'Один слот повний', hour: 15, slot1Count: 8, slot2Count: 3, slot1Type: 'групові', slot2Type: 'групові' },
+  after_21:     { label: 'Після 21:00',      hour: 22, slot1Count: 7, slot2Count: 3, slot1Type: 'групові', slot2Type: 'групові' },
+  payment_test: { label: 'Тест оплати',      hour: 15, slot1Count: 3, slot2Count: 1, slot1Type: 'групові', slot2Type: 'індивідуальні' },
 } as const;
 
 export type ScenarioName = keyof typeof DEMO_SCENARIOS;
@@ -74,7 +75,7 @@ export class DemoService {
       .set({ clockOverrideAt: clockAt.toJSDate(), scenarioName })
       .where(eq(demoState.id, 1));
 
-    await this.resetBookingsForScenario(clockAt, scenario.slot1Count, scenario.slot2Count);
+    await this.resetBookingsForScenario(clockAt, scenario.slot1Count, scenario.slot2Count, scenario.slot1Type, scenario.slot2Type);
 
     return { ok: true, scenarioName, clockAt: clockAt.toISO() };
   }
@@ -89,6 +90,8 @@ export class DemoService {
     clockAt: DateTime,
     slot1Count: number,
     slot2Count: number,
+    slot1Type = 'групові',
+    slot2Type = 'групові',
   ) {
     const today = clockAt.toISODate()!;
 
@@ -110,13 +113,13 @@ export class DemoService {
     if (!day) return;
 
     // Ensure slots exist for today
-    for (const slotTime of ['19:00', '20:00']) {
+    for (const [slotTime, trainingType] of [['19:00', slot1Type], ['20:00', slot2Type]]) {
       await this.database.db
         .insert(trainingSlots)
-        .values({ trainingDayId: day.id, slotTime, status: 'ACTIVE', capacity: 8, bookedCount: 0 })
+        .values({ trainingDayId: day.id, slotTime, status: 'ACTIVE', trainingType, capacity: 8, bookedCount: 0 })
         .onConflictDoUpdate({
           target: [trainingSlots.trainingDayId, trainingSlots.slotTime],
-          set: { status: 'ACTIVE', bookedCount: 0 },
+          set: { status: 'ACTIVE', trainingType, bookedCount: 0 },
         });
     }
 
