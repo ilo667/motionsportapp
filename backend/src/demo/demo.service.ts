@@ -2,7 +2,7 @@ import { Injectable, ForbiddenException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { eq, and } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { demoState, trainingDays, trainingSlots, bookings, members, attendance } from '../database/schema';
+import { demoState, trainingDays, trainingSlots, bookings, members, attendance, payments } from '../database/schema';
 
 const KY_ZONE = 'Europe/Kyiv';
 
@@ -140,6 +140,7 @@ export class DemoService {
       .where(eq(bookings.trainingDayId, day.id));
 
     for (const b of dayBookings) {
+      await this.database.db.delete(payments).where(eq(payments.bookingId, b.id));
       await this.database.db.delete(attendance).where(eq(attendance.bookingId, b.id));
     }
 
