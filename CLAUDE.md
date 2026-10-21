@@ -93,5 +93,5 @@ Two separate Vercel projects pointing at this repo:
 
 Required env vars:
 - Backend: `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`
-- Backend (payments): `LIQPAY_PUBLIC_KEY`, `LIQPAY_PRIVATE_KEY`, `LIQPAY_SERVER_URL`, `LIQPAY_SANDBOX` (set to `1` for sandbox), `LIQPAY_AMOUNT` (default `700`)
+- Backend (payments): `LIQPAY_PUBLIC_KEY`, `LIQPAY_PRIVATE_KEY`, `LIQPAY_SERVER_URL`, `LIQPAY_AMOUNT` (default `700`)
 - Frontend: `BACKEND_URL`

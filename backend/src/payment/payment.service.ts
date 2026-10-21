@@ -14,7 +14,6 @@ export class PaymentService {
 
   private get publicKey() { return process.env.LIQPAY_PUBLIC_KEY ?? ''; }
   private get privateKey() { return process.env.LIQPAY_PRIVATE_KEY ?? ''; }
-  private get sandbox() { return process.env.LIQPAY_SANDBOX === '1' ? 1 : 0; }
   private get amount() { return parseInt(process.env.LIQPAY_AMOUNT ?? '700', 10); }
 
   async createCheckout(slotId: string, memberId: string) {
@@ -99,7 +98,6 @@ export class PaymentService {
       order_id: orderId,
       server_url: process.env.LIQPAY_SERVER_URL ?? '',
       result_url: `${process.env.FRONTEND_URL ?? ''}/payment/return?order=${orderId}`,
-      sandbox: this.sandbox,
     };
 
     const data = liqpayEncode(params);

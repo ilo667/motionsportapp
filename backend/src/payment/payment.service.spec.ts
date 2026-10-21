@@ -74,7 +74,6 @@ function makeDb(results: unknown[][] = []) {
 function makeService(db: any) {
   process.env.LIQPAY_PUBLIC_KEY = 'pub_key';
   process.env.LIQPAY_PRIVATE_KEY = 'priv_key';
-  process.env.LIQPAY_SANDBOX = '1';
   process.env.FRONTEND_URL = 'https://test.example.com';
   process.env.LIQPAY_SERVER_URL = 'https://api.example.com/payments/liqpay/callback';
   return new PaymentService({ db } as any);
