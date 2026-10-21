@@ -188,7 +188,7 @@ describe('PaymentService — handleCallback failure', () => {
 });
 
 describe('PaymentService — getStatus', () => {
-  const pending = { id: 'pay-1', bookingId: 'booking-1', status: 'PENDING' };
+  const pending = { id: 'pay-1', bookingId: 'booking-1', status: 'PENDING', createdAt: new Date('2026-10-21T19:00:00Z') };
 
   it('throws NotFoundException when order does not belong to member', async () => {
     const { db } = makeDb([[]]);
@@ -218,28 +218,28 @@ describe('PaymentService — getStatus', () => {
   it('stays PENDING for non-final LiqPay status', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: '3ds_verify' });
     const { db, sets } = makeDb([[pending]]);
-    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING' });
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING', expiresAt: '2026-10-21T19:15:00.000Z' });
     expect(sets).toHaveLength(0);
   });
 
   it('returns errCode for a rejected attempt (try_again) and keeps booking', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'try_again', err_code: 'limit' });
     const { db, sets } = makeDb([[pending]]);
-    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING', errCode: 'limit' });
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING', errCode: 'limit', expiresAt: '2026-10-21T19:15:00.000Z' });
     expect(sets).toHaveLength(0);
   });
 
   it('stays PENDING when LiqPay returns result=error (e.g. payment not started)', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
     const { db, sets } = makeDb([[pending]]);
-    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING' });
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING', expiresAt: '2026-10-21T19:15:00.000Z' });
     expect(sets).toHaveLength(0);
   });
 
   it('stays PENDING when LiqPay is unreachable', async () => {
     mockLiqpayStatus.mockRejectedValue(new Error('timeout'));
     const { db, sets } = makeDb([[pending]]);
-    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING' });
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING', expiresAt: '2026-10-21T19:15:00.000Z' });
     expect(sets).toHaveLength(0);
   });
 });
@@ -330,5 +330,17 @@ describe('PaymentService — callback for a REPLACED attempt', () => {
     const { db, sets } = makeDb([[replaced], [{ status: 'ACTIVE', paymentStatus: 'PAID' }]]);
     await makeService(db).handleCallback(...callback());
     expect(sets).toHaveLength(0);
+  });
+});
+
+describe('PaymentService — PAYMENT_EXPIRY_MINUTES', () => {
+  afterEach(() => { delete process.env.PAYMENT_EXPIRY_MINUTES; });
+
+  it('uses the configured expiry for expiresAt', async () => {
+    process.env.PAYMENT_EXPIRY_MINUTES = '2';
+    mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
+    const pending = { id: 'pay-1', bookingId: 'booking-1', status: 'PENDING', createdAt: new Date('2026-10-21T19:00:00Z') };
+    const { db } = makeDb([[pending]]);
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING', expiresAt: '2026-10-21T19:02:00.000Z' });
   });
 });

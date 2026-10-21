@@ -66,7 +66,7 @@ Auth endpoints:
   - `POST /payments/checkout` — creates booking (PENDING payment status) + returns LiqPay `{data, signature}` for form POST; if member already has a PENDING booking on that slot — reuses it with a new order_id (old payment → `REPLACED`), or returns `{status: 'PAID'}` if LiqPay says the previous attempt succeeded
   - `POST /payments/liqpay/callback` — public server-to-server callback; verifies SHA1 signature; activates/cancels booking
   - `GET /payments/status?order=` — member's own order; while PENDING asks LiqPay status API directly (used by `/payment/return`)
-  - Expiry: lazily on `GET /schedule/next` (`expireStale()`), PENDING older than 15 min — reconciles with LiqPay status API first (lost callback → PAID, LiqPay unreachable → skip)
+  - Expiry: lazily on `GET /schedule/next` (`expireStale()`), PENDING older than `PAYMENT_EXPIRY_MINUTES` — reconciles with LiqPay status API first (lost callback → PAID, LiqPay unreachable → skip)
 - `HealthModule` — `GET /health`
 
 ### Database
@@ -94,5 +94,5 @@ Two separate Vercel projects pointing at this repo:
 
 Required env vars:
 - Backend: `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`
-- Backend (payments): `LIQPAY_PUBLIC_KEY`, `LIQPAY_PRIVATE_KEY`, `LIQPAY_SERVER_URL`, `LIQPAY_AMOUNT` (default `700`)
+- Backend (payments): `LIQPAY_PUBLIC_KEY`, `LIQPAY_PRIVATE_KEY`, `LIQPAY_SERVER_URL`, `LIQPAY_AMOUNT` (default `700`), `PAYMENT_EXPIRY_MINUTES` (default `15`; set e.g. `2` to test expiry)
 - Frontend: `BACKEND_URL`

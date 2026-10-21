@@ -29,6 +29,8 @@ export class PaymentService {
   private get publicKey() { return process.env.LIQPAY_PUBLIC_KEY ?? ''; }
   private get privateKey() { return process.env.LIQPAY_PRIVATE_KEY ?? ''; }
   private get amount() { return parseInt(process.env.LIQPAY_AMOUNT ?? '700', 10); }
+  // Lower it (e.g. 2) to test expiry without waiting
+  private get expiryMs() { return parseInt(process.env.PAYMENT_EXPIRY_MINUTES ?? '15', 10) * 60 * 1000; }
 
   async createCheckout(slotId: string, memberId: string) {
     if (!this.publicKey || !this.privateKey) {
@@ -221,10 +223,14 @@ export class PaymentService {
 
   // Used by /payment/return. Asks LiqPay directly while still PENDING, so the page
   // shows the real result even if the callback is late or lost.
-  // errCode is set when LiqPay rejected an attempt but the order is still open (status=try_again)
-  async getStatus(orderId: string, memberId: string): Promise<{ status: PaymentStatus; errCode?: string }> {
+  // errCode is set when LiqPay rejected an attempt but the order is still open (status=try_again);
+  // expiresAt — when a still PENDING booking will be released
+  async getStatus(
+    orderId: string,
+    memberId: string,
+  ): Promise<{ status: PaymentStatus; errCode?: string; expiresAt?: string }> {
     const [payment] = await this.database.db
-      .select({ id: payments.id, bookingId: payments.bookingId, status: payments.status })
+      .select({ id: payments.id, bookingId: payments.bookingId, status: payments.status, createdAt: payments.createdAt })
       .from(payments)
       .innerJoin(bookings, eq(bookings.id, payments.bookingId))
       .where(and(eq(payments.orderId, orderId), eq(bookings.memberId, memberId)))
@@ -236,10 +242,11 @@ export class PaymentService {
       return { status: payment.status as PaymentStatus };
     }
 
+    const expiresAt = new Date(payment.createdAt.getTime() + this.expiryMs).toISOString();
     const remote = await this.fetchLiqpayStatus(orderId);
     if (!remote || remote.result !== 'ok') {
       this.logger.log(`Status check: order=${orderId} → PENDING (LiqPay ${remote ? 'result=' + String(remote.result as string) : 'unreachable'})`);
-      return { status: 'PENDING' };
+      return { status: 'PENDING', expiresAt };
     }
 
     const status = await this.applyLiqpayStatus(payment, remote);
@@ -247,11 +254,12 @@ export class PaymentService {
       ? remote.err_code
       : undefined;
     this.logger.log(`Status check: order=${orderId} → ${status}${errCode ? ` errCode=${errCode}` : ''}`);
-    return errCode ? { status, errCode } : { status };
+    if (status !== 'PENDING') return { status };
+    return errCode ? { status, errCode, expiresAt } : { status, expiresAt };
   }
 
   async expireStale() {
-    const cutoff = new Date(Date.now() - 15 * 60 * 1000);
+    const cutoff = new Date(Date.now() - this.expiryMs);
     const stale = await this.database.db
       .select({ id: payments.id, bookingId: payments.bookingId, orderId: payments.orderId })
       .from(payments)

@@ -48,16 +48,16 @@ const CONTENT: Record<Exclude<ResultState, "PENDING" | "REJECTED">, { icon: stri
   },
 };
 
-const PENDING_CONTENT = {
-  icon: "…",
-  iconClass: "text-amber-400",
-  title: "Оплату не завершено",
-  text: "Якщо ви не завершили оплату, запис скасується автоматично через 15 хвилин.",
-};
+function holdUntil(expiresAt?: string) {
+  if (!expiresAt) return "ще кілька хвилин";
+  const time = new Date(expiresAt).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Kyiv" });
+  return `до ${time}`;
+}
 
 export function PaymentResult({ orderId }: { orderId?: string }) {
   const [state, setState] = useState<ResultState | null>(orderId ? null : "UNKNOWN");
   const [errCode, setErrCode] = useState<string>();
+  const [expiresAt, setExpiresAt] = useState<string>();
 
   useEffect(() => {
     if (!orderId) return;
@@ -66,8 +66,9 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
 
     const check = async (attempt: number) => {
       try {
-        const { status, errCode } = await api.getPaymentStatus(orderId);
+        const { status, errCode, expiresAt } = await api.getPaymentStatus(orderId);
         if (cancelled) return;
+        setExpiresAt(expiresAt);
         if (status === "PENDING" && errCode) {
           setErrCode(errCode);
           setState("REJECTED");
@@ -98,10 +99,15 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
           icon: "✕",
           iconClass: "text-danger",
           title: "Оплата не пройшла",
-          text: `${REJECT_REASONS[errCode ?? ""] ?? "Банк відхилив платіж."} Спробуйте ще раз або іншою карткою — місце за вами ще 15 хвилин.`,
+          text: `${REJECT_REASONS[errCode ?? ""] ?? "Банк відхилив платіж."} Спробуйте ще раз або іншою карткою — місце за вами ${holdUntil(expiresAt)}.`,
         }
       : state === "PENDING"
-        ? PENDING_CONTENT
+        ? {
+            icon: "…",
+            iconClass: "text-amber-400",
+            title: "Оплату не завершено",
+            text: `Місце за вами ${holdUntil(expiresAt)}, далі запис скасується автоматично.`,
+          }
         : CONTENT[state];
 
   return (

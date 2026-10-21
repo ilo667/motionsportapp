@@ -197,7 +197,7 @@ export const api = {
     }),
 
   getPaymentStatus: (orderId: string) =>
-    request<{ status: PaymentStatus; errCode?: string }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
+    request<{ status: PaymentStatus; errCode?: string; expiresAt?: string }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
 
   getCalendar: (month: string) =>
     request<CalendarSlot[]>(`/admin/calendar?month=${month}`),
