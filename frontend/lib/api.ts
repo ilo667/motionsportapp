@@ -18,6 +18,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type TrainingType = "групові" | "індивідуальні" | "спліт";
 
+export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "EXPIRED" | "REPLACED";
+
 export interface MeResponse {
   type: "member" | "admin";
   id: string;
@@ -188,10 +190,14 @@ export const api = {
     }),
 
   createCheckout: (slotId: string) =>
-    request<{ data: string; signature: string }>("/payments/checkout", {
+    // { status: "PAID" } — a previous attempt for this booking already succeeded, no redirect needed
+    request<{ data: string; signature: string } | { status: "PAID" }>("/payments/checkout", {
       method: "POST",
       body: JSON.stringify({ slotId }),
     }),
+
+  getPaymentStatus: (orderId: string) =>
+    request<{ status: PaymentStatus }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
 
   getCalendar: (month: string) =>
     request<CalendarSlot[]>(`/admin/calendar?month=${month}`),

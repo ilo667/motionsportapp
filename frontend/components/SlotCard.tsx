@@ -8,8 +8,11 @@ const LIQPAY_URL = "https://www.liqpay.ua/api/3/checkout";
 const PAYMENT_TYPES = ["індивідуальні", "спліт"];
 const PRICE_UAH = 700;
 
-async function redirectToLiqPay(slotId: string) {
-  const { data, signature } = await api.createCheckout(slotId);
+// Returns false when no redirect happened (booking turned out to be already paid)
+async function redirectToLiqPay(slotId: string): Promise<boolean> {
+  const checkout = await api.createCheckout(slotId);
+  if ("status" in checkout) return false;
+  const { data, signature } = checkout;
   const form = document.createElement("form");
   form.method = "POST";
   form.action = LIQPAY_URL;
@@ -23,6 +26,7 @@ async function redirectToLiqPay(slotId: string) {
   });
   document.body.appendChild(form);
   form.submit();
+  return true;
 }
 
 interface SlotCardProps {
@@ -49,7 +53,10 @@ export function SlotCard({
     setPaying(true);
     setPayError("");
     try {
-      await redirectToLiqPay(slot.id);
+      if (!(await redirectToLiqPay(slot.id))) {
+        setPaying(false);
+        onRefresh();
+      }
     } catch {
       setPayError("Помилка оплати. Спробуйте ще раз.");
       setPaying(false);

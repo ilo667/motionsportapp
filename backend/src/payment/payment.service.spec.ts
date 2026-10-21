@@ -1,6 +1,12 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify } from './liqpay.helper';
+import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } from './liqpay.helper';
 import { PaymentService } from './payment.service';
+
+jest.mock('./liqpay.helper', () => ({
+  ...jest.requireActual('./liqpay.helper'),
+  liqpayStatus: jest.fn(),
+}));
+const mockLiqpayStatus = liqpayStatus as jest.MockedFunction<typeof liqpayStatus>;
 
 // ── LiqPay helper ──────────────────────────────────────────────────────────
 
@@ -42,23 +48,27 @@ describe('liqpay helper', () => {
 
 // ── PaymentService ─────────────────────────────────────────────────────────
 
+// `sets` records every update().set(...) payload so tests can assert resulting statuses
 function makeDb(results: unknown[][] = []) {
   let idx = 0;
   const next = () => results[idx++] ?? [];
+  const sets: Record<string, unknown>[] = [];
 
   function readLink(): any {
     const chain: any = { then: (r: (v: unknown) => void) => r(next()) };
-    for (const m of ['from', 'where', 'for', 'orderBy', 'limit']) {
+    for (const m of ['from', 'innerJoin', 'where', 'for', 'orderBy', 'limit']) {
       chain[m] = jest.fn().mockImplementation(() => readLink());
     }
     return chain;
   }
 
+  // Writes resolve to one affected row, so `.returning()` destructuring works
   function writeLink(): any {
-    const chain: any = { then: (r: (v: void) => void) => r() };
-    for (const m of ['set', 'where', 'values', 'onConflictDoNothing', 'returning']) {
+    const chain: any = { then: (r: (v: unknown) => void) => r([{ id: 'new-booking-id' }]) };
+    for (const m of ['where', 'values', 'onConflictDoNothing', 'returning']) {
       chain[m] = jest.fn().mockImplementation(() => writeLink());
     }
+    chain.set = jest.fn().mockImplementation((v: Record<string, unknown>) => { sets.push(v); return writeLink(); });
     return chain;
   }
 
@@ -68,8 +78,10 @@ function makeDb(results: unknown[][] = []) {
     update: jest.fn().mockImplementation(() => writeLink()),
     transaction: jest.fn().mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(db)),
   };
-  return { db };
+  return { db, sets };
 }
+
+beforeEach(() => mockLiqpayStatus.mockReset());
 
 function makeService(db: any) {
   process.env.LIQPAY_PUBLIC_KEY = 'pub_key';
@@ -155,5 +167,161 @@ describe('PaymentService — handleCallback', () => {
 
     const result = await svc.handleCallback(data, sig);
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe('PaymentService — handleCallback failure', () => {
+  it('cancels booking and marks payment FAILED on failure status', async () => {
+    const { db, sets } = makeDb([
+      [{ id: 'pay-1', bookingId: 'booking-1', status: 'PENDING' }],
+      [{ slotId: 'slot-1' }],
+    ]);
+    const svc = makeService(db);
+
+    const data = liqpayEncode({ order_id: 'mg-1', status: 'failure', err_code: 'limit' });
+    const result = await svc.handleCallback(data, liqpaySign('priv_key', data));
+
+    expect(result).toEqual({ ok: true });
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'FAILED' }));
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED' }));
+  });
+});
+
+describe('PaymentService — getStatus', () => {
+  const pending = { id: 'pay-1', bookingId: 'booking-1', status: 'PENDING' };
+
+  it('throws NotFoundException when order does not belong to member', async () => {
+    const { db } = makeDb([[]]);
+    await expect(makeService(db).getStatus('mg-1', 'member-2')).rejects.toThrow(NotFoundException);
+  });
+
+  it('returns stored status without asking LiqPay when not PENDING', async () => {
+    const { db } = makeDb([[{ ...pending, status: 'PAID' }]]);
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PAID' });
+    expect(mockLiqpayStatus).not.toHaveBeenCalled();
+  });
+
+  it('marks PAID when LiqPay reports success', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'success', order_id: 'mg-1' });
+    const { db, sets } = makeDb([[pending]]);
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PAID' });
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'PAID' }));
+  });
+
+  it('cancels booking when LiqPay reports failure', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'failure', err_code: 'limit' });
+    const { db, sets } = makeDb([[pending], [{ slotId: 'slot-1' }]]);
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'FAILED' });
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED' }));
+  });
+
+  it('stays PENDING for non-final LiqPay status', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: '3ds_verify' });
+    const { db, sets } = makeDb([[pending]]);
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING' });
+    expect(sets).toHaveLength(0);
+  });
+
+  it('stays PENDING when LiqPay returns result=error (e.g. payment not started)', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
+    const { db, sets } = makeDb([[pending]]);
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING' });
+    expect(sets).toHaveLength(0);
+  });
+
+  it('stays PENDING when LiqPay is unreachable', async () => {
+    mockLiqpayStatus.mockRejectedValue(new Error('timeout'));
+    const { db, sets } = makeDb([[pending]]);
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING' });
+    expect(sets).toHaveLength(0);
+  });
+});
+
+describe('PaymentService — expireStale', () => {
+  const stale = { id: 'pay-1', bookingId: 'booking-1', orderId: 'mg-1' };
+
+  it('marks PAID instead of expiring when LiqPay reports success (lost callback)', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'success' });
+    const { db, sets } = makeDb([[stale]]);
+    await expect(makeService(db).expireStale()).resolves.toEqual({ expired: 0 });
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'PAID' }));
+    expect(sets).not.toContainEqual(expect.objectContaining({ status: 'EXPIRED' }));
+  });
+
+  it('does not expire when LiqPay is unreachable', async () => {
+    mockLiqpayStatus.mockRejectedValue(new Error('timeout'));
+    const { db, sets } = makeDb([[stale]]);
+    await expect(makeService(db).expireStale()).resolves.toEqual({ expired: 0 });
+    expect(sets).toHaveLength(0);
+  });
+
+  it('expires and frees the slot when payment was not completed', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
+    const { db, sets } = makeDb([[stale], [{ slotId: 'slot-1' }]]);
+    await expect(makeService(db).expireStale()).resolves.toEqual({ expired: 1 });
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'EXPIRED' }));
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED' }));
+  });
+});
+
+describe('PaymentService — resume PENDING checkout', () => {
+  const slot = { id: 'slot-1', status: 'ACTIVE', trainingType: 'індивідуальні', bookedCount: 1, capacity: 8, trainingDayId: 'day-1' };
+  const pending = { id: 'pay-1', bookingId: 'booking-1', orderId: 'mg-old' };
+
+  it('issues a new order for the same booking instead of 409', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
+    const { db, sets } = makeDb([[slot], [pending]]);
+    const result = await makeService(db).createCheckout('slot-1', 'member-1');
+
+    expect(result).toHaveProperty('data');
+    const orderId = liqpayDecode((result as { data: string }).data).order_id as string;
+    expect(orderId).toMatch(/^mg-\d+-booking-/);
+    expect(orderId).not.toBe('mg-old');
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'REPLACED' }));
+    expect(sets).not.toContainEqual(expect.objectContaining({ bookedCount: expect.anything() }));
+  });
+
+  it('returns PAID without redirect when the previous attempt actually succeeded', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'success' });
+    const { db, sets } = makeDb([[slot], [pending]]);
+    await expect(makeService(db).createCheckout('slot-1', 'member-1')).resolves.toEqual({ status: 'PAID' });
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'PAID' }));
+  });
+
+  it('starts a fresh booking when the previous attempt failed', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'failure' });
+    const { db, sets } = makeDb([[slot], [pending], [{ slotId: 'slot-1' }], [slot], []]);
+    const result = await makeService(db).createCheckout('slot-1', 'member-1');
+
+    expect(result).toHaveProperty('data');
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'FAILED' }));
+    expect(db.insert).toHaveBeenCalled();
+  });
+
+  it('still returns 409 when the PENDING booking is on another slot', async () => {
+    const { db } = makeDb([[slot], [], [slot], [{ id: 'booking-other' }]]);
+    await expect(makeService(db).createCheckout('slot-1', 'member-1')).rejects.toThrow('already have an active booking');
+    expect(mockLiqpayStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('PaymentService — callback for a REPLACED attempt', () => {
+  const replaced = { id: 'pay-old', bookingId: 'booking-1', status: 'REPLACED' };
+  const callback = () => {
+    const data = liqpayEncode({ order_id: 'mg-old', status: 'success' });
+    return [data, liqpaySign('priv_key', data)] as const;
+  };
+
+  it('marks booking PAID when it still awaits payment', async () => {
+    const { db, sets } = makeDb([[replaced], [{ status: 'ACTIVE', paymentStatus: 'PENDING' }]]);
+    await makeService(db).handleCallback(...callback());
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'PAID' }));
+    expect(sets).toContainEqual(expect.objectContaining({ paymentStatus: 'PAID' }));
+  });
+
+  it('does not touch a booking that is already paid (double payment → manual handling)', async () => {
+    const { db, sets } = makeDb([[replaced], [{ status: 'ACTIVE', paymentStatus: 'PAID' }]]);
+    await makeService(db).handleCallback(...callback());
+    expect(sets).toHaveLength(0);
   });
 });

@@ -15,3 +15,23 @@ export function liqpayDecode(data: string): Record<string, unknown> {
 export function liqpayVerify(privateKey: string, data: string, signature: string): boolean {
   return liqpaySign(privateKey, data) === signature;
 }
+
+const LIQPAY_API_URL = 'https://www.liqpay.ua/api/request';
+
+// Server-to-server status check: https://www.liqpay.ua/uk/doc/api/information/status_payment
+// Throws on network error / timeout — callers must treat that as "unknown", not as failure.
+export async function liqpayStatus(
+  publicKey: string,
+  privateKey: string,
+  orderId: string,
+  timeoutMs = 3000,
+): Promise<Record<string, unknown>> {
+  const data = liqpayEncode({ version: 3, public_key: publicKey, action: 'status', order_id: orderId });
+  const res = await fetch(LIQPAY_API_URL, {
+    method: 'POST',
+    body: new URLSearchParams({ data, signature: liqpaySign(privateKey, data) }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`LiqPay status API returned ${res.status}`);
+  return (await res.json()) as Record<string, unknown>;
+}

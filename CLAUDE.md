@@ -63,9 +63,10 @@ Auth endpoints:
 - `AiModule` — AI announcement generation
 - `DemoModule` — demo mode time override (`DEMO_MODE=true` env only)
 - `PaymentModule` — LiqPay payment for індивідуальні/спліт slots:
-  - `POST /payments/checkout` — creates booking (PENDING payment status) + returns LiqPay `{data, signature}` for form POST
+  - `POST /payments/checkout` — creates booking (PENDING payment status) + returns LiqPay `{data, signature}` for form POST; if member already has a PENDING booking on that slot — reuses it with a new order_id (old payment → `REPLACED`), or returns `{status: 'PAID'}` if LiqPay says the previous attempt succeeded
   - `POST /payments/liqpay/callback` — public server-to-server callback; verifies SHA1 signature; activates/cancels booking
-  - Expiry via `POST /internal/cron/expire-payments` (Vercel cron `*/15 * * * *`)
+  - `GET /payments/status?order=` — member's own order; while PENDING asks LiqPay status API directly (used by `/payment/return`)
+  - Expiry: lazily on `GET /schedule/next` (`expireStale()`), PENDING older than 15 min — reconciles with LiqPay status API first (lost callback → PAID, LiqPay unreachable → skip)
 - `HealthModule` — `GET /health`
 
 ### Database

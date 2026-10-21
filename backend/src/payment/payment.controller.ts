@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Headers, HttpCode, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Headers, HttpCode, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { SessionGuard, SessionUser } from '../auth/session.guard';
 import { MemberGuard } from '../common/guards/member.guard';
@@ -17,6 +17,16 @@ export class PaymentController {
     @CurrentUser() user: SessionUser,
   ) {
     return this.paymentService.createCheckout(dto.slotId, user.id);
+  }
+
+  @Get('status')
+  @UseGuards(SessionGuard, MemberGuard)
+  getStatus(
+    @Query('order') orderId: string,
+    @CurrentUser() user: SessionUser,
+  ) {
+    if (!orderId) throw new BadRequestException('order is required');
+    return this.paymentService.getStatus(orderId, user.id);
   }
 
   @Post('liqpay/callback')
