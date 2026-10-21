@@ -1,8 +1,9 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import "@fullcalendar/react/skeleton.css";
+import "@fullcalendar/react/themes/classic/theme.css";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/react/daygrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
@@ -32,8 +33,11 @@ interface Modal {
 
 export default function CalendarPage() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [days, setDays] = useState<CalendarDay[]>([]);
   const [currentMonth, setCurrentMonth] = useState("");
+
+  useEffect(() => { setMounted(true); }, []);
   const [modal, setModal] = useState<Modal | null>(null);
   const [selectedType, setSelectedType] = useState<TrainingType>("групові");
   const [saving, setSaving] = useState(false);
@@ -166,7 +170,7 @@ export default function CalendarPage() {
       `}</style>
 
       <div className="rounded-xl border border-line p-3 overflow-hidden">
-        <FullCalendar
+        {!mounted ? <div className="h-64 flex items-center justify-center text-muted text-sm">Завантаження...</div> : <FullCalendar
           plugins={[dayGridPlugin, interactionPlugin]}
           initialView="dayGridMonth"
           locale={ukLocale}
@@ -177,7 +181,7 @@ export default function CalendarPage() {
           dateClick={handleDateClick}
           headerToolbar={{ left: "prev", center: "title", right: "next" }}
           fixedWeekCount={false}
-        />
+        />}
       </div>
 
       {modal && (
