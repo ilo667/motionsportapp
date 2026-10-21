@@ -153,10 +153,10 @@ export default function CalendarPage() {
 
       <style>{`
         .fc { --fc-border-color: #1a2040; --fc-today-bg-color: rgba(147,210,60,0.06); --fc-page-bg-color: transparent; color: #c8d4ec; font-size: 0.8125rem; }
-        .fc .fc-toolbar-title { font-size: 1rem; font-weight: 600; color: #d8e4f8; }
+        .fc .fc-toolbar-title { font-size: 0.8125rem; font-weight: 600; color: #d8e4f8; }
         .fc .fc-toolbar { align-items: center; }
         .fc .fc-toolbar-chunk { display: flex; align-items: center; }
-        .fc .fc-button { background: transparent; border-color: #1a2040; color: #c8d4ec; font-size: 0.875rem; padding: 0.25rem 0.625rem; line-height: 1; }
+        .fc .fc-button { background: transparent; border-color: #1a2040; color: #c8d4ec; font-size: 0.75rem; padding: 0.25rem 0.625rem; line-height: 1; }
         .fc .fc-button:hover { background: #1a2040; color: #d8e4f8; border-color: #1a2040; }
         .fc .fc-button:focus { box-shadow: none; }
         .fc .fc-button-primary:not(:disabled).fc-button-active, .fc .fc-button-primary:not(:disabled):active { background: #1a2040; border-color: #93d23c; box-shadow: none; }
