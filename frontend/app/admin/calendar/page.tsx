@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import "@fullcalendar/react/skeleton.css";
 import "@fullcalendar/react/themes/classic/theme.css";
-import "@fullcalendar/react/themes/classic/palette.css";
 import FullCalendar from "@fullcalendar/react";
 import classicThemePlugin from "@fullcalendar/react/themes/classic";
 import dayGridPlugin from "@fullcalendar/react/daygrid";
@@ -177,7 +176,7 @@ export default function CalendarPage() {
         .fc .fc-daygrid-day-number { color: #c8d4ec; font-size: 0.75rem; }
         .fc .fc-day-other .fc-daygrid-day-number { color: #1a2040; }
         .fc .fc-day-today .fc-daygrid-day-number { color: #93d23c; font-weight: 700; }
-        .fc .fc-event { cursor: pointer; border-width: 1px; border-radius: 4px; padding: 1px 4px; }
+        .fc .fc-event { cursor: pointer; border-width: 1px; border-radius: 4px; padding: 1px 4px; --fc-event-bg-color: transparent; --fc-event-border-color: transparent; }
         .fc .fc-event-title { font-size: 0.6875rem; font-weight: 500; }
         .fc .fc-daygrid-day { cursor: pointer; }
         .fc .fc-daygrid-day:hover { background: rgba(26,32,64,0.4); }
