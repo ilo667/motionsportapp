@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import "@fullcalendar/react/skeleton.css";
 import "@fullcalendar/react/themes/classic/theme.css";
+import "@fullcalendar/react/themes/classic/palette.css";
 import FullCalendar from "@fullcalendar/react";
+import classicThemePlugin from "@fullcalendar/react/themes/classic";
 import dayGridPlugin from "@fullcalendar/react/daygrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
 import ukLocale from "@fullcalendar/react/locales/uk";
@@ -171,7 +173,7 @@ export default function CalendarPage() {
 
       <div className="rounded-xl border border-line p-3 overflow-hidden">
         {!mounted ? <div className="h-64 flex items-center justify-center text-muted text-sm">Завантаження...</div> : <FullCalendar
-          plugins={[dayGridPlugin, interactionPlugin]}
+          plugins={[classicThemePlugin, dayGridPlugin, interactionPlugin]}
           initialView="dayGridMonth"
           locale={ukLocale}
           height="auto"
