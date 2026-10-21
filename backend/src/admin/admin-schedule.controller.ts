@@ -15,6 +15,7 @@ import { SessionGuard, SessionUser } from '../auth/session.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
+import { UpsertCalendarSlotDto } from './dto/upsert-calendar-slot.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 
@@ -40,6 +41,16 @@ export class AdminScheduleController {
     @Body() dto: UpsertTrainingDayDto,
   ) {
     return this.adminScheduleService.upsertTrainingDay(date, dto);
+  }
+
+  @Put('training-days/:date/slots/:slotTime')
+  @HttpCode(HttpStatus.OK)
+  upsertCalendarSlot(
+    @Param('date') date: string,
+    @Param('slotTime') slotTime: string,
+    @Body() dto: UpsertCalendarSlotDto,
+  ) {
+    return this.adminScheduleService.upsertCalendarSlot(date, slotTime, dto.trainingType);
   }
 
   @Patch('slots/:slotId')

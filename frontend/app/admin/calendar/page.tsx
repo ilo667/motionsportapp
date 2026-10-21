@@ -11,7 +11,7 @@ import dayGridPlugin from "@fullcalendar/react/daygrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
 import ukLocale from "@fullcalendar/react/locales/uk";
 import type { DatesSetInfo, EventClickInfo, DateClickInfo } from "@fullcalendar/react";
-import { api, CalendarDay, TrainingType } from "@/lib/api";
+import { api, CalendarSlot, TrainingType } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 
 const TYPE_COLORS: Record<TrainingType, { bg: string; border: string; text: string }> = {
@@ -27,28 +27,30 @@ const TYPE_LABELS: Record<TrainingType, string> = {
 };
 
 const TYPES: TrainingType[] = ["групові", "індивідуальні", "спліт"];
+const SLOT_TIMES = ["19:00", "20:00"] as const;
 
 interface Modal {
   date: string;
-  existing: CalendarDay | null;
+  existingSlot: CalendarSlot | null; // if editing a specific slot
 }
 
 export default function CalendarPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [days, setDays] = useState<CalendarDay[]>([]);
+  const [slots, setSlots] = useState<CalendarSlot[]>([]);
   const [currentMonth, setCurrentMonth] = useState("");
 
   useEffect(() => { setMounted(true); }, []);
   const [modal, setModal] = useState<Modal | null>(null);
   const [selectedType, setSelectedType] = useState<TrainingType>("групові");
+  const [selectedTime, setSelectedTime] = useState<"19:00" | "20:00">("19:00");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const fetchMonth = useCallback(async (month: string) => {
     try {
       const data = await api.getCalendar(month);
-      setDays(data);
+      setSlots(data);
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
       if (status === 401 || status === 403) router.push("/admin/login");
@@ -64,39 +66,44 @@ export default function CalendarPage() {
     }
   }, [currentMonth, fetchMonth]);
 
-  const daysMap = Object.fromEntries(days.map((d) => [d.localDate, d]));
+  const events = slots.map((s) => {
+    const colors = TYPE_COLORS[s.trainingType];
+    return {
+      id: s.slotId,
+      title: `${s.slotTime} · ${TYPE_LABELS[s.trainingType]} · ${s.bookedCount}/${s.capacity}`,
+      date: s.localDate,
+      backgroundColor: colors.bg,
+      borderColor: colors.border,
+      textColor: colors.text,
+      extendedProps: { slot: s },
+    };
+  });
 
-  const events = days
-    .filter((d) => d.status === "SCHEDULED")
-    .map((d) => {
-      const colors = TYPE_COLORS[d.trainingType];
-      return {
-        id: d.localDate,
-        title: `${TYPE_LABELS[d.trainingType]}${d.totalCapacity > 0 ? ` · ${d.bookedCount}/${d.totalCapacity}` : ""}`,
-        date: d.localDate,
-        backgroundColor: colors.bg,
-        borderColor: colors.border,
-        textColor: colors.text,
-      };
-    });
-
-  const openModal = (date: string) => {
-    const existing = daysMap[date] ?? null;
-    setSelectedType(existing?.trainingType ?? "групові");
+  const openAddModal = (date: string) => {
+    setSelectedType("групові");
+    setSelectedTime("19:00");
     setError("");
-    setModal({ date, existing });
+    setModal({ date, existingSlot: null });
+  };
+
+  const openEditModal = (slot: CalendarSlot) => {
+    setSelectedType(slot.trainingType);
+    setSelectedTime(slot.slotTime);
+    setError("");
+    setModal({ date: slot.localDate, existingSlot: slot });
   };
 
   const handleEventClick = (arg: EventClickInfo) => {
-    openModal(arg.event.startStr);
+    const slot = arg.event.extendedProps.slot as CalendarSlot;
+    openEditModal(slot);
   };
 
   const handleDateClick = (arg: DateClickInfo) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const clicked = new Date(arg.dateStr);
+    const clicked = new Date(arg.dateStr + "T12:00:00");
     if (clicked < today) return;
-    openModal(arg.dateStr);
+    openAddModal(arg.dateStr);
   };
 
   const handleSave = async () => {
@@ -104,11 +111,14 @@ export default function CalendarPage() {
     setSaving(true);
     setError("");
     try {
-      await api.upsertTrainingDay(modal.date, {
-        status: "SCHEDULED",
-        trainingType: selectedType,
-        isException: !isRegularDay(modal.date),
-      });
+      if (selectedType === "групові") {
+        // групові = обидва слоти
+        await Promise.all(
+          SLOT_TIMES.map((t) => api.upsertCalendarSlot(modal.date, t, selectedType))
+        );
+      } else {
+        await api.upsertCalendarSlot(modal.date, selectedTime, selectedType);
+      }
       await fetchMonth(currentMonth);
       setModal(null);
     } catch {
@@ -118,12 +128,12 @@ export default function CalendarPage() {
     }
   };
 
-  const handleCancel = async () => {
-    if (!modal) return;
+  const handleCancelSlot = async () => {
+    if (!modal?.existingSlot) return;
     setSaving(true);
     setError("");
     try {
-      await api.upsertTrainingDay(modal.date, { status: "CANCELLED", isException: true });
+      await api.cancelSlot(modal.existingSlot.slotId);
       await fetchMonth(currentMonth);
       setModal(null);
     } catch {
@@ -132,6 +142,8 @@ export default function CalendarPage() {
       setSaving(false);
     }
   };
+
+  const isEditing = !!modal?.existingSlot;
 
   return (
     <PageLayout variant="top" action={
@@ -198,16 +210,17 @@ export default function CalendarPage() {
                 {new Date(modal.date + "T12:00:00").toLocaleDateString("uk-UA", { weekday: "long", day: "numeric", month: "long" })}
               </p>
               <p className="font-geologica font-semibold text-heading">
-                {modal.existing?.status === "SCHEDULED" ? "Редагувати тренування" : "Додати тренування"}
+                {isEditing ? `Редагувати ${modal.existingSlot!.slotTime}` : "Додати тренування"}
               </p>
             </div>
 
+            {/* Тип тренування */}
             <div className="flex flex-col space-y-2">
               {TYPES.map((t) => (
                 <button
                   key={t}
                   onClick={() => setSelectedType(t)}
-                  className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${selectedType === t ? "border-opacity-100" : "border-line"}`}
+                  className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${selectedType === t ? "" : "border-line"}`}
                   style={selectedType === t ? { borderColor: TYPE_COLORS[t].border, backgroundColor: TYPE_COLORS[t].bg, color: TYPE_COLORS[t].text } : {}}
                 >
                   <span>{TYPE_LABELS[t]}</span>
@@ -215,6 +228,29 @@ export default function CalendarPage() {
                 </button>
               ))}
             </div>
+
+            {/* Час — тільки для не-групових і тільки при додаванні нового */}
+            {!isEditing && selectedType !== "групові" && (
+              <div>
+                <p className="text-muted text-xs mb-2 uppercase tracking-wide">Час</p>
+                <div className="flex space-x-2">
+                  {SLOT_TIMES.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setSelectedTime(t)}
+                      className={`flex-1 py-2 rounded-lg border text-sm transition-colors ${selectedTime === t ? "border-teal bg-teal/10 text-teal" : "border-line text-muted"}`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-muted text-xs mt-2">Групові займають обидва слоти автоматично</p>
+              </div>
+            )}
+
+            {!isEditing && selectedType === "групові" && (
+              <p className="text-muted text-xs">Буде створено слоти 19:00 і 20:00</p>
+            )}
 
             {error && <p className="text-danger text-sm">{error}</p>}
 
@@ -226,13 +262,13 @@ export default function CalendarPage() {
               >
                 {saving ? "Зачекайте..." : "Зберегти"}
               </button>
-              {modal.existing?.status === "SCHEDULED" && (
+              {isEditing && (
                 <button
-                  onClick={handleCancel}
+                  onClick={handleCancelSlot}
                   disabled={saving}
                   className="btn-ghost hover-danger w-full py-3 rounded-xl border text-sm transition-colors disabled:opacity-60"
                 >
-                  Скасувати день
+                  Скасувати слот {modal.existingSlot!.slotTime}
                 </button>
               )}
               <button
@@ -247,9 +283,4 @@ export default function CalendarPage() {
       )}
     </PageLayout>
   );
-}
-
-function isRegularDay(dateStr: string): boolean {
-  const day = new Date(dateStr + "T12:00:00").getDay();
-  return day === 2 || day === 4; // вівторок або четвер
 }

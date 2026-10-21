@@ -103,14 +103,17 @@ export interface AdminSchedule {
 
 export type TrainingType = "групові" | "індивідуальні" | "спліт";
 
-export interface CalendarDay {
+export interface CalendarSlot {
   localDate: string;
-  status: "SCHEDULED" | "CANCELLED";
+  slotId: string;
+  slotTime: "19:00" | "20:00";
   trainingType: TrainingType;
-  isException: boolean;
   bookedCount: number;
-  totalCapacity: number;
+  capacity: number;
 }
+
+/** @deprecated use CalendarSlot */
+export type CalendarDay = CalendarSlot;
 
 export const api = {
   me: () => request<MeResponse>("/auth/me"),
@@ -183,7 +186,13 @@ export const api = {
     }),
 
   getCalendar: (month: string) =>
-    request<CalendarDay[]>(`/admin/calendar?month=${month}`),
+    request<CalendarSlot[]>(`/admin/calendar?month=${month}`),
+
+  upsertCalendarSlot: (date: string, slotTime: string, trainingType: TrainingType) =>
+    request<{ ok: boolean }>(`/admin/training-days/${date}/slots/${encodeURIComponent(slotTime)}`, {
+      method: "PUT",
+      body: JSON.stringify({ trainingType }),
+    }),
 
   markAllAttendance: (slotId: string) =>
     request<{ marked: number }>(`/admin/slots/${slotId}/attendance/all`, {

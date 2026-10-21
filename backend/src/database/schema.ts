@@ -59,6 +59,7 @@ export const trainingSlots = pgTable(
       .references(() => trainingDays.id),
     slotTime: text('slot_time').notNull(),
     status: text('status').notNull().default('ACTIVE'),
+    trainingType: text('training_type').notNull().default('групові'),
     capacity: integer('capacity').notNull().default(8),
     bookedCount: integer('booked_count').notNull().default(0),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
