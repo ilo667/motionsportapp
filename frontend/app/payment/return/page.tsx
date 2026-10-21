@@ -1,24 +1,19 @@
-"use client";
-import { useRouter } from "next/navigation";
-import { MotionGymLogo } from "@/components/MotionGymLogo";
+import Link from "next/link";
+import { PageLayout } from "@/components/PageLayout";
 
 export default function PaymentReturnPage() {
-  const router = useRouter();
-
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6 text-center">
-      <MotionGymLogo />
-      <div className="space-y-2">
-        <div className="text-4xl">✓</div>
-        <h1 className="font-geologica text-heading text-2xl">Платіж прийнято</h1>
-        <p className="text-muted text-sm">Ваш запис підтверджено.</p>
+    <PageLayout className="items-center text-center">
+      <div className="text-4xl text-accent mb-3">✓</div>
+      <h1 className="font-geologica font-semibold text-title text-heading mb-2 uppercase">
+        Платіж прийнято
+      </h1>
+      <p className="text-muted text-sm">Ваш запис підтверджено.</p>
+      <div className="flex flex-col w-full max-w-xs mt-10">
+        <Link href="/" className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center">
+          До розкладу
+        </Link>
       </div>
-      <button
-        onClick={() => router.push("/")}
-        className="btn-primary px-6 py-3 rounded-lg text-sm"
-      >
-        До розкладу
-      </button>
-    </div>
+    </PageLayout>
   );
 }
