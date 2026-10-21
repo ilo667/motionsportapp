@@ -12,19 +12,19 @@ interface PageLayoutProps {
 }
 
 export function PageLayout({ children, variant = "centered", className, action, loading }: PageLayoutProps) {
-  if (variant === "top") {
-    return (
-      <div className="flex flex-col flex-1">
-        <Header action={action} />
-        {loading ? <GymLoader /> : children}
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <GymLoader className="flex flex-col items-center space-y-7 -mt-10" />
+      </div>
+    );
+  }
+
+  if (variant === "top") {
+    return (
+      <div className="flex flex-col flex-1">
+        <Header action={action} />
+        {children}
       </div>
     );
   }
