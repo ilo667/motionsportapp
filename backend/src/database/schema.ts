@@ -43,6 +43,7 @@ export const trainingDays = pgTable('training_days', {
   id: uuid('id').primaryKey().defaultRandom(),
   localDate: date('local_date').notNull().unique(),
   status: text('status').notNull().default('SCHEDULED'),
+  trainingType: text('training_type').notNull().default('групові'),
   isException: boolean('is_exception').notNull().default(false),
   bookingOpenOverrideAt: timestamp('booking_open_override_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

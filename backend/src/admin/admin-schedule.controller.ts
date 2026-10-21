@@ -5,6 +5,7 @@ import {
   Patch,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -25,6 +26,11 @@ export class AdminScheduleController {
   @Get('schedule')
   getSchedule() {
     return this.adminScheduleService.getSchedule();
+  }
+
+  @Get('calendar')
+  getCalendar(@Query('month') month: string) {
+    return this.adminScheduleService.getCalendar(month);
   }
 
   @Put('training-days/:date')

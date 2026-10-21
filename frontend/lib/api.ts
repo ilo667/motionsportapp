@@ -101,6 +101,17 @@ export interface AdminSchedule {
   isDemoMode?: boolean;
 }
 
+export type TrainingType = "групові" | "індивідуальні" | "спліт";
+
+export interface CalendarDay {
+  localDate: string;
+  status: "SCHEDULED" | "CANCELLED";
+  trainingType: TrainingType;
+  isException: boolean;
+  bookedCount: number;
+  totalCapacity: number;
+}
+
 export const api = {
   me: () => request<MeResponse>("/auth/me"),
 
@@ -164,6 +175,15 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ status: "CANCELLED", isException: true }),
     }),
+
+  upsertTrainingDay: (date: string, body: { status: string; trainingType?: TrainingType; isException?: boolean }) =>
+    request<{ ok: boolean }>(`/admin/training-days/${date}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  getCalendar: (month: string) =>
+    request<CalendarDay[]>(`/admin/calendar?month=${month}`),
 
   markAllAttendance: (slotId: string) =>
     request<{ marked: number }>(`/admin/slots/${slotId}/attendance/all`, {

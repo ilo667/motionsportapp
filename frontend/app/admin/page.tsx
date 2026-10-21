@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api, AdminSchedule, Announcement, AnnouncementExample } from "@/lib/api";
 import { SlotCard as AdminSlotCard } from "@/components/admin/SlotCard";
 import { GymLoader } from "@/components/GymLoader";
@@ -118,9 +119,14 @@ export default function AdminPage() {
 
   return (
     <PageLayout variant="top" action={
-      <button onClick={handleLogout} className="text-muted text-sm hover:text-body transition-colors">
-        Вийти
-      </button>
+      <div className="flex items-center space-x-4">
+        <Link href="/admin/calendar" className="text-muted text-sm hover:text-body transition-colors">
+          Календар
+        </Link>
+        <button onClick={handleLogout} className="text-muted text-sm hover:text-body transition-colors">
+          Вийти
+        </button>
+      </div>
     }>
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-1">
         Панель тренера

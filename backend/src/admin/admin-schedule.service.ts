@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, gte, lte, sum } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
 import { trainingDays, trainingSlots, bookings, members, attendance } from '../database/schema';
@@ -95,18 +95,69 @@ export class AdminScheduleService {
     };
   }
 
+  async getCalendar(month: string) {
+    // month = '2026-10'
+    const start = `${month}-01`;
+    const [year, m] = month.split('-').map(Number);
+    const lastDay = new Date(year, m, 0).getDate();
+    const end = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+    const days = await this.database.db
+      .select({
+        id: trainingDays.id,
+        localDate: trainingDays.localDate,
+        status: trainingDays.status,
+        trainingType: trainingDays.trainingType,
+        isException: trainingDays.isException,
+      })
+      .from(trainingDays)
+      .where(and(gte(trainingDays.localDate, start), lte(trainingDays.localDate, end)));
+
+    if (days.length === 0) return [];
+
+    const dayIds = days.map((d) => d.id);
+    const slotTotals = await this.database.db
+      .select({
+        trainingDayId: trainingSlots.trainingDayId,
+        bookedCount: sum(trainingSlots.bookedCount).mapWith(Number),
+        totalCapacity: sum(trainingSlots.capacity).mapWith(Number),
+      })
+      .from(trainingSlots)
+      .where(inArray(trainingSlots.trainingDayId, dayIds))
+      .groupBy(trainingSlots.trainingDayId);
+
+    const totalsMap = Object.fromEntries(
+      slotTotals.map((s) => [s.trainingDayId, { bookedCount: s.bookedCount ?? 0, totalCapacity: s.totalCapacity ?? 0 }]),
+    );
+
+    return days.map((d) => ({
+      localDate: d.localDate,
+      status: d.status,
+      trainingType: d.trainingType,
+      isException: d.isException,
+      bookedCount: totalsMap[d.id]?.bookedCount ?? 0,
+      totalCapacity: totalsMap[d.id]?.totalCapacity ?? 0,
+    }));
+  }
+
   async upsertTrainingDay(date: string, dto: UpsertTrainingDayDto) {
     await this.database.db
       .insert(trainingDays)
       .values({
         localDate: date,
         status: dto.status,
+        trainingType: dto.trainingType ?? 'групові',
         isException: dto.isException ?? false,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
         target: trainingDays.localDate,
-        set: { status: dto.status, isException: dto.isException ?? false, updatedAt: new Date() },
+        set: {
+          status: dto.status,
+          trainingType: dto.trainingType ?? 'групові',
+          isException: dto.isException ?? false,
+          updatedAt: new Date(),
+        },
       });
 
     const [day] = await this.database.db
