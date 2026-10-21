@@ -15,8 +15,8 @@ import { api, CalendarDay, TrainingType } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 
 const TYPE_COLORS: Record<TrainingType, { bg: string; border: string; text: string }> = {
-  групові:       { bg: "#78350f", border: "#d97706", text: "#fde68a" },
-  індивідуальні: { bg: "#14532d", border: "#93d23c", text: "#bbf7d0" },
+  групові:       { bg: "#14532d", border: "#93d23c", text: "#bbf7d0" },
+  індивідуальні: { bg: "#78350f", border: "#d97706", text: "#fde68a" },
   спліт:         { bg: "#7c2d12", border: "#fb923c", text: "#fed7aa" },
 };
 
