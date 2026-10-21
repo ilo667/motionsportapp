@@ -8,9 +8,14 @@ import { PageLayout } from "./PageLayout";
 const POLL_INTERVAL_MS = 2000;
 const MAX_ATTEMPTS = 5;
 
-type ResultState = PaymentStatus | "UNKNOWN";
+// REJECTED: LiqPay declined an attempt (try_again) but the order is still open, so the booking is kept
+type ResultState = PaymentStatus | "UNKNOWN" | "REJECTED";
 
-const CONTENT: Record<Exclude<ResultState, "PENDING">, { icon: string; iconClass: string; title: string; text: string }> = {
+const REJECT_REASONS: Record<string, string> = {
+  limit: "Перевищено ліміт картки.",
+};
+
+const CONTENT: Record<Exclude<ResultState, "PENDING" | "REJECTED">, { icon: string; iconClass: string; title: string; text: string }> = {
   PAID: {
     icon: "✓",
     iconClass: "text-accent",
@@ -52,6 +57,7 @@ const PENDING_CONTENT = {
 
 export function PaymentResult({ orderId }: { orderId?: string }) {
   const [state, setState] = useState<ResultState | null>(orderId ? null : "UNKNOWN");
+  const [errCode, setErrCode] = useState<string>();
 
   useEffect(() => {
     if (!orderId) return;
@@ -60,8 +66,13 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
 
     const check = async (attempt: number) => {
       try {
-        const { status } = await api.getPaymentStatus(orderId);
+        const { status, errCode } = await api.getPaymentStatus(orderId);
         if (cancelled) return;
+        if (status === "PENDING" && errCode) {
+          setErrCode(errCode);
+          setState("REJECTED");
+          return;
+        }
         if (status === "PENDING" && attempt < MAX_ATTEMPTS) {
           timer = setTimeout(() => check(attempt + 1), POLL_INTERVAL_MS);
           return;
@@ -81,7 +92,17 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
 
   if (state === null) return <PageLayout loading />;
 
-  const { icon, iconClass, title, text } = state === "PENDING" ? PENDING_CONTENT : CONTENT[state];
+  const { icon, iconClass, title, text } =
+    state === "REJECTED"
+      ? {
+          icon: "✕",
+          iconClass: "text-danger",
+          title: "Оплата не пройшла",
+          text: `${REJECT_REASONS[errCode ?? ""] ?? "Банк відхилив платіж."} Спробуйте ще раз або іншою карткою — місце за вами ще 15 хвилин.`,
+        }
+      : state === "PENDING"
+        ? PENDING_CONTENT
+        : CONTENT[state];
 
   return (
     <PageLayout className="items-center text-center">
@@ -90,7 +111,7 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
       <p className="text-muted text-sm">{text}</p>
       <div className="flex flex-col w-full max-w-xs mx-auto mt-10">
         <Link href="/" className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center">
-          До розкладу
+          {state === "REJECTED" ? "Спробувати ще раз" : "До розкладу"}
         </Link>
       </div>
     </PageLayout>

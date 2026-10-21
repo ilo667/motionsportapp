@@ -11,6 +11,11 @@ const FAILED_STATUSES = ['failure', 'error', 'reversed'];
 // REPLACED: superseded by a newer attempt for the same booking (member pressed "Оплатити" again)
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'REPLACED';
 
+const LOGGED_LIQPAY_FIELDS = [
+  'result', 'order_id', 'status', 'err_code', 'err_description', 'action', 'paytype',
+  'payment_id', 'liqpay_order_id', 'amount', 'currency', 'create_date', 'end_date',
+];
+
 function newOrderId(bookingId: string) {
   return `mg-${Date.now()}-${bookingId.substring(0, 8)}`;
 }
@@ -44,7 +49,10 @@ export class PaymentService {
 
     // "Оплатити" on an own PENDING booking continues that booking instead of creating a new one
     const resumed = await this.resumePendingCheckout(slotId, memberId);
-    if (resumed === 'PAID') return { status: 'PAID' as const };
+    if (resumed === 'PAID') {
+      this.logger.log(`Checkout: member=${memberId} slot=${slotId} — previous attempt already paid, no redirect`);
+      return { status: 'PAID' as const };
+    }
     if (resumed) return this.buildCheckout(resumed);
 
     let orderId = '';
@@ -102,6 +110,7 @@ export class PaymentService {
       throw err;
     }
 
+    this.logger.log(`Checkout: member=${memberId} slot=${slotId} — new booking, order=${orderId}`);
     return this.buildCheckout(orderId);
   }
 
@@ -128,7 +137,10 @@ export class PaymentService {
     if (remote?.result === 'ok') {
       const applied = await this.applyLiqpayStatus(pending, remote);
       if (applied === 'PAID') return 'PAID';
-      if (applied === 'FAILED') return null; // booking cancelled, seat freed — caller creates a fresh one
+      if (applied === 'FAILED') {
+        this.logger.log(`Checkout: previous order=${pending.orderId} failed — creating a fresh booking`);
+        return null; // booking cancelled, seat freed — caller creates a fresh one
+      }
     }
 
     // LiqPay may refuse to reuse an order_id that already had an attempt, so issue a new one for the same booking
@@ -149,6 +161,7 @@ export class PaymentService {
         status: 'PENDING',
       });
     });
+    this.logger.log(`Checkout: member=${memberId} slot=${slotId} — resumed booking=${pending.bookingId}, order ${pending.orderId} → REPLACED by ${orderId}`);
     return orderId;
   }
 
@@ -194,6 +207,7 @@ export class PaymentService {
       return { ok: true };
     }
 
+    this.logger.log(`LiqPay callback: order=${orderId} ignored as PENDING handler — payment is already ${payment.status}`);
     if (SUCCESS_STATUSES.includes(decoded.status as string) && payment.status !== 'PAID') {
       // Member paid in an old LiqPay tab after pressing "Оплатити" again — still valid while the booking awaits payment
       if (payment.status === 'REPLACED' && (await this.isAwaitingPayment(payment.bookingId))) {
@@ -207,7 +221,8 @@ export class PaymentService {
 
   // Used by /payment/return. Asks LiqPay directly while still PENDING, so the page
   // shows the real result even if the callback is late or lost.
-  async getStatus(orderId: string, memberId: string): Promise<{ status: PaymentStatus }> {
+  // errCode is set when LiqPay rejected an attempt but the order is still open (status=try_again)
+  async getStatus(orderId: string, memberId: string): Promise<{ status: PaymentStatus; errCode?: string }> {
     const [payment] = await this.database.db
       .select({ id: payments.id, bookingId: payments.bookingId, status: payments.status })
       .from(payments)
@@ -216,12 +231,23 @@ export class PaymentService {
       .limit(1);
 
     if (!payment) throw new NotFoundException('Payment not found');
-    if (payment.status !== 'PENDING') return { status: payment.status as PaymentStatus };
+    if (payment.status !== 'PENDING') {
+      this.logger.log(`Status check: order=${orderId} → ${payment.status} (from DB)`);
+      return { status: payment.status as PaymentStatus };
+    }
 
     const remote = await this.fetchLiqpayStatus(orderId);
-    if (!remote || remote.result !== 'ok') return { status: 'PENDING' };
+    if (!remote || remote.result !== 'ok') {
+      this.logger.log(`Status check: order=${orderId} → PENDING (LiqPay ${remote ? 'result=' + String(remote.result as string) : 'unreachable'})`);
+      return { status: 'PENDING' };
+    }
 
-    return { status: await this.applyLiqpayStatus(payment, remote) };
+    const status = await this.applyLiqpayStatus(payment, remote);
+    const errCode = status === 'PENDING' && remote.status === 'try_again' && typeof remote.err_code === 'string'
+      ? remote.err_code
+      : undefined;
+    this.logger.log(`Status check: order=${orderId} → ${status}${errCode ? ` errCode=${errCode}` : ''}`);
+    return errCode ? { status, errCode } : { status };
   }
 
   async expireStale() {
@@ -236,12 +262,17 @@ export class PaymentService {
     for (const p of stale) {
       // Reconcile before cancelling — the callback may have been lost while the member actually paid
       const remote = await this.fetchLiqpayStatus(p.orderId);
-      if (!remote) continue; // LiqPay unreachable — retry next run rather than cancel a possibly paid booking
+      if (!remote) {
+        this.logger.warn(`Expire: order=${p.orderId} skipped — LiqPay unreachable, retry next run`);
+        continue; // retry next run rather than cancel a possibly paid booking
+      }
       if (remote.result === 'ok' && SUCCESS_STATUSES.includes(remote.status as string)) {
+        this.logger.warn(`Expire: order=${p.orderId} was actually paid (lost callback) → PAID`);
         await this.applyLiqpayStatus(p, remote);
         continue;
       }
 
+      this.logger.log(`Expire: order=${p.orderId} → EXPIRED, booking=${p.bookingId} cancelled`);
       await this.cancelPayment(p, 'EXPIRED');
       expired++;
     }
@@ -334,10 +365,12 @@ export class PaymentService {
     }
   }
 
+  // Safe subset of a LiqPay payload (no names/phones/card masks) + the list of all keys,
+  // so undocumented statuses and fields show up in logs
   private describe(liqpay: Record<string, unknown>) {
-    return ['order_id', 'status', 'err_code', 'err_description']
-      .filter((key) => liqpay[key] != null)
+    const fields = LOGGED_LIQPAY_FIELDS.filter((key) => liqpay[key] != null)
       .map((key) => `${key}=${String(liqpay[key] as string)}`)
       .join(' ');
+    return `${fields} keys=[${Object.keys(liqpay).sort().join(',')}]`;
   }
 }

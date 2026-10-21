@@ -222,6 +222,13 @@ describe('PaymentService — getStatus', () => {
     expect(sets).toHaveLength(0);
   });
 
+  it('returns errCode for a rejected attempt (try_again) and keeps booking', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'try_again', err_code: 'limit' });
+    const { db, sets } = makeDb([[pending]]);
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING', errCode: 'limit' });
+    expect(sets).toHaveLength(0);
+  });
+
   it('stays PENDING when LiqPay returns result=error (e.g. payment not started)', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
     const { db, sets } = makeDb([[pending]]);
