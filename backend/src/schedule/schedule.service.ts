@@ -4,6 +4,7 @@ import { and, eq, gte, lte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { trainingDays, trainingSlots, bookings, vacancyAlerts, announcements } from '../database/schema';
 import { DemoService } from '../demo/demo.service';
+import { PaymentService } from '../payment/payment.service';
 
 const KY_ZONE = 'Europe/Kyiv';
 const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
@@ -14,9 +15,11 @@ export class ScheduleService {
   constructor(
     private readonly database: DatabaseService,
     private readonly demoService: DemoService,
+    private readonly paymentService: PaymentService,
   ) {}
 
   async getNext(memberId?: string) {
+    await this.paymentService.expireStale();
     await this.materializeUpcoming(21);
 
     const now = await this.demoService.getNow();
