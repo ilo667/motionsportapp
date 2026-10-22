@@ -20,6 +20,8 @@ export const members = pgTable('members', {
   recoveryHash: text('recovery_hash').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   disabledAt: timestamp('disabled_at', { withTimezone: true }),
+  // Coach-only note ("ходить через раз", "це Катюха"); never returned by member-facing APIs
+  trainerNote: text('trainer_note'),
 });
 
 export const admins = pgTable('admins', {

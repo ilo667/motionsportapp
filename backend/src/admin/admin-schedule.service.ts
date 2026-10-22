@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { eq, and, inArray, gte, lte } from 'drizzle-orm';
+import { eq, and, inArray, gte, lte, asc } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
 import { trainingDays, trainingSlots, bookings, members, attendance } from '../database/schema';
 import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
 import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import type { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 import { NotificationService } from '../notifications/notification.service';
 import { DemoService } from '../demo/demo.service';
 
@@ -357,5 +358,31 @@ export class AdminScheduleService {
     }
 
     return { ok: true };
+  }
+
+  // Coach's client list. trainerNote is admin-only — keep it out of member-facing queries
+  async getMembers() {
+    return this.database.db
+      .select({
+        id: members.id,
+        memberCode: members.memberCode,
+        displayName: members.displayName,
+        trainerNote: members.trainerNote,
+        createdAt: members.createdAt,
+      })
+      .from(members)
+      .orderBy(asc(members.displayName));
+  }
+
+  async updateMemberNote(memberId: string, dto: UpdateMemberNoteDto) {
+    const note = dto.note.trim();
+    const [updated] = await this.database.db
+      .update(members)
+      .set({ trainerNote: note || null })
+      .where(eq(members.id, memberId))
+      .returning({ id: members.id, trainerNote: members.trainerNote });
+
+    if (!updated) throw new NotFoundException('Member not found');
+    return updated;
   }
 }

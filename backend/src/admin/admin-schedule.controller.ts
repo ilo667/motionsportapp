@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { AdminScheduleService } from './admin-schedule.service';
 import { SessionGuard, SessionUser } from '../auth/session.guard';
@@ -18,6 +19,7 @@ import { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import { UpsertCalendarSlotDto } from './dto/upsert-calendar-slot.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 
 @Controller('admin')
 @UseGuards(SessionGuard, AdminGuard)
@@ -27,6 +29,16 @@ export class AdminScheduleController {
   @Get('schedule')
   getSchedule() {
     return this.adminScheduleService.getSchedule();
+  }
+
+  @Get('members')
+  getMembers() {
+    return this.adminScheduleService.getMembers();
+  }
+
+  @Patch('members/:memberId/note')
+  updateMemberNote(@Param('memberId', ParseUUIDPipe) memberId: string, @Body() dto: UpdateMemberNoteDto) {
+    return this.adminScheduleService.updateMemberNote(memberId, dto);
   }
 
   @Get('calendar')

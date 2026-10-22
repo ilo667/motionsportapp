@@ -58,7 +58,8 @@ Auth endpoints:
 - `AuthModule` — member + admin auth, bcrypt passwords, JWT signing, PIN recovery
 - `ScheduleModule` — `GET /schedule/next` — next training day with slots
 - `BookingModule` — book / cancel / switch slot
-- `AdminModule` — admin schedule management, slot cancellation, attendance
+- `AdminModule` — admin schedule management, slot cancellation, attendance, clients list (`GET /admin/members`, `PATCH /admin/members/:id/note`)
+  - `members.trainer_note` is a **coach-only** note (max 300). Member-facing code must select explicit columns and never return it (SessionGuard and `/auth/me` already do)
 - `NotificationsModule` — push subscriptions, vacancy alerts, internal cron
   - `/internal/cron/*` routes must be **`@Get`** — Vercel Cron invokes with GET (`vercel-cron/1.0`); a POST route answers 404 and the job silently never runs. Protected by `CRON_SECRET` (`Authorization: Bearer …`, sent by Vercel automatically); missing secret in production → 403. Trigger manually: `vercel crons run /internal/cron/<job>`. Hobby plan: once per day, any minute within the scheduled hour
 - `AiModule` — AI announcement generation

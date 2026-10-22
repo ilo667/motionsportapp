@@ -5,7 +5,7 @@
 Next.js 16 App Router PWA. Backend API runs on port 3001 (proxied via `/api` rewrites in `next.config.ts`).
 
 Key files:
-- `app/` — pages: `/` (schedule + unauthenticated landing), `/login`, `/register`, `/forgot`, `/admin`, `/admin/login`, `/admin/calendar`, `/payment/return`, `/demo`
+- `app/` — pages: `/` (schedule + unauthenticated landing), `/login`, `/register`, `/forgot`, `/admin`, `/admin/login`, `/admin/calendar`, `/admin/clients`, `/payment/return`, `/demo`
 - `components/` — `Header`, `MotionGymLogo`, `PageLayout`, `LoginForm` (member/admin login), `PaymentResult` (`/payment/return` status), `SwRegister`, `SlotCard`, `GymLoader`, `DemoControls`, `admin/SlotCard`
 - `lib/api.ts` — typed fetch wrapper for all backend calls
 

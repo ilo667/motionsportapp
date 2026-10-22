@@ -120,6 +120,9 @@ export default function AdminPage() {
   return (
     <PageLayout variant="top" action={
       <div className="flex items-center space-x-4">
+        <Link href="/admin/clients" className="text-muted text-sm hover:text-body transition-colors">
+          Клієнти
+        </Link>
         <Link href="/admin/calendar" className="text-muted text-sm hover:text-body transition-colors">
           Календар
         </Link>

@@ -18,6 +18,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type TrainingType = "групові" | "індивідуальні" | "спліт";
 
+export interface AdminMember {
+  id: string;
+  memberCode: string;
+  displayName: string;
+  trainerNote: string | null;
+  createdAt: string;
+}
+
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "EXPIRED" | "REPLACED";
 
 export interface MeResponse {
@@ -198,6 +206,14 @@ export const api = {
 
   getPaymentStatus: (orderId: string) =>
     request<{ status: PaymentStatus; errCode?: string; expiresAt?: string }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
+
+  getMembers: () => request<AdminMember[]>("/admin/members"),
+
+  updateMemberNote: (memberId: string, note: string) =>
+    request<{ id: string; trainerNote: string | null }>(`/admin/members/${memberId}/note`, {
+      method: "PATCH",
+      body: JSON.stringify({ note }),
+    }),
 
   getCalendar: (month: string) =>
     request<CalendarSlot[]>(`/admin/calendar?month=${month}`),
