@@ -129,16 +129,6 @@ export class AnnouncementsService {
     return updated;
   }
 
-  async getPublishedTextForDay(trainingDayId: string): Promise<string | null> {
-    const [ann] = await this.database.db
-      .select({ text: announcements.text, publishedAt: announcements.publishedAt })
-      .from(announcements)
-      .where(eq(announcements.trainingDayId, trainingDayId))
-      .limit(1);
-    if (!ann?.publishedAt || !ann.text) return null;
-    return ann.text;
-  }
-
   async autoGenerate(localDate: string): Promise<void> {
     const ann = await this.getOrCreateForDate(localDate);
     if (!ann || ann.publishedAt) return;

@@ -13,6 +13,7 @@ import {
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import {
+  DEFAULT_WEEKDAYS,
   GROUP_SLOT_TIMES,
   GROUP_TYPE,
   KY_ZONE,
@@ -27,7 +28,6 @@ const ASSIGNED_SHOWN_FOR_MINUTES = 60;
 type DayRow = typeof trainingDays.$inferSelect;
 
 // Group trainings appear by themselves on these weekdays, so they exist even if the coach forgets
-const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
 const DEFAULT_HORIZON_DAYS = 21;
 
 @Injectable()

@@ -12,6 +12,7 @@ import type { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { NotificationService } from '../notifications/notification.service';
 import { ClockService } from '../clock/clock.service';
 import {
+  DEFAULT_WEEKDAYS,
   GROUP_SLOT_TIMES,
   GROUP_TYPE,
   KY_ZONE,
@@ -20,8 +21,6 @@ import {
   slotStartsAt,
 } from '../schedule/training-types';
 
-const SLOT_TIMES = GROUP_SLOT_TIMES;
-const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
 
 // Member-initiated cancellations / moves shown to the coach (with the reason they wrote)
 const CANCELLATION_STATS_DAYS = 30;
@@ -70,11 +69,10 @@ export class AdminScheduleService {
       .orderBy(trainingDays.localDate)
       .limit(30);
 
-    const future = upcoming;
-    const targetDay = future.find((day) => {
+    const targetDay = upcoming.find((day) => {
       const closeAt = DateTime.fromISO(`${day.localDate}T21:00:00`, { zone: KY_ZONE });
       return now < closeAt;
-    }) ?? future[0];
+    }) ?? upcoming[0];
 
     if (!targetDay) return null;
 
@@ -274,7 +272,7 @@ export class AdminScheduleService {
 
   // Group slot at 19:00 / 20:00. Re-activates a cancelled slot at that time, but never takes over an active assigned one
   async upsertGroupSlot(adminId: string, date: string, slotTime: string) {
-    if (!SLOT_TIMES.includes(slotTime)) throw new BadRequestException('Group trainings are at 19:00 and 20:00');
+    if (!GROUP_SLOT_TIMES.includes(slotTime)) throw new BadRequestException('Group trainings are at 19:00 and 20:00');
 
     await this.database.db.transaction(async (tx) => {
       const dayId = await this.ensureDay(tx, date);
@@ -417,7 +415,7 @@ export class AdminScheduleService {
         const dayId = await this.ensureDay(tx, date);
         await tx
           .insert(trainingSlots)
-          .values(SLOT_TIMES.map((slotTime) => ({
+          .values(GROUP_SLOT_TIMES.map((slotTime) => ({
             trainingDayId: dayId,
             slotTime,
             status: 'ACTIVE' as const,

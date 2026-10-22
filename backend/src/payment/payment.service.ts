@@ -6,7 +6,6 @@ import { ClockService } from '../clock/clock.service';
 import { ASSIGNED_TYPES, slotStartsAt } from '../schedule/training-types';
 import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } from './liqpay.helper';
 
-const PAYMENT_TYPES = ASSIGNED_TYPES;
 const SUCCESS_STATUSES = ['success', 'sandbox'];
 const FAILED_STATUSES = ['failure', 'error', 'reversed'];
 // Stale PENDING payments handled per expireStale() run; the rest wait for the next schedule load
@@ -52,7 +51,7 @@ export class PaymentService {
 
     if (!slot) throw new NotFoundException('Slot not found');
     if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
-    if (!PAYMENT_TYPES.includes(slot.trainingType)) {
+    if (!ASSIGNED_TYPES.includes(slot.trainingType)) {
       throw new BadRequestException('This slot does not require payment');
     }
 

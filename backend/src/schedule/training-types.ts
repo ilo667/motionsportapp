@@ -2,12 +2,12 @@ import { DateTime } from 'luxon';
 
 export const KY_ZONE = 'Europe/Kyiv';
 
-export type TrainingType = 'групові' | 'персональні' | 'спліт';
-
 export const GROUP_TYPE = 'групові';
 // Assigned slots: visible only to members listed in slot_members, paid via LiqPay, bookable until the start
 export const ASSIGNED_TYPES = ['персональні', 'спліт'];
 export const GROUP_SLOT_TIMES = ['19:00', '20:00'];
+// Default group training days (Luxon weekday numbers)
+export const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
 // Members an assigned slot is assigned to: персональні exactly 1, спліт 1–3.
 // Capacity is always `max` (персональні 1, спліт 3), however many members are assigned
 export const ASSIGNED_MEMBER_LIMITS: Record<string, { min: number; max: number }> = {

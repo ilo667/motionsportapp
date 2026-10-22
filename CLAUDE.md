@@ -30,7 +30,8 @@ npm run start:dev  # localhost:3001, watch mode
 npm run build      # rm -rf dist && nest build
 npm run test       # Jest, matches *.spec.ts in src/
 npm run test:cov
-npm run db:setup   # runs sql/schema.sql then sql/seed.sql via DATABASE_URL
+npm run db:push    # apply src/database/schema.ts to the DB (drizzle-kit push)
+npm run seed:admin # create a coach account (ADMIN_USERNAME / ADMIN_PASSWORD)
 npm run lint
 ```
 
@@ -86,7 +87,7 @@ Auth endpoints:
 - «Скасувати мої тренування цього дня» cancels only this coach's slots; the day becomes CANCELLED only when no active slot is left on it.
 - Clients: a coach sees **own + unassigned** clients («Без тренера», «Забрати собі»), reassigns under the client's name; the trainer note moves with the client. Assigned trainings can only be given to own/unassigned clients (members already on the slot may stay).
 - Coach push (`MEMBER_CANCELLED`) goes to the coach **whose training** it is.
-- Add a coach: `ADMIN_USERNAME=… ADMIN_PASSWORD=… npm run seed:admin` (in `backend/`). Migrations: `migrate-member-coach.js`, `migrate-slot-coach.js` (existing slots → first coach; run it before deploy, then `migrate-slot-coach.js finalize` after deploy for NOT NULL).
+- Add a coach: `ADMIN_USERNAME=… ADMIN_PASSWORD=… npm run seed:admin` (in `backend/`).
 
 ### Cancellation reasons — rules
 
@@ -94,16 +95,15 @@ Auth endpoints:
 - The coach sees reasons in four places: today page (block «Скасували» under each slot, «з 19:00» next to a moved participant), calendar event modal, clients page (count for 30 days, red from 3, expandable history), and a push to the coach (`MEMBER_CANCELLED`, sent from `BookingService`; a failed push never fails the member's action).
 - Coach push subscriptions live in **`admin_push_subscriptions`**, separate from members' `push_subscriptions`, so member-wide sends (BOOKING_OPEN) never reach the coach. `POST /push/subscriptions` routes by session type. The frontend re-sends an existing browser subscription on load (`syncSubscription`), because the same browser may have subscribed under the other role.
 - Raw SQL subqueries: write table names explicitly. In a single-table select drizzle drops table names, so `${members.id}` inside a subquery on `bookings` renders as `"id"` and binds to `bookings.id`.
-- Migration: `node backend/scripts/migrate-cancellation-reasons.js`.
 
 ### Training types — rules
 
-Types (DB value = UI word): `групові`, `персональні` (one person, formerly `індивідуальні`; renamed in DB by `scripts/migrate-assigned-slots.js`), `спліт`. In code, an **assigned slot** (`ASSIGNED_TYPES`, `isAssignedType`, `assignedSlots`, `AssignedSlotCard`) means `персональні` **or** `спліт`: the coach assigns its members. Never call that umbrella "personal" (that is the `персональні` type). On the member page assigned slots are listed under «Мої тренування».
+Types (DB value = UI word): `групові`, `персональні` (one person, formerly `індивідуальні`), `спліт`. In code, an **assigned slot** (`ASSIGNED_TYPES`, `isAssignedType`, `assignedSlots`, `AssignedSlotCard`) means `персональні` **or** `спліт`: the coach assigns its members. Never call that umbrella "personal" (that is the `персональні` type). On the member page assigned slots are listed under «Мої тренування».
 
 Constants and helpers live in `backend/src/schedule/training-types.ts`.
 - **Групові**: 19:00 and 20:00, capacity 8, free, visible to everyone, booking window 14:00–21:00 of that day. **One group booking per member per day** (switch between 19:00 and 20:00), checked in `BookingService` under a `SELECT … FOR UPDATE` on the member row.
 - **Персональні / спліт** (assigned): any time in 15-minute steps, on any day. The coach assigns members in `slot_members` (персональні exactly 1, спліт 1–3); `capacity` is fixed: персональні 1, спліт 3. Only assigned members see the slot (`GET /schedule/next` → `assignedSlots`) and can pay (`createCheckout` returns 404 for anyone else). Paid via LiqPay; payment and cancellation allowed until the slot starts; shown until one hour after the start. No vacancy alerts.
-- Assigned bookings **don't count** toward the one-per-day rule: a member can have a group booking plus several assigned ones on the same day. DB index: `bookings_member_slot_active_idx` UNIQUE (member_id, slot_id) WHERE ACTIVE (the old per-day index is dropped by `scripts/migrate-assigned-slots.js`).
+- Assigned bookings **don't count** toward the one-per-day rule: a member can have a group booking plus several assigned ones on the same day. DB index: `bookings_member_slot_active_idx` UNIQUE (member_id, slot_id) WHERE ACTIVE.
 - `training_slots` stays UNIQUE (day, slot_time): two trainings can't share a time. A **cancelled** slot at that time is reused (`ON CONFLICT … DO UPDATE … WHERE status = 'CANCELLED'`); the group upsert never takes over an active assigned slot.
 - The coach can't remove a member who already booked an assigned slot (409).
 - "Наступне тренування" on the member page is the next day **with group slots**; days with only assigned trainings are skipped. The booking-open push and the AI announcement cron skip such days too.
@@ -130,7 +130,7 @@ The LiqPay docs are incomplete. These rules come from prod logs, so do not "fix"
 
 ### Database
 
-Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts`, SQL migrations in `backend/sql/`. Run `npm run db:setup` to apply schema + seed.
+Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts` is the source of truth; `npm run db:push` (drizzle-kit) applies it to the DB. One-off migration scripts are deleted once run (all data is test data during development).
 
 ### Frontend conventions
 

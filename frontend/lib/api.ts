@@ -184,9 +184,6 @@ export interface CalendarSlot {
   members: { id: string; displayName: string; paymentStatus: "PAID" | "PENDING" | null }[];
 }
 
-/** @deprecated use CalendarSlot */
-export type CalendarDay = CalendarSlot;
-
 export const api = {
   me: () => request<MeResponse>("/auth/me"),
 
@@ -255,12 +252,6 @@ export const api = {
     request<{ ok: boolean }>(`/admin/training-days/${date}`, {
       method: "PUT",
       body: JSON.stringify({ status: "CANCELLED", isException: true }),
-    }),
-
-  upsertTrainingDay: (date: string, body: { status: string; trainingType?: TrainingType; isException?: boolean }) =>
-    request<{ ok: boolean }>(`/admin/training-days/${date}`, {
-      method: "PUT",
-      body: JSON.stringify(body),
     }),
 
   createCheckout: (slotId: string) =>
@@ -364,12 +355,6 @@ export const api = {
 
   getAnnouncement: (date: string) =>
     request<Announcement>(`/admin/announcements/${date}`),
-
-  setAnnouncementTopic: (date: string, topic: string) =>
-    request<Announcement>(`/admin/announcements/${date}/topic`, {
-      method: "PUT",
-      body: JSON.stringify({ topic }),
-    }),
 
   generateAnnouncement: (date: string) =>
     request<Announcement>(`/admin/announcements/${date}/generate`, { method: "POST" }),

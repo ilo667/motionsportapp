@@ -40,13 +40,4 @@ export class VacancyAlertsService {
       .set({ active: false })
       .where(eq(vacancyAlerts.slotId, slotId));
   }
-
-  async isSubscribed(memberId: string, slotId: string): Promise<boolean> {
-    const [row] = await this.database.db
-      .select({ active: vacancyAlerts.active })
-      .from(vacancyAlerts)
-      .where(and(eq(vacancyAlerts.memberId, memberId), eq(vacancyAlerts.slotId, slotId)))
-      .limit(1);
-    return row?.active === true;
-  }
 }

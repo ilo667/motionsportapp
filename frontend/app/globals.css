@@ -25,7 +25,6 @@
   --color-teal-light: #a5e048;
   --color-on-teal: #070910;
   --color-accent: #93d23c;
-  --color-navy: #1a2040;
 
   /* Text */
   --color-heading: #d8e4f8;
@@ -35,9 +34,7 @@
   /* UI */
   --color-surface: #0d1019;
   --color-line: #1a2040;
-  --color-highlight: #93d23c;
   --color-danger: #f87171;
-  --color-danger-ring: #f87171;
 }
 
 @utility font-geologica {
@@ -61,15 +58,6 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ── Gym loader ── */
-.gym-loader {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 29px;
-  flex: 1;
-}
-
 .gym-loader__circle {
   position: relative;
   display: grid;

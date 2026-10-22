@@ -13,9 +13,8 @@ import { AnnouncementsService } from '../ai/announcements.service';
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { trainingDays, trainingSlots, bookings, attendance, admins } from '../database/schema';
-import { GROUP_TYPE } from '../schedule/training-types';
+import { GROUP_TYPE, KY_ZONE } from '../schedule/training-types';
 
-const KY_ZONE = 'Europe/Kyiv';
 
 // Vercel Cron invokes paths with GET and sends `Authorization: Bearer $CRON_SECRET`.
 // Manual run: curl -H "Authorization: Bearer $CRON_SECRET" https://<backend>/internal/cron/<job>
