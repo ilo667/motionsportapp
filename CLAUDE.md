@@ -99,6 +99,7 @@ Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts`, 
 - **No `gap-*`** — use `space-y-*` (flex-col), `space-x-*` (inline), or `-m-1`/`m-1` trick for flex-wrap. Pre-commit hook enforces this.
 - Fonts: Inter (body, `--font-inter`), Rubik 700 (headings, `--font-geologica`). Use `font-geologica` utility class for headings.
 - Logo component: `MotionGymLogo`
+- Login pages: `/login` and `/admin/login` are thin wrappers around `LoginForm` (`variant="member" | "admin"`). Per-variant fields, texts, API call and redirect live in the `VARIANTS` config in `components/LoginForm.tsx`; change them there, not in the pages
 - Layout: `app/layout.tsx` provides the outer flex container (`max-w-xl`, `px-5`). Pages use `PageLayout` component:
   - `variant="centered"` (default) — logo + vertically centered content (auth/landing pages)
   - `variant="top"` — mini `Header` (logo + optional `action`) + content below (schedule/admin pages)
