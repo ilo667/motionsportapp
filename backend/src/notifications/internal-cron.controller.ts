@@ -67,13 +67,6 @@ export class InternalCronController {
     return { ok: true, localDate: today };
   }
 
-  @Get('cron/process-outbox')
-  async processOutbox(@Headers('authorization') auth: string) {
-    this.verifyCronSecret(auth);
-    await this.notifications.processAllPending();
-    return { ok: true };
-  }
-
   @Get('cron/generate-announcement')
   async generateAnnouncement(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);

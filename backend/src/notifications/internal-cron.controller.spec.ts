@@ -53,7 +53,7 @@ describe('InternalCronController — cron secret', () => {
 
 describe('InternalCronController — routes', () => {
   // Vercel Cron invokes with GET — a POST route answers 404 and the job silently never runs
-  it.each(['bookingOpen', 'processOutbox', 'generateAnnouncement', 'autoConfirmAttendance', 'expirePayments'] as const)(
+  it.each(['bookingOpen', 'generateAnnouncement', 'autoConfirmAttendance', 'expirePayments'] as const)(
     '%s is a GET route',
     (handler) => {
       expect(Reflect.getMetadata(METHOD_METADATA, InternalCronController.prototype[handler])).toBe(RequestMethod.GET);

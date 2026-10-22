@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { notificationEvents } from '../database/schema';
 import { PushService, PushPayload } from './push.service';
@@ -43,17 +43,8 @@ export class NotificationService {
     if (event) await this.processEvent(event);
   }
 
-  async processAllPending() {
-    const events = await this.database.db
-      .select()
-      .from(notificationEvents)
-      .where(inArray(notificationEvents.status, ['PENDING', 'FAILED']));
-
-    for (const event of events) {
-      await this.processEvent(event);
-    }
-  }
-
+  // Sent once, right away. A failed event stays FAILED (logged); there are no retries (push delivery isn't
+  // guaranteed anyway, and a retry could re-send to those who already got it)
   private async processEvent(event: typeof notificationEvents.$inferSelect) {
     try {
       const p = event.payload as Record<string, unknown>;
@@ -64,13 +55,13 @@ export class NotificationService {
 
       await this.database.db
         .update(notificationEvents)
-        .set({ status: 'SENT', sentAt: new Date(), attempts: event.attempts + 1 })
+        .set({ status: 'SENT', sentAt: new Date() })
         .where(eq(notificationEvents.id, event.id));
     } catch (err) {
       this.logger.error(`Event ${event.id} failed`, err);
       await this.database.db
         .update(notificationEvents)
-        .set({ status: 'FAILED', attempts: event.attempts + 1 })
+        .set({ status: 'FAILED' })
         .where(eq(notificationEvents.id, event.id));
     }
   }

@@ -176,7 +176,6 @@ export const notificationEvents = pgTable('notification_events', {
   dedupeKey: text('dedupe_key').notNull().unique(),
   payload: jsonb('payload').notNull(),
   status: text('status').notNull().default('PENDING'),
-  attempts: integer('attempts').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   sentAt: timestamp('sent_at', { withTimezone: true }),
 });
