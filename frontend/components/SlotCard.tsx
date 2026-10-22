@@ -78,7 +78,7 @@ export function SlotCard({
             Скасувати
           </button>
         </div>
-      ) : hasAnyBooking ? (
+      ) : hasAnyBooking && !isFull ? (
         <p className="text-muted text-sm">Ви вже записані на інший час</p>
       ) : !isFull ? (
         <button
@@ -88,6 +88,8 @@ export function SlotCard({
           Записатись
         </button>
       ) : (
+        // Full slot. Also offered to a member booked on the other time: when a seat frees up,
+        // their own card shows "Перейти на …"
         <div className="flex flex-col space-y-2">
           <p className="text-muted text-sm font-medium">Місць немає</p>
           {bookingWindowOpen && (

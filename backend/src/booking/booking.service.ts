@@ -10,6 +10,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { bookings, trainingSlots, trainingDays, members } from '../database/schema';
 import { NotificationService } from '../notifications/notification.service';
+import { VacancyAlertsService } from '../notifications/vacancy-alerts.service';
 import { DemoService } from '../demo/demo.service';
 import { GROUP_TYPE, KY_ZONE, slotStartsAt } from '../schedule/training-types';
 
@@ -24,6 +25,7 @@ export class BookingService {
     private readonly database: DatabaseService,
     private readonly notifications: NotificationService,
     private readonly demoService: DemoService,
+    private readonly vacancyAlerts: VacancyAlertsService,
   ) {}
 
   async book(memberId: string, slotId: string) {
@@ -84,6 +86,9 @@ export class BookingService {
       }
       throw err;
     }
+
+    // Booked the slot they were waiting for: no "seat free" push about their own slot
+    await this.vacancyAlerts.unsubscribe(memberId, slotId);
 
     return { ok: true };
   }
@@ -253,6 +258,9 @@ export class BookingService {
       }
       throw err;
     }
+
+    // Usually they came here from a vacancy push; stop alerts for the slot they now hold
+    await this.vacancyAlerts.unsubscribe(memberId, newSlotId);
 
     if (wasAtCapacity && day) {
       const dedupeKey = `vacancy:${oldSlotId}:${current.id}`;

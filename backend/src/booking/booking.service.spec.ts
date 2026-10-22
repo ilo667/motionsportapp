@@ -67,10 +67,12 @@ const validDay = {
 function makeService(db: any, now: DateTime) {
   const mockDemoService = { getNow: jest.fn().mockResolvedValue(now), isDemoMode: jest.fn().mockReturnValue(false) };
   const mockNotifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
+  const mockVacancyAlerts = { unsubscribe: jest.fn().mockResolvedValue(undefined) };
   return new BookingService(
     { db } as any,
     mockNotifications as any,
     mockDemoService as any,
+    mockVacancyAlerts as any,
   );
 }
 
@@ -223,5 +225,7 @@ describe('BookingService — coach push with the reason', () => {
       'member-cancelled:booking-1',
       expect.objectContaining({ displayName: 'Іра', slotTime: '19:00', switchedToTime: '20:00' }),
     );
+    // waited for this slot → no vacancy push about the slot they now hold
+    expect((service as any).vacancyAlerts.unsubscribe).toHaveBeenCalledWith('member-1', 'slot-2');
   });
 });
