@@ -178,6 +178,9 @@ export class PaymentService {
       order_id: orderId,
       server_url: process.env.LIQPAY_SERVER_URL ?? '',
       result_url: `${process.env.FRONTEND_URL ?? ''}/payment/return?order=${orderId}`,
+      // LiqPay closes the order at the same moment our expiry releases the booking,
+      // so an old LiqPay tab can't be paid after the seat is gone. Format: UTC "YYYY-MM-DD HH:mm:ss"
+      expired_date: new Date(Date.now() + this.expiryMs).toISOString().replace('T', ' ').slice(0, 19),
     };
 
     const data = liqpayEncode(params);

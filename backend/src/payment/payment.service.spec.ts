@@ -359,3 +359,23 @@ describe('PaymentService — PAYMENT_EXPIRY_MINUTES', () => {
     await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING', expiresAt: '2026-10-21T19:02:00.000Z' });
   });
 });
+
+describe('PaymentService — LiqPay expired_date', () => {
+  afterEach(() => { delete process.env.PAYMENT_EXPIRY_MINUTES; });
+
+  it('passes expired_date equal to our expiry so LiqPay closes the order together with the booking', async () => {
+    process.env.PAYMENT_EXPIRY_MINUTES = '15';
+    mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
+    const slot = { id: 'slot-1', status: 'ACTIVE', trainingType: 'індивідуальні', bookedCount: 1, capacity: 8, trainingDayId: 'day-1' };
+    const { db } = makeDb([[slot], [{ id: 'pay-1', bookingId: 'booking-1', orderId: 'mg-old' }]]);
+
+    const before = Date.now();
+    const result = await makeService(db).createCheckout('slot-1', 'member-1');
+    const expired = liqpayDecode((result as { data: string }).data).expired_date as string;
+
+    expect(expired).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    const expiredMs = new Date(expired.replace(' ', 'T') + 'Z').getTime();
+    expect(expiredMs).toBeGreaterThanOrEqual(before + 15 * 60 * 1000 - 1000);
+    expect(expiredMs).toBeLessThanOrEqual(Date.now() + 15 * 60 * 1000);
+  });
+});
