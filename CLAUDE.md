@@ -124,7 +124,7 @@ Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts`, 
   - there are no stable `fc-*` class names (theme classes are hashed), so style only via `--fc-classic-*` palette variables (override in `.mg-calendar [data-color-scheme]`, dark mode via `colorScheme="dark"`, `palette.css` must stay imported);
   - no calendar-level `buttonText`: view button labels come from the `uk` locale.
   Default view `timeGridWeek` (17:00–22:00, widened to fit earlier/later personal trainings) with a `dayGridMonth` toggle. Data is fetched per month for **every** month the visible range touches.
-  Clicking a day adds one training (групові = both 19:00 and 20:00; індивідуальні / спліт = time + members); click again to add another. Clicking an event: cancel it, or change the members of a personal one
+  Clicking a day adds one training (групові = both 19:00 and 20:00; індивідуальні / спліт = time + members); click again to add another. Clicking an event: cancel it, or change the members of a personal one. Group events show `booked/capacity`; personal events show members instead of a count (`Спліт · Катя ✓, Оля`, ✓ = paid) and the modal lists each member's payment state
 - Auth state: `mg_authed` in `localStorage` — set on login, cleared on logout/401. Home page skips API call when flag is absent (avoids 401 in console for unauthenticated users)
 
 ## Vercel deployment

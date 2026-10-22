@@ -152,17 +152,22 @@ describe('Group slots — upsertGroupSlot', () => {
 });
 
 describe('Calendar — personal slot members', () => {
-  it('returns assigned members for personal slots only', async () => {
+  it('returns assigned members with their payment state for personal slots only', async () => {
     const rows = [
       { localDate: '2026-10-21', slotId: 'g1', slotTime: '19:00', trainingType: 'групові', bookedCount: 3, capacity: 8 },
       { localDate: '2026-10-21', slotId: 'p1', slotTime: '10:30', trainingType: 'спліт', bookedCount: 0, capacity: 2 },
     ];
-    const { db } = makeDb([rows, [{ slotId: 'p1', id: M1, displayName: 'Катя' }, { slotId: 'p1', id: M2, displayName: 'Оля' }]]);
+    const { db } = makeDb([
+      rows,
+      [{ slotId: 'p1', id: M1, displayName: 'Катя' }, { slotId: 'p1', id: M2, displayName: 'Оля' }, { slotId: 'p1', id: M3, displayName: 'Іра' }],
+      [{ slotId: 'p1', memberId: M1, paymentStatus: 'PAID' }, { slotId: 'p1', memberId: M2, paymentStatus: 'PENDING' }],
+    ]);
     const result = await makeService(db).getCalendar('2026-10');
     expect(result.find((s) => s.slotId === 'g1')?.members).toEqual([]);
     expect(result.find((s) => s.slotId === 'p1')?.members).toEqual([
-      { id: M1, displayName: 'Катя' },
-      { id: M2, displayName: 'Оля' },
+      { id: M1, displayName: 'Катя', paymentStatus: 'PAID' },
+      { id: M2, displayName: 'Оля', paymentStatus: 'PENDING' },
+      { id: M3, displayName: 'Іра', paymentStatus: null },
     ]);
   });
 });

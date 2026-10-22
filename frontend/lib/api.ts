@@ -137,7 +137,8 @@ export interface CalendarSlot {
   trainingType: TrainingType;
   bookedCount: number;
   capacity: number;
-  members: { id: string; displayName: string }[]; // assigned members, personal slots only
+  // Assigned members, personal slots only. paymentStatus: PENDING = on LiqPay (seat held), null = has not started paying
+  members: { id: string; displayName: string; paymentStatus: "PAID" | "PENDING" | null }[];
 }
 
 /** @deprecated use CalendarSlot */

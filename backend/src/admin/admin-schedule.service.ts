@@ -148,6 +148,14 @@ export class AdminScheduleService {
             .where(inArray(slotMembers.slotId, personalIds))
             .orderBy(slotMembers.createdAt)
         : [];
+    // Per-member payment state: the coach needs who paid, not a count
+    const booked =
+      personalIds.length > 0
+        ? await this.database.db
+            .select({ slotId: bookings.slotId, memberId: bookings.memberId, paymentStatus: bookings.paymentStatus })
+            .from(bookings)
+            .where(and(inArray(bookings.slotId, personalIds), eq(bookings.status, 'ACTIVE')))
+        : [];
 
     return rows.map((r) => ({
       localDate: r.localDate,
@@ -156,7 +164,15 @@ export class AdminScheduleService {
       trainingType: r.trainingType,
       bookedCount: r.bookedCount,
       capacity: r.capacity,
-      members: assigned.filter((a) => a.slotId === r.slotId).map(({ id, displayName }) => ({ id, displayName })),
+      members: assigned
+        .filter((a) => a.slotId === r.slotId)
+        .map(({ id, displayName }) => ({
+          id,
+          displayName,
+          // 'PAID' | 'PENDING' (on LiqPay, seat held) | null (has not started paying)
+          paymentStatus:
+            booked.find((b) => b.slotId === r.slotId && b.memberId === id)?.paymentStatus ?? null,
+        })),
     }));
   }
 

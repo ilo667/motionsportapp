@@ -41,6 +41,12 @@ const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, інд�
 const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
 const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 
+const PAYMENT_LABELS = {
+  PAID: { text: "оплачено", className: "text-teal" },
+  PENDING: { text: "очікує оплати", className: "text-amber-400" },
+  NONE: { text: "не оплачено", className: "text-muted" },
+};
+
 const ERROR_TEXTS: [string, string][] = [
   ["Time is already taken", "На цей час уже є тренування"],
   ["taken by a personal training", "На 19:00 чи 20:00 уже стоїть персональне тренування"],
@@ -117,11 +123,14 @@ export default function CalendarPage() {
 
   const events = slots.map((s) => {
     const colors = TYPE_COLORS[s.trainingType];
-    const names = s.members.map((m) => m.displayName).join(", ");
     const start = `${s.localDate}T${s.slotTime}:00`;
+    // Group: how full it is. Personal: who paid ("Спліт · Катя ✓, Оля")
+    const detail = s.trainingType === "групові"
+      ? `${s.bookedCount}/${s.capacity}`
+      : s.members.map((m) => `${m.displayName}${m.paymentStatus === "PAID" ? " ✓" : ""}`).join(", ") || "без людей";
     return {
       id: s.slotId,
-      title: `${TYPE_SHORT[s.trainingType]} · ${s.bookedCount}/${s.capacity}${names ? ` · ${names}` : ""}`,
+      title: `${TYPE_SHORT[s.trainingType]} · ${detail}`,
       // Timed events (1 h) so the week-with-hours view places them on their hour; the time is shown by FullCalendar
       start,
       end: new Date(new Date(start).getTime() + 60 * 60 * 1000),
@@ -302,10 +311,24 @@ export default function CalendarPage() {
               <p className="font-geologica font-semibold text-heading">
                 {editing ? `${TYPE_LABELS[editing.trainingType]} ${editing.slotTime}` : "Додати тренування"}
               </p>
-              {editing && (
+              {editing?.trainingType === "групові" && (
                 <p className="text-muted text-xs mt-1">Записано {editing.bookedCount} з {editing.capacity}</p>
               )}
             </div>
+
+            {editing && editing.trainingType !== "групові" && editing.members.length > 0 && (
+              <ul className="space-y-1">
+                {editing.members.map((m) => {
+                  const label = PAYMENT_LABELS[m.paymentStatus ?? "NONE"];
+                  return (
+                    <li key={m.id} className="flex items-center justify-between text-sm">
+                      <span className="text-body">{m.displayName}</span>
+                      <span className={label.className}>{label.text}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
             {/* Тип — тільки при додаванні. Ще одне тренування в цей день: клікніть день знову */}
             {!editing && (
