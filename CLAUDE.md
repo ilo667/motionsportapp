@@ -86,6 +86,7 @@ The LiqPay docs are incomplete. These rules come from prod logs, so do not "fix"
 - **`LIQPAY_SERVER_URL`** must be `https://<backend>/payments/liqpay/callback` **without `/api`**. With `/api` LiqPay gets a 404 and payments hang in PENDING. **`FRONTEND_URL`** is required, otherwise LiqPay shows no "back to site" button (`result_url` ends up relative).
 - **`server_url` is embedded in each order.** After changing the env var, old orders keep retrying the old URL; this is harmless.
 - **Testing:** set `PAYMENT_EXPIRY_MINUTES=2` on Vercel for expiry scenarios, then remove it. Vercel Hobby keeps runtime logs only ~30 min (`vercel logs` without `--since`), so check them right after the scenario. The LiqPay cabinet → payment → "Лог виклику API" keeps callback history.
+- **Money arrived for a cancelled booking** (callback `success` for an EXPIRED/FAILED/REPLACED payment whose booking no longer awaits payment): status is not changed, the payload is saved to `payments.raw_callback`, and an error "needs manual handling" is logged. Find such cases with `SELECT * FROM payments WHERE status <> 'PAID' AND raw_callback->>'status' IN ('success','sandbox')`, then refund via the LiqPay cabinet by `payment_id`.
 - **Logs:** every payment decision is logged (`Checkout:`, `LiqPay callback:`, `LiqPay status API:`, `Status check:`, `Expire:`). LiqPay payloads are logged as a safe field subset plus `keys=[…]`; never log names, phones or card masks.
 
 ### Database

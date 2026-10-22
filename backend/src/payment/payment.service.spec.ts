@@ -344,7 +344,17 @@ describe('PaymentService — callback for a REPLACED attempt', () => {
   it('does not touch a booking that is already paid (double payment → manual handling)', async () => {
     const { db, sets } = makeDb([[replaced], [{ status: 'ACTIVE', paymentStatus: 'PAID' }]]);
     await makeService(db).handleCallback(...callback());
-    expect(sets).toHaveLength(0);
+    // Only the evidence is stored — no status / booking changes
+    expect(sets).toEqual([expect.objectContaining({ rawCallback: expect.objectContaining({ status: 'success' }) })]);
+    expect(sets[0]).not.toHaveProperty('status');
+    expect(sets[0]).not.toHaveProperty('paymentStatus');
+  });
+
+  it('stores raw_callback when money arrives for an EXPIRED payment, without changing status', async () => {
+    const { db, sets } = makeDb([[{ id: 'pay-old', bookingId: 'booking-1', status: 'EXPIRED' }]]);
+    await makeService(db).handleCallback(...callback());
+    expect(sets).toEqual([expect.objectContaining({ rawCallback: expect.objectContaining({ order_id: 'mg-old', status: 'success' }) })]);
+    expect(sets[0]).not.toHaveProperty('status');
   });
 });
 

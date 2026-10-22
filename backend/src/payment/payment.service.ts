@@ -219,6 +219,12 @@ export class PaymentService {
         await this.applyLiqpayStatus(payment, decoded);
       } else {
         this.logger.error(`LiqPay: order=${orderId} paid after it was ${payment.status} — needs manual handling`);
+        // Keep the evidence (payment_id for a refund) in the DB — runtime logs expire in ~30 min.
+        // Status stays as is; find these with: status <> 'PAID' AND raw_callback->>'status' IN ('success','sandbox')
+        await this.database.db
+          .update(payments)
+          .set({ rawCallback: decoded, updatedAt: new Date() })
+          .where(eq(payments.id, payment.id));
       }
     }
     return { ok: true };
