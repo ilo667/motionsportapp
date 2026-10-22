@@ -283,12 +283,13 @@ export class BookingService {
   ) {
     try {
       const [member] = await this.database.db
-        .select({ displayName: members.displayName })
+        .select({ displayName: members.displayName, coachId: members.coachId })
         .from(members)
         .where(eq(members.id, memberId))
         .limit(1);
       await this.notifications.enqueueAndProcess('MEMBER_CANCELLED', `member-cancelled:${bookingId}`, {
         displayName: member?.displayName ?? '',
+        coachId: member?.coachId ?? null,
         slotTime,
         localDate,
         reason,

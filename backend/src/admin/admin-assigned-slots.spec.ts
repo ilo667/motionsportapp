@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { DateTime } from 'luxon';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { AdminScheduleService } from './admin-schedule.service';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 
@@ -189,8 +190,47 @@ describe('Cancellation reasons for the coach', () => {
   });
 
   it('client history: adds the training date and time', async () => {
-    const { db } = makeDb([[rows[0]]]);
-    const [entry] = await makeService(db).getMemberCancellations(M1);
+    // visibility check (own or unassigned client), then the history
+    const { db } = makeDb([[{ id: M1 }], [rows[0]]]);
+    const [entry] = await makeService(db).getMemberCancellations('coach-1', M1);
     expect(entry).toEqual(expect.objectContaining({ localDate: '2026-10-22', slotTime: '19:00', reason: 'Захворіла' }));
+  });
+});
+
+describe('Clients per coach', () => {
+  it('hides history of another coach\'s client (404)', async () => {
+    const { db } = makeDb([[]]);
+    await expect(makeService(db).getMemberCancellations('coach-1', M1)).rejects.toThrow(NotFoundException);
+  });
+
+  it('a coach sees own and unassigned clients only', () => {
+    const { db } = makeDb();
+    const where = (makeService(db) as any).visibleTo('coach-1');
+    const { sql, params } = new PgDialect().sqlToQuery(where);
+    expect(sql).toBe('("members"."coach_id" = $1 or "members"."coach_id" is null)');
+    expect(params).toEqual(['coach-1']);
+  });
+
+  it('reassigns a client to another coach', async () => {
+    const { db, sets } = makeDb([[{ id: 'coach-2' }]], () => [{ id: M1, coachId: 'coach-2' }]);
+    await expect(makeService(db).assignCoach('coach-1', M1, 'coach-2')).resolves.toEqual({ id: M1, coachId: 'coach-2' });
+    expect(sets).toEqual([{ coachId: 'coach-2' }]);
+  });
+
+  it('refuses an unknown coach', async () => {
+    const { db } = makeDb([[]]);
+    await expect(makeService(db).assignCoach('coach-1', M1, 'nobody')).rejects.toThrow('Coach not found');
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("cannot reassign another coach's client (update matches nothing → 404)", async () => {
+    const { db } = makeDb([[{ id: 'coach-2' }]], () => []);
+    await expect(makeService(db).assignCoach('coach-1', M1, 'coach-2')).rejects.toThrow('Member not found');
+  });
+
+  it('coach picker returns usernames only', async () => {
+    const { db } = makeDb([[{ id: 'coach-1', username: 'ilona' }]]);
+    await expect(makeService(db).getCoaches()).resolves.toEqual([{ id: 'coach-1', username: 'ilona' }]);
+    expect(db.select).toHaveBeenCalledWith({ id: expect.anything(), username: expect.anything() });
   });
 });

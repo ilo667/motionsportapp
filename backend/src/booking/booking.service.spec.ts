@@ -193,14 +193,14 @@ describe('BookingService — coach push with the reason', () => {
   it('sends MEMBER_CANCELLED with the reason when a member cancels', async () => {
     const booking = { id: 'booking-1', slotId: 'slot-1', trainingDayId: 'day-1', memberId: 'member-1', status: 'ACTIVE' };
     const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '19:00', trainingType: 'групові' };
-    const { db } = makeDb([[booking], [validDay], [groupSlot], [{ displayName: 'Оля' }]]);
+    const { db } = makeDb([[booking], [validDay], [groupSlot], [{ displayName: 'Оля', coachId: 'coach-1' }]]);
     const service = makeService(db, kyivAt(17));
     await service.cancel('member-1', 'slot-1', 'Захворіла', new Date());
 
     expect((service as any).notifications.enqueueAndProcess).toHaveBeenCalledWith(
       'MEMBER_CANCELLED',
       'member-cancelled:booking-1',
-      { displayName: 'Оля', slotTime: '19:00', localDate: TODAY, reason: 'Захворіла', switchedToTime: null },
+      { displayName: 'Оля', coachId: 'coach-1', slotTime: '19:00', localDate: TODAY, reason: 'Захворіла', switchedToTime: null },
     );
   });
 

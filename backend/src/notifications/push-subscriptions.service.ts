@@ -81,6 +81,13 @@ export class PushSubscriptionsService {
       .where(isNull(adminPushSubscriptions.disabledAt));
   }
 
+  async findAdminByAdminId(adminId: string) {
+    return this.database.db
+      .select()
+      .from(adminPushSubscriptions)
+      .where(and(eq(adminPushSubscriptions.adminId, adminId), isNull(adminPushSubscriptions.disabledAt)));
+  }
+
   async disableAdminByEndpoint(endpoint: string) {
     await this.database.db
       .update(adminPushSubscriptions)

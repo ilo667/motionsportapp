@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   serial,
   primaryKey,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -23,6 +24,8 @@ export const members = pgTable('members', {
   disabledAt: timestamp('disabled_at', { withTimezone: true }),
   // Coach-only note ("ходить через раз", "це Катюха"); never returned by member-facing APIs
   trainerNote: text('trainer_note'),
+  // The member's coach; null = not assigned yet (every coach sees them under «Без тренера»)
+  coachId: uuid('coach_id').references((): AnyPgColumn => admins.id),
 });
 
 export const admins = pgTable('admins', {

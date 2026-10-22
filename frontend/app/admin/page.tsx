@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, AdminSchedule, Announcement, AnnouncementExample } from "@/lib/api";
 import { SlotCard as AdminSlotCard } from "@/components/admin/SlotCard";
-import { GymLoader } from "@/components/GymLoader";
 import DemoControls from "@/components/DemoControls";
 import { PageLayout } from "@/components/PageLayout";
 import { PushSubscribeButton } from "@/components/PushSubscribeButton";
@@ -57,6 +56,7 @@ export default function AdminPage() {
   }, [fetchSchedule]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchSchedule is async: state is set after the await, not synchronously
     fetchSchedule().then(() => {
       authedRef.current = true;
       setLoading(false);

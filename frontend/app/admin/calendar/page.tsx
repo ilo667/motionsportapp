@@ -14,6 +14,7 @@ import ukLocale from "@fullcalendar/react/locales/uk";
 import type { DatesSetInfo, EventClickInfo, DateClickInfo } from "@fullcalendar/react";
 import { api, AdminMember, CalendarSlot, Cancellation, TrainingType } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
+import { useIsClient } from "@/lib/clientStore";
 import { CancellationList } from "@/components/admin/CancellationList";
 
 const TYPE_COLORS: Record<TrainingType, { bg: string; border: string; text: string }> = {
@@ -79,13 +80,13 @@ type Modal =
 
 export default function CalendarPage() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  // FullCalendar renders in the browser only
+  const mounted = useIsClient();
   const [slots, setSlots] = useState<CalendarSlot[]>([]);
   const [members, setMembers] = useState<AdminMember[]>([]);
   // Months covering the visible range ("2026-10,2026-11"): a week can span two months
   const [visibleMonths, setVisibleMonths] = useState("");
 
-  useEffect(() => { setMounted(true); }, []);
   const [modal, setModal] = useState<Modal | null>(null);
   const [selectedType, setSelectedType] = useState<TrainingType>("групові");
   const [time, setTime] = useState("");
@@ -241,6 +242,12 @@ export default function CalendarPage() {
   const modalDate = modal ? (modal.mode === "add" ? modal.date : modal.slot.localDate) : "";
   const editing = modal?.mode === "edit" ? modal.slot : null;
   const assigned = selectedType !== "групові";
+  // The coach's own and unassigned clients, plus anyone already on this training (another coach's client
+  // must not silently disappear from the picker and be dropped on save)
+  const pickerMembers: { id: string; displayName: string; memberCode?: string }[] = [
+    ...members,
+    ...(editing?.members.filter((sm) => !members.some((m) => m.id === sm.id)) ?? []),
+  ];
 
   return (
     <PageLayout variant="top" action={
@@ -399,10 +406,10 @@ export default function CalendarPage() {
                     className={FIELD_CLASS}
                   >
                     <option value="">{i === 0 ? "Виберіть людину" : "Не вибрано (необовʼязково)"}</option>
-                    {members
+                    {pickerMembers
                       .filter((m) => m.id === id || !memberIds.includes(m.id))
                       .map((m) => (
-                        <option key={m.id} value={m.id}>{m.displayName} · {m.memberCode}</option>
+                        <option key={m.id} value={m.id}>{m.memberCode ? `${m.displayName} · ${m.memberCode}` : m.displayName}</option>
                       ))}
                   </select>
                 ))}

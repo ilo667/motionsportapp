@@ -1,9 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { eq, and, or, inArray, gte, lte, asc, desc, isNotNull, sql, type SQL } from 'drizzle-orm';
+import { eq, and, or, inArray, gte, lte, asc, desc, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
-import { trainingDays, trainingSlots, bookings, members, attendance, slotMembers } from '../database/schema';
+import { trainingDays, trainingSlots, bookings, members, attendance, slotMembers, admins } from '../database/schema';
 import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
 import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
@@ -525,8 +525,13 @@ export class AdminScheduleService {
     return { ok: true };
   }
 
+  // A coach works with their own clients plus unassigned ones (to claim them); other coaches' clients are hidden
+  private visibleTo(adminId: string) {
+    return or(eq(members.coachId, adminId), isNull(members.coachId))!;
+  }
+
   // Coach's client list. trainerNote is admin-only — keep it out of member-facing queries
-  async getMembers() {
+  async getMembers(adminId: string) {
     const since = new Date(Date.now() - CANCELLATION_STATS_DAYS * 24 * 60 * 60 * 1000);
     // Cancellations only (a move to another slot isn't a missed training)
     // Raw, fully qualified SQL: in a single-table select drizzle drops table names, and an unqualified
@@ -545,11 +550,35 @@ export class AdminScheduleService {
         memberCode: members.memberCode,
         displayName: members.displayName,
         trainerNote: members.trainerNote,
+        coachId: members.coachId,
         createdAt: members.createdAt,
         recentCancellations: cancelledCount,
       })
       .from(members)
+      .where(this.visibleTo(adminId))
       .orderBy(asc(members.displayName));
+  }
+
+  // For the reassign picker. Usernames only, never password hashes
+  async getCoaches() {
+    return this.database.db
+      .select({ id: admins.id, username: admins.username })
+      .from(admins)
+      .orderBy(asc(admins.username));
+  }
+
+  // Hand a client to a coach (or claim an unassigned one). Only the current coach can do it
+  async assignCoach(adminId: string, memberId: string, coachId: string) {
+    const [coach] = await this.database.db.select({ id: admins.id }).from(admins).where(eq(admins.id, coachId)).limit(1);
+    if (!coach) throw new NotFoundException('Coach not found');
+
+    const [updated] = await this.database.db
+      .update(members)
+      .set({ coachId })
+      .where(and(eq(members.id, memberId), this.visibleTo(adminId)))
+      .returning({ id: members.id, coachId: members.coachId });
+    if (!updated) throw new NotFoundException('Member not found');
+    return updated;
   }
 
   // Calendar modal: who cancelled or moved away from this slot and why
@@ -558,7 +587,14 @@ export class AdminScheduleService {
   }
 
   // Clients page: one member's latest cancellations and moves
-  async getMemberCancellations(memberId: string) {
+  async getMemberCancellations(adminId: string, memberId: string) {
+    const [member] = await this.database.db
+      .select({ id: members.id })
+      .from(members)
+      .where(and(eq(members.id, memberId), this.visibleTo(adminId)))
+      .limit(1);
+    if (!member) throw new NotFoundException('Member not found');
+
     const rows = await this.memberCancellations(eq(bookings.memberId, memberId), MEMBER_HISTORY_LIMIT);
     return rows.map((r) => ({ ...toCancellationView(r), localDate: r.localDate, slotTime: r.slotTime }));
   }
@@ -590,12 +626,12 @@ export class AdminScheduleService {
     return limit ? query.limit(limit) : query;
   }
 
-  async updateMemberNote(memberId: string, dto: UpdateMemberNoteDto) {
+  async updateMemberNote(adminId: string, memberId: string, dto: UpdateMemberNoteDto) {
     const note = dto.note.trim();
     const [updated] = await this.database.db
       .update(members)
       .set({ trainerNote: note || null })
-      .where(eq(members.id, memberId))
+      .where(and(eq(members.id, memberId), this.visibleTo(adminId)))
       .returning({ id: members.id, trainerNote: members.trainerNote });
 
     if (!updated) throw new NotFoundException('Member not found');

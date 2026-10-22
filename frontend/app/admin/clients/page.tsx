@@ -2,7 +2,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, AdminMember, MemberCancellation } from "@/lib/api";
+import { api, AdminMember, Coach, MemberCancellation } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { CancellationList } from "@/components/admin/CancellationList";
 
@@ -97,15 +97,81 @@ function NoteCell({ member, onSaved }: { member: AdminMember; onSaved: (note: st
   );
 }
 
+// Under the client's name: hand the client to another coach, or claim an unassigned one
+function CoachPicker({
+  member,
+  coaches,
+  myId,
+  onAssigned,
+}: {
+  member: AdminMember;
+  coaches: Coach[];
+  myId: string;
+  onAssigned: (coachId: string) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const assign = async (coachId: string) => {
+    if (!coachId || coachId === member.coachId) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.assignCoach(member.id, coachId);
+      onAssigned(coachId);
+    } catch {
+      setError("Не вдалося змінити тренера");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-start space-y-1 mt-2">
+      {!member.coachId && (
+        <button
+          onClick={() => assign(myId)}
+          disabled={saving}
+          className="btn-secondary text-xs px-3 py-1 rounded-md border transition-colors disabled:opacity-60"
+        >
+          Забрати собі
+        </button>
+      )}
+      <label className="flex items-center space-x-1 text-xs text-muted">
+        <span>Тренер:</span>
+        <select
+          aria-label={`Тренер для ${member.displayName}`}
+          value={member.coachId ?? ""}
+          disabled={saving}
+          onChange={(e) => assign(e.target.value)}
+          className="bg-transparent text-body border-b border-line focus:outline-none focus:border-accent"
+        >
+          {!member.coachId && <option value="">не вибрано</option>}
+          {coaches.map((c) => (
+            <option key={c.id} value={c.id}>{c.id === myId ? `${c.username} (я)` : c.username}</option>
+          ))}
+        </select>
+      </label>
+      {error && <span className="text-danger text-xs">{error}</span>}
+    </div>
+  );
+}
+
 export default function ClientsPage() {
   const router = useRouter();
   const [members, setMembers] = useState<AdminMember[] | null>(null);
+  const [coaches, setCoaches] = useState<Coach[]>([]);
+  const [myId, setMyId] = useState("");
   const [loadError, setLoadError] = useState(false);
   const [openHistory, setOpenHistory] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getMembers()
-      .then(setMembers)
+    Promise.all([api.getMembers(), api.getCoaches(), api.me()])
+      .then(([memberList, coachList, me]) => {
+        setMembers(memberList);
+        setCoaches(coachList);
+        setMyId(me.id);
+      })
       .catch((err: unknown) => {
         const status = (err as { status?: number }).status;
         if (status === 401 || status === 403) router.push("/admin/login");
@@ -115,6 +181,64 @@ export default function ClientsPage() {
 
   const updateNote = (id: string, trainerNote: string | null) =>
     setMembers((prev) => prev?.map((m) => (m.id === id ? { ...m, trainerNote } : m)) ?? null);
+
+  // Given to another coach: the client leaves this coach's list
+  const updateCoach = (id: string, coachId: string) =>
+    setMembers((prev) =>
+      (coachId === myId
+        ? prev?.map((m) => (m.id === id ? { ...m, coachId } : m))
+        : prev?.filter((m) => m.id !== id)) ?? null,
+    );
+
+  const mine = members?.filter((m) => m.coachId) ?? [];
+  const unassigned = members?.filter((m) => !m.coachId) ?? [];
+
+  const renderTable = (rows: AdminMember[]) => (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="text-muted text-xs text-left border-b border-line">
+          <th className="py-2 pr-3 font-medium w-2/5">Клієнт</th>
+          <th className="py-2 pr-3 font-medium">Нотатка</th>
+          <th className="py-2 font-medium text-right" title="Скасування за останні 30 днів">Скасувань</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((m) => (
+          <Fragment key={m.id}>
+            <tr className={`align-top ${openHistory === m.id ? "" : "border-b border-line"}`}>
+              <td className="py-3 pr-3">
+                <div className="text-heading">{m.displayName}</div>
+                <div className="text-muted text-xs">{m.memberCode}</div>
+                <CoachPicker member={m} coaches={coaches} myId={myId} onAssigned={(coachId) => updateCoach(m.id, coachId)} />
+              </td>
+              <td className="py-3 pr-3">
+                <NoteCell member={m} onSaved={(note) => updateNote(m.id, note)} />
+              </td>
+              <td className="py-3 text-right">
+                <button
+                  onClick={() => setOpenHistory(openHistory === m.id ? null : m.id)}
+                  aria-expanded={openHistory === m.id}
+                  title="Показати історію скасувань"
+                  className={`tabular-nums hover:text-heading transition-colors ${m.recentCancellations >= FREQUENT_CANCELLATIONS ? "text-danger font-medium" : "text-body"}`}
+                >
+                  {m.recentCancellations} {openHistory === m.id ? "▴" : "▾"}
+                </button>
+              </td>
+            </tr>
+            {openHistory === m.id && (
+              <tr className="border-b border-line">
+                <td colSpan={3} className="pb-4">
+                  <div className="bg-surface border border-line rounded-xl p-3">
+                    <CancellationHistory memberId={m.id} />
+                  </div>
+                </td>
+              </tr>
+            )}
+          </Fragment>
+        ))}
+      </tbody>
+    </table>
+  );
 
   return (
     <PageLayout
@@ -132,52 +256,21 @@ export default function ClientsPage() {
 
       {loadError && <p className="text-danger text-sm">Не вдалося завантажити клієнтів.</p>}
 
-      {members && members.length === 0 && <p className="text-muted text-sm">Клієнтів ще немає.</p>}
+      {members && (
+        <div className="flex flex-col space-y-8">
+          {unassigned.length > 0 && (
+            <section>
+              <h2 className="font-geologica font-semibold text-heading uppercase mb-1">Без тренера</h2>
+              <p className="text-muted text-xs mb-3">Нові клієнти. Їх бачать усі тренери, поки хтось не забере собі</p>
+              {renderTable(unassigned)}
+            </section>
+          )}
 
-      {members && members.length > 0 && (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-muted text-xs text-left border-b border-line">
-              <th className="py-2 pr-3 font-medium w-2/5">Клієнт</th>
-              <th className="py-2 pr-3 font-medium">Нотатка</th>
-              <th className="py-2 font-medium text-right" title="Скасування за останні 30 днів">Скасувань</th>
-            </tr>
-          </thead>
-          <tbody>
-            {members.map((m) => (
-              <Fragment key={m.id}>
-                <tr className={`align-top ${openHistory === m.id ? "" : "border-b border-line"}`}>
-                  <td className="py-3 pr-3">
-                    <div className="text-heading">{m.displayName}</div>
-                    <div className="text-muted text-xs">{m.memberCode}</div>
-                  </td>
-                  <td className="py-3 pr-3">
-                    <NoteCell member={m} onSaved={(note) => updateNote(m.id, note)} />
-                  </td>
-                  <td className="py-3 text-right">
-                    <button
-                      onClick={() => setOpenHistory(openHistory === m.id ? null : m.id)}
-                      aria-expanded={openHistory === m.id}
-                      title="Показати історію скасувань"
-                      className={`tabular-nums hover:text-heading transition-colors ${m.recentCancellations >= FREQUENT_CANCELLATIONS ? "text-danger font-medium" : "text-body"}`}
-                    >
-                      {m.recentCancellations} {openHistory === m.id ? "▴" : "▾"}
-                    </button>
-                  </td>
-                </tr>
-                {openHistory === m.id && (
-                  <tr className="border-b border-line">
-                    <td colSpan={3} className="pb-4">
-                      <div className="bg-surface border border-line rounded-xl p-3">
-                        <CancellationHistory memberId={m.id} />
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+          <section>
+            <h2 className="font-geologica font-semibold text-heading uppercase mb-3">Мої клієнти</h2>
+            {mine.length === 0 ? <p className="text-muted text-sm">Клієнтів ще немає.</p> : renderTable(mine)}
+          </section>
+        </div>
       )}
     </PageLayout>
   );

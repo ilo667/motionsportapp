@@ -61,6 +61,7 @@ Auth endpoints:
 - `AdminModule` — admin schedule management, slot cancellation, attendance, clients list (`GET /admin/members`, `PATCH /admin/members/:id/note`)
   - group slots: `PUT /admin/training-days/:date/slots/:slotTime` (19:00 / 20:00 only); assigned: `POST /admin/training-days/:date/assigned-slots` `{slotTime, trainingType, memberIds}`, `PUT /admin/slots/:id/members`
   - cancellation reasons: `GET /admin/slots/:id/cancellations`, `GET /admin/members/:id/cancellations`; `GET /admin/schedule` slots carry `cancellations` and participants' `switchedFromTime`; `GET /admin/members` has `recentCancellations` (30 days, moves not counted)
+  - coaches: `GET /admin/coaches` (id + username), `PATCH /admin/members/:id/coach` `{coachId}`
   - `members.trainer_note` is a **coach-only** note (max 300). Member-facing code must select explicit columns and never return it (SessionGuard and `/auth/me` already do)
 - `NotificationsModule` — push subscriptions, vacancy alerts, internal cron
   - `/internal/cron/*` routes must be **`@Get`** — Vercel Cron invokes with GET (`vercel-cron/1.0`); a POST route answers 404 and the job silently never runs. Protected by `CRON_SECRET` (`Authorization: Bearer …`, sent by Vercel automatically); missing secret in production → 403. Trigger manually: `vercel crons run /internal/cron/<job>`. Hobby plan: once per day, any minute within the scheduled hour
@@ -72,6 +73,15 @@ Auth endpoints:
   - `GET /payments/status?order=` — member's own order; while PENDING asks LiqPay status API directly (used by `/payment/return`)
   - Expiry: lazily on `GET /schedule/next` (`expireStale()`), PENDING older than `PAYMENT_EXPIRY_MINUTES` — reconciles with LiqPay status API first (lost callback → PAID, LiqPay unreachable → skip)
 - `HealthModule` — `GET /health`
+
+### Coaches — rules
+
+- Every `admins` row is a coach; all coaches are equal (no head coach yet). Schedule, calendar and attendance are **shared**; only the clients list is per coach.
+- `members.coach_id` → `admins.id`; null = not assigned (new registrations). A coach sees **own + unassigned** clients (`visibleTo(adminId)` in `AdminScheduleService`): clients list, note edit, cancellation history and reassign all go through it, so another coach's client answers 404.
+- Reassign: the current coach (or anyone, for an unassigned client) picks a coach under the client's name; «Забрати собі» claims an unassigned one. The trainer note moves with the client.
+- Coach push (`MEMBER_CANCELLED`) goes to the client's coach only; for an unassigned client, to every coach.
+- Calendar member picker lists own + unassigned clients, plus members already on the edited training (so another coach's client isn't dropped on save).
+- Add a coach: `ADMIN_USERNAME=… ADMIN_PASSWORD=… npm run seed:admin` (in `backend/`; command-line vars win over `.env`). Migration: `node backend/scripts/migrate-member-coach.js` (assigns existing members to the coach while there is only one).
 
 ### Cancellation reasons — rules
 

@@ -22,6 +22,7 @@ import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { SlotMembersDto } from './dto/update-slot-members.dto';
+import { AssignCoachDto } from './dto/assign-coach.dto';
 
 @Controller('admin')
 @UseGuards(SessionGuard, AdminGuard)
@@ -34,13 +35,27 @@ export class AdminScheduleController {
   }
 
   @Get('members')
-  getMembers() {
-    return this.adminScheduleService.getMembers();
+  getMembers(@CurrentUser() user: SessionUser) {
+    return this.adminScheduleService.getMembers(user.id);
+  }
+
+  @Get('coaches')
+  getCoaches() {
+    return this.adminScheduleService.getCoaches();
+  }
+
+  @Patch('members/:memberId/coach')
+  assignCoach(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @Body() dto: AssignCoachDto,
+    @CurrentUser() user: SessionUser,
+  ) {
+    return this.adminScheduleService.assignCoach(user.id, memberId, dto.coachId);
   }
 
   @Get('members/:memberId/cancellations')
-  getMemberCancellations(@Param('memberId', ParseUUIDPipe) memberId: string) {
-    return this.adminScheduleService.getMemberCancellations(memberId);
+  getMemberCancellations(@Param('memberId', ParseUUIDPipe) memberId: string, @CurrentUser() user: SessionUser) {
+    return this.adminScheduleService.getMemberCancellations(user.id, memberId);
   }
 
   @Get('slots/:slotId/cancellations')
@@ -49,8 +64,12 @@ export class AdminScheduleController {
   }
 
   @Patch('members/:memberId/note')
-  updateMemberNote(@Param('memberId', ParseUUIDPipe) memberId: string, @Body() dto: UpdateMemberNoteDto) {
-    return this.adminScheduleService.updateMemberNote(memberId, dto);
+  updateMemberNote(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @Body() dto: UpdateMemberNoteDto,
+    @CurrentUser() user: SessionUser,
+  ) {
+    return this.adminScheduleService.updateMemberNote(user.id, memberId, dto);
   }
 
   @Get('calendar')

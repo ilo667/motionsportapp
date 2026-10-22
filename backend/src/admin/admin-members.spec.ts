@@ -28,24 +28,24 @@ describe('Admin members — trainer note', () => {
   it('lists members with their trainer note', async () => {
     const rows = [{ id: 'm1', memberCode: 'GYM-11111', displayName: 'Катя', trainerNote: 'ходить через раз', createdAt: new Date() }];
     const { db } = makeDb(rows);
-    await expect(makeService(db).getMembers()).resolves.toEqual(rows);
+    await expect(makeService(db).getMembers('coach-1')).resolves.toEqual(rows);
   });
 
   it('saves a trimmed note', async () => {
     const { db, sets } = makeDb([{ id: 'm1', trainerNote: 'це Катюха' }]);
-    await makeService(db).updateMemberNote('m1', { note: '  це Катюха  ' });
+    await makeService(db).updateMemberNote('coach-1', 'm1', { note: '  це Катюха  ' });
     expect(sets).toEqual([{ trainerNote: 'це Катюха' }]);
   });
 
   it('clears the note when empty text is sent', async () => {
     const { db, sets } = makeDb([{ id: 'm1', trainerNote: null }]);
-    await makeService(db).updateMemberNote('m1', { note: '   ' });
+    await makeService(db).updateMemberNote('coach-1', 'm1', { note: '   ' });
     expect(sets).toEqual([{ trainerNote: null }]);
   });
 
   it('throws NotFoundException for an unknown member', async () => {
     const { db } = makeDb([]);
-    await expect(makeService(db).updateMemberNote('missing', { note: 'x' })).rejects.toThrow(NotFoundException);
+    await expect(makeService(db).updateMemberNote('coach-1', 'missing', { note: 'x' })).rejects.toThrow(NotFoundException);
   });
 
   it('rejects notes longer than 300 characters', async () => {

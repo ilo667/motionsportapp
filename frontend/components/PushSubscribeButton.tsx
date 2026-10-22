@@ -1,44 +1,44 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { api } from "@/lib/api";
 import { ensurePushSubscribed, syncSubscription } from "@/lib/pushUtils";
+import { noopSubscribe } from "@/lib/clientStore";
 
-type PushState = "unsupported" | "loading" | "denied" | "subscribed" | "unsubscribed";
+type Support = "pending" | "unsupported" | "denied" | "available";
+
+// Whether this browser can do push at all; "pending" on the server and during hydration
+function readSupport(): Support {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "unsupported";
+  if (Notification.permission === "denied") return "denied";
+  return "available";
+}
 
 export function PushSubscribeButton() {
-  const [state, setState] = useState<PushState>("loading");
+  const support = useSyncExternalStore<Support>(noopSubscribe, readSupport, () => "pending");
+  // null = still checking the browser's current subscription, or a request is in flight
+  const [subscribed, setSubscribed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setState("unsupported");
-      return;
-    }
-    if (Notification.permission === "denied") {
-      setState("denied");
-      return;
-    }
+    if (support !== "available") return;
     navigator.serviceWorker.ready.then(async (reg) => {
       const existing = await reg.pushManager.getSubscription();
       // Keep the server in sync for the current role (same browser may have subscribed as the other one)
       if (existing) syncSubscription(existing).catch(() => {});
-      setState(existing ? "subscribed" : "unsubscribed");
-    }).catch(() => setState("unsubscribed"));
-  }, []);
+      setSubscribed(!!existing);
+    }).catch(() => setSubscribed(false));
+  }, [support]);
 
   const subscribe = async () => {
-    setState("loading");
+    setSubscribed(null);
     try {
-      const ok = await ensurePushSubscribed();
-      if (ok) setState("subscribed");
-      else if (Notification.permission === "denied") setState("denied");
-      else setState("unsubscribed");
+      setSubscribed(await ensurePushSubscribed());
     } catch {
-      setState("unsubscribed");
+      setSubscribed(false);
     }
   };
 
   const unsubscribe = async () => {
-    setState("loading");
+    setSubscribed(null);
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
@@ -46,16 +46,17 @@ export function PushSubscribeButton() {
         await api.unsubscribePush(sub.endpoint);
         await sub.unsubscribe();
       }
-      setState("unsubscribed");
+      setSubscribed(false);
     } catch {
-      setState("subscribed");
+      setSubscribed(true);
     }
   };
 
-  if (state === "unsupported" || state === "denied") return null;
-  if (state === "loading") return null;
+  // Permission can be refused in the prompt: hide the button like an already-denied browser
+  if (support !== "available" || subscribed === null) return null;
+  if (typeof Notification !== "undefined" && Notification.permission === "denied") return null;
 
-  if (state === "subscribed") {
+  if (subscribed) {
     return (
       <button
         onClick={unsubscribe}

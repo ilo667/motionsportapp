@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ScheduleNext } from "@/lib/api";
@@ -7,6 +7,7 @@ import { PageLayout } from "@/components/PageLayout";
 import { SlotCard } from "@/components/SlotCard";
 import { AssignedSlotCard } from "@/components/AssignedSlotCard";
 import DemoControls from "@/components/DemoControls";
+import { noopSubscribe } from "@/lib/clientStore";
 
 function formatLocalDate(localDate: string): string {
   const date = new Date(localDate + "T12:00:00");
@@ -39,10 +40,19 @@ function nextPollDelay(data: ScheduleNext | undefined): number {
   return Math.min(Math.max(untilEdge, 1_000), POLL_IDLE_MAX_MS);
 }
 
+// Set on login, cleared on logout / 401. Without it the page shows the landing and skips the API call
+function readAuthFlag(): boolean {
+  try { return localStorage.getItem('mg_authed') === '1'; } catch { return true; }
+}
+
 export default function SchedulePage() {
   const router = useRouter();
   const [schedule, setSchedule] = useState<ScheduleNext | null>(null);
-  const [authed, setAuthed] = useState<boolean | null>(null);
+  // null on the server and during hydration, then the browser's flag
+  const hasFlag = useSyncExternalStore<boolean | null>(noopSubscribe, readAuthFlag, () => null);
+  // Result of the first schedule fetch (false = session expired)
+  const [sessionOk, setAuthed] = useState<boolean | null>(null);
+  const authed = hasFlag === false ? false : sessionOk;
   const [loading, setLoading] = useState(true);
   const [mutateError, setMutateError] = useState("");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -87,17 +97,10 @@ export default function SchedulePage() {
   }, [fetchSchedule]);
 
   useEffect(() => {
-    const hasFlag = (() => {
-      try { return localStorage.getItem('mg_authed') === '1'; } catch { return true; }
-    })();
-
-    if (!hasFlag) {
-      setAuthed(false);
-      setLoading(false);
-      return;
-    }
+    if (hasFlag !== true) return;
 
     pollingRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchSchedule is async: state is set after the await, not synchronously
     fetchSchedule().then(() => {
       authedRef.current = true;
       setAuthed(true);
@@ -114,7 +117,7 @@ export default function SchedulePage() {
       stopPolling();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [fetchSchedule, startPolling, stopPolling]);
+  }, [hasFlag, fetchSchedule, startPolling, stopPolling]);
 
   const handleMutate = async (fn: () => Promise<unknown>) => {
     setMutateError("");

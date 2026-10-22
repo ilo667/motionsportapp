@@ -23,8 +23,14 @@ export interface AdminMember {
   memberCode: string;
   displayName: string;
   trainerNote: string | null;
+  coachId: string | null; // null = not assigned (shown to every coach under «Без тренера»)
   createdAt: string;
   recentCancellations: number; // member's own cancellations in the last 30 days (moves not counted)
+}
+
+export interface Coach {
+  id: string;
+  username: string;
 }
 
 // A booking the member cancelled or moved themselves, with the reason they wrote
@@ -242,6 +248,14 @@ export const api = {
     request<{ status: PaymentStatus; errCode?: string; expiresAt?: string }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
 
   getMembers: () => request<AdminMember[]>("/admin/members"),
+
+  getCoaches: () => request<Coach[]>("/admin/coaches"),
+
+  assignCoach: (memberId: string, coachId: string) =>
+    request<{ id: string; coachId: string }>(`/admin/members/${memberId}/coach`, {
+      method: "PATCH",
+      body: JSON.stringify({ coachId }),
+    }),
 
   getMemberCancellations: (memberId: string) =>
     request<MemberCancellation[]>(`/admin/members/${memberId}/cancellations`),

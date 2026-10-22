@@ -7,6 +7,7 @@ function makeNotifications() {
   const push = { send: jest.fn().mockResolvedValue('ok') };
   const subs = {
     findAllAdmin: jest.fn().mockResolvedValue([adminSub]),
+    findAdminByAdminId: jest.fn().mockResolvedValue([adminSub]),
     disableAdminByEndpoint: jest.fn(),
     findAll: jest.fn(),
   };
@@ -32,6 +33,24 @@ describe('Coach push — member cancelled / moved', () => {
       displayName: 'Іра', slotTime: '19:00', localDate: '2026-10-22', reason: 'Не встигаю', switchedToTime: '20:00',
     });
     expect(push.send).toHaveBeenCalledWith(adminSub, expect.objectContaining({ title: 'Перенесення 19:00 → 20:00, 22.10' }));
+  });
+
+  it("goes only to the member's coach when the member has one", async () => {
+    const { svc, subs } = makeNotifications();
+    await (svc as any).sendMemberCancelled({
+      displayName: 'Оля', slotTime: '19:00', localDate: '2026-10-22', reason: 'x', switchedToTime: null, coachId: 'coach-2',
+    });
+    expect(subs.findAdminByAdminId).toHaveBeenCalledWith('coach-2');
+    expect(subs.findAllAdmin).not.toHaveBeenCalled();
+  });
+
+  it('goes to every coach for an unassigned member', async () => {
+    const { svc, subs } = makeNotifications();
+    await (svc as any).sendMemberCancelled({
+      displayName: 'Оля', slotTime: '19:00', localDate: '2026-10-22', reason: 'x', switchedToTime: null, coachId: null,
+    });
+    expect(subs.findAllAdmin).toHaveBeenCalled();
+    expect(subs.findAdminByAdminId).not.toHaveBeenCalled();
   });
 
   it('disables an expired coach subscription', async () => {
