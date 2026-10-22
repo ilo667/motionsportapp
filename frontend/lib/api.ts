@@ -24,6 +24,21 @@ export interface AdminMember {
   displayName: string;
   trainerNote: string | null;
   createdAt: string;
+  recentCancellations: number; // member's own cancellations in the last 30 days (moves not counted)
+}
+
+// A booking the member cancelled or moved themselves, with the reason they wrote
+export interface Cancellation {
+  bookingId: string;
+  displayName: string;
+  reason: string;
+  cancelledAt: string | null;
+  switchedToTime: string | null; // null = cancelled, otherwise moved to that time
+}
+
+export interface MemberCancellation extends Cancellation {
+  localDate: string;
+  slotTime: string;
 }
 
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "EXPIRED" | "REPLACED";
@@ -107,6 +122,7 @@ export interface AdminParticipant {
   bookingId: string;
   displayName: string;
   attendanceStatus: AttendanceStatus;
+  switchedFromTime: string | null; // moved here from that slot today
 }
 
 export interface AdminSlotView {
@@ -117,6 +133,7 @@ export interface AdminSlotView {
   capacity: number;
   bookedCount: number;
   participants: AdminParticipant[];
+  cancellations: Cancellation[];
 }
 
 export interface AdminSchedule {
@@ -225,6 +242,12 @@ export const api = {
     request<{ status: PaymentStatus; errCode?: string; expiresAt?: string }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
 
   getMembers: () => request<AdminMember[]>("/admin/members"),
+
+  getMemberCancellations: (memberId: string) =>
+    request<MemberCancellation[]>(`/admin/members/${memberId}/cancellations`),
+
+  getSlotCancellations: (slotId: string) =>
+    request<Cancellation[]>(`/admin/slots/${slotId}/cancellations`),
 
   updateMemberNote: (memberId: string, note: string) =>
     request<{ id: string; trainerNote: string | null }>(`/admin/members/${memberId}/note`, {

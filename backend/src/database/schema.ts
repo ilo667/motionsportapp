@@ -104,6 +104,8 @@ export const bookings = pgTable(
     cancellationReason: text('cancellation_reason'),
     cancellationReasonAt: timestamp('cancellation_reason_at', { withTimezone: true }),
     paymentStatus: text('payment_status'), // null = free | 'PENDING' | 'PAID'
+    // Set when the member moved this booking to another slot (19:00 → 20:00); null + reason = plain cancel
+    switchedToSlotId: uuid('switched_to_slot_id').references(() => trainingSlots.id),
   },
   (table) => [
     // One active booking per member per slot. "One group booking per day" is checked in BookingService
@@ -130,6 +132,19 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   memberId: uuid('member_id')
     .notNull()
     .references(() => members.id),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  disabledAt: timestamp('disabled_at', { withTimezone: true }),
+});
+
+// Coach's devices: push when a member cancels or moves a booking. Separate from members' subscriptions
+export const adminPushSubscriptions = pgTable('admin_push_subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  adminId: uuid('admin_id')
+    .notNull()
+    .references(() => admins.id),
   endpoint: text('endpoint').notNull().unique(),
   p256dh: text('p256dh').notNull(),
   auth: text('auth').notNull(),

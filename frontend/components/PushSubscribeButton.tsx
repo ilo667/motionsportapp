@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { ensurePushSubscribed } from "@/lib/pushUtils";
+import { ensurePushSubscribed, syncSubscription } from "@/lib/pushUtils";
 
 type PushState = "unsupported" | "loading" | "denied" | "subscribed" | "unsubscribed";
 
@@ -19,6 +19,8 @@ export function PushSubscribeButton() {
     }
     navigator.serviceWorker.ready.then(async (reg) => {
       const existing = await reg.pushManager.getSubscription();
+      // Keep the server in sync for the current role (same browser may have subscribed as the other one)
+      if (existing) syncSubscription(existing).catch(() => {});
       setState(existing ? "subscribed" : "unsubscribed");
     }).catch(() => setState("unsubscribed"));
   }, []);

@@ -7,6 +7,7 @@ import { SlotCard as AdminSlotCard } from "@/components/admin/SlotCard";
 import { GymLoader } from "@/components/GymLoader";
 import DemoControls from "@/components/DemoControls";
 import { PageLayout } from "@/components/PageLayout";
+import { PushSubscribeButton } from "@/components/PushSubscribeButton";
 
 function formatLocalDate(localDate: string): string {
   const date = new Date(localDate + "T12:00:00");
@@ -138,6 +139,11 @@ export default function AdminPage() {
         <p className="text-muted text-sm mb-1 capitalize">
           {formatLocalDate(schedule.localDate)}
         </p>
+
+        {/* Push on this device when a client cancels or moves a booking (with the reason) */}
+        <div className="mb-2">
+          <PushSubscribeButton />
+        </div>
 
         <div className="flex items-center space-x-2 mb-6">
           {schedule.status === "CANCELLED" ? (

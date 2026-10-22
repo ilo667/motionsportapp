@@ -7,6 +7,12 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
+// Registers the browser's subscription for whoever is signed in (member or coach); the server upserts by endpoint
+export async function syncSubscription(sub: PushSubscription) {
+  const json = sub.toJSON() as { endpoint: string; keys?: { p256dh?: string; auth?: string } };
+  await api.subscribePush({ endpoint: json.endpoint, p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" });
+}
+
 export async function ensurePushSubscribed(): Promise<boolean> {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
   if (Notification.permission === "denied") return false;
@@ -14,7 +20,11 @@ export async function ensurePushSubscribed(): Promise<boolean> {
   try {
     const reg = await navigator.serviceWorker.ready;
     const existing = await reg.pushManager.getSubscription();
-    if (existing) return true;
+    // The browser may be subscribed under the other role (coach testing as a member), so register it again
+    if (existing) {
+      await syncSubscription(existing);
+      return true;
+    }
 
     const { publicKey } = await api.getVapidPublicKey();
     if (!publicKey) return false;
@@ -24,15 +34,7 @@ export async function ensurePushSubscribed(): Promise<boolean> {
       applicationServerKey: urlBase64ToUint8Array(publicKey).buffer as ArrayBuffer,
     });
 
-    const json = sub.toJSON() as {
-      endpoint: string;
-      keys?: { p256dh?: string; auth?: string };
-    };
-    await api.subscribePush({
-      endpoint: json.endpoint,
-      p256dh: json.keys?.p256dh ?? "",
-      auth: json.keys?.auth ?? "",
-    });
+    await syncSubscription(sub);
     return true;
   } catch {
     return false;

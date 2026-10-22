@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { pushSubscriptions } from '../database/schema';
+import { pushSubscriptions, adminPushSubscriptions } from '../database/schema';
 
 @Injectable()
 export class PushSubscriptionsService {
@@ -54,5 +54,37 @@ export class PushSubscriptionsService {
       .update(pushSubscriptions)
       .set({ disabledAt: new Date() })
       .where(eq(pushSubscriptions.endpoint, endpoint));
+  }
+
+  // Coach's devices live in their own table, so member-wide sends (BOOKING_OPEN) never reach them
+  async upsertAdmin(adminId: string, endpoint: string, p256dh: string, auth: string) {
+    await this.database.db
+      .insert(adminPushSubscriptions)
+      .values({ adminId, endpoint, p256dh, auth })
+      .onConflictDoUpdate({
+        target: adminPushSubscriptions.endpoint,
+        set: { adminId, p256dh, auth, disabledAt: null },
+      });
+  }
+
+  async removeAdmin(adminId: string, endpoint: string) {
+    await this.database.db
+      .update(adminPushSubscriptions)
+      .set({ disabledAt: new Date() })
+      .where(and(eq(adminPushSubscriptions.adminId, adminId), eq(adminPushSubscriptions.endpoint, endpoint)));
+  }
+
+  async findAllAdmin() {
+    return this.database.db
+      .select()
+      .from(adminPushSubscriptions)
+      .where(isNull(adminPushSubscriptions.disabledAt));
+  }
+
+  async disableAdminByEndpoint(endpoint: string) {
+    await this.database.db
+      .update(adminPushSubscriptions)
+      .set({ disabledAt: new Date() })
+      .where(eq(adminPushSubscriptions.endpoint, endpoint));
   }
 }

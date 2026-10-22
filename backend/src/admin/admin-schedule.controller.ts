@@ -38,6 +38,16 @@ export class AdminScheduleController {
     return this.adminScheduleService.getMembers();
   }
 
+  @Get('members/:memberId/cancellations')
+  getMemberCancellations(@Param('memberId', ParseUUIDPipe) memberId: string) {
+    return this.adminScheduleService.getMemberCancellations(memberId);
+  }
+
+  @Get('slots/:slotId/cancellations')
+  getSlotCancellations(@Param('slotId', ParseUUIDPipe) slotId: string) {
+    return this.adminScheduleService.getSlotCancellations(slotId);
+  }
+
   @Patch('members/:memberId/note')
   updateMemberNote(@Param('memberId', ParseUUIDPipe) memberId: string, @Body() dto: UpdateMemberNoteDto) {
     return this.adminScheduleService.updateMemberNote(memberId, dto);

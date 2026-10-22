@@ -19,7 +19,7 @@ function makeDb(reads: unknown[][] = [], writeResult: () => unknown[] = () => [{
 
   function readLink(): any {
     const chain: any = { then: (r: (v: unknown) => void) => r(reads[idx++] ?? []) };
-    for (const m of ['from', 'innerJoin', 'where', 'for', 'orderBy', 'limit']) chain[m] = jest.fn(() => readLink());
+    for (const m of ['from', 'innerJoin', 'leftJoin', 'where', 'for', 'orderBy', 'limit']) chain[m] = jest.fn(() => readLink());
     return chain;
   }
   function writeLink(): any {
@@ -169,5 +169,28 @@ describe('Calendar — assigned slot members', () => {
       { id: M2, displayName: 'Оля', paymentStatus: 'PENDING' },
       { id: M3, displayName: 'Іра', paymentStatus: null },
     ]);
+  });
+});
+
+describe('Cancellation reasons for the coach', () => {
+  const rows = [
+    { bookingId: 'b1', slotId: 's1', memberId: M1, displayName: 'Оля', reason: 'Захворіла', cancelledAt: new Date('2026-10-22T14:42:00Z'),
+      slotTime: '19:00', localDate: '2026-10-22', switchedToSlotId: null, switchedToTime: null },
+    { bookingId: 'b2', slotId: 's1', memberId: M2, displayName: 'Іра', reason: 'Не встигаю', cancelledAt: new Date('2026-10-22T13:10:00Z'),
+      slotTime: '19:00', localDate: '2026-10-22', switchedToSlotId: 's2', switchedToTime: '20:00' },
+  ];
+
+  it('calendar modal: cancelled and moved, with reason and time', async () => {
+    const { db } = makeDb([rows]);
+    await expect(makeService(db).getSlotCancellations('s1')).resolves.toEqual([
+      { bookingId: 'b1', displayName: 'Оля', reason: 'Захворіла', cancelledAt: '2026-10-22T14:42:00.000Z', switchedToTime: null },
+      { bookingId: 'b2', displayName: 'Іра', reason: 'Не встигаю', cancelledAt: '2026-10-22T13:10:00.000Z', switchedToTime: '20:00' },
+    ]);
+  });
+
+  it('client history: adds the training date and time', async () => {
+    const { db } = makeDb([[rows[0]]]);
+    const [entry] = await makeService(db).getMemberCancellations(M1);
+    expect(entry).toEqual(expect.objectContaining({ localDate: '2026-10-22', slotTime: '19:00', reason: 'Захворіла' }));
   });
 });

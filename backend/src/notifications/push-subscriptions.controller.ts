@@ -8,7 +8,7 @@ import {
   HttpCode,
   Req,
 } from '@nestjs/common';
-import { SessionGuard } from '../auth/session.guard';
+import { SessionGuard, SessionUser } from '../auth/session.guard';
 import { PushSubscriptionsService } from './push-subscriptions.service';
 import {
   UpsertPushSubscriptionDto,
@@ -28,8 +28,9 @@ export class PushSubscriptionsController {
   @UseGuards(SessionGuard)
   @HttpCode(200)
   async subscribe(@Body() dto: UpsertPushSubscriptionDto, @Req() req: Express.Request) {
-    const user = (req as unknown as { user: { id: string } }).user;
-    await this.svc.upsert(user.id, dto.endpoint, dto.p256dh, dto.auth);
+    const user = (req as unknown as { user: SessionUser }).user;
+    if (user.type === 'admin') await this.svc.upsertAdmin(user.id, dto.endpoint, dto.p256dh, dto.auth);
+    else await this.svc.upsert(user.id, dto.endpoint, dto.p256dh, dto.auth);
     return { ok: true };
   }
 
@@ -37,8 +38,9 @@ export class PushSubscriptionsController {
   @UseGuards(SessionGuard)
   @HttpCode(200)
   async unsubscribe(@Body() dto: DeletePushSubscriptionDto, @Req() req: Express.Request) {
-    const user = (req as unknown as { user: { id: string } }).user;
-    await this.svc.remove(user.id, dto.endpoint);
+    const user = (req as unknown as { user: SessionUser }).user;
+    if (user.type === 'admin') await this.svc.removeAdmin(user.id, dto.endpoint);
+    else await this.svc.remove(user.id, dto.endpoint);
     return { ok: true };
   }
 }

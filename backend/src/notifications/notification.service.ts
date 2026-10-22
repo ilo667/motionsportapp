@@ -8,7 +8,7 @@ import { VacancyAlertsService } from './vacancy-alerts.service';
 
 const ICON = '/motion-gym-logo-app.png';
 
-type EventType = 'BOOKING_OPEN' | 'SLOT_CANCELLED' | 'VACANCY';
+type EventType = 'BOOKING_OPEN' | 'SLOT_CANCELLED' | 'VACANCY' | 'MEMBER_CANCELLED';
 
 @Injectable()
 export class NotificationService {
@@ -60,6 +60,7 @@ export class NotificationService {
       if (event.eventType === 'BOOKING_OPEN') await this.sendOpening(p);
       else if (event.eventType === 'SLOT_CANCELLED') await this.sendCancellation(p);
       else if (event.eventType === 'VACANCY') await this.sendVacancy(p);
+      else if (event.eventType === 'MEMBER_CANCELLED') await this.sendMemberCancelled(p);
 
       await this.database.db
         .update(notificationEvents)
@@ -113,6 +114,24 @@ export class NotificationService {
       url: '/',
     });
     await this.vacancyAlerts.deactivateBySlot(slotId);
+  }
+
+  // To the coach: a member cancelled or moved a booking, with the reason they wrote
+  private async sendMemberCancelled(payload: Record<string, unknown>) {
+    const displayName = payload.displayName as string;
+    const slotTime = payload.slotTime as string;
+    const localDate = payload.localDate as string;
+    const reason = payload.reason as string;
+    const switchedToTime = payload.switchedToTime as string | null;
+
+    const title = switchedToTime
+      ? `Перенесення ${slotTime} → ${switchedToTime}, ${this.fmtDate(localDate)}`
+      : `Скасування ${slotTime}, ${this.fmtDate(localDate)}`;
+    const subscriptions = await this.subs.findAllAdmin();
+    for (const sub of subscriptions) {
+      const result = await this.push.send(sub, { title, body: `${displayName}: ${reason}`, icon: ICON, url: '/admin' });
+      if (result === 'expired') await this.subs.disableAdminByEndpoint(sub.endpoint);
+    }
   }
 
   private async sendToSubs(

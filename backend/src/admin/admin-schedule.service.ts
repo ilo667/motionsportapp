@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { eq, and, or, inArray, gte, lte, asc } from 'drizzle-orm';
+import { eq, and, or, inArray, gte, lte, asc, desc, isNotNull, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
 import { trainingDays, trainingSlots, bookings, members, attendance, slotMembers } from '../database/schema';
@@ -22,8 +23,30 @@ import {
 const SLOT_TIMES = GROUP_SLOT_TIMES;
 const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
 
+// Member-initiated cancellations / moves shown to the coach (with the reason they wrote)
+const CANCELLATION_STATS_DAYS = 30;
+const MEMBER_HISTORY_LIMIT = 20;
+
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
+type CancellationRow = {
+  bookingId: string;
+  displayName: string;
+  reason: string | null;
+  cancelledAt: Date | null;
+  switchedToTime: string | null;
+};
+
+function toCancellationView(r: CancellationRow) {
+  return {
+    bookingId: r.bookingId,
+    displayName: r.displayName,
+    reason: r.reason ?? '',
+    cancelledAt: r.cancelledAt?.toISOString() ?? null,
+    switchedToTime: r.switchedToTime, // null = cancelled, otherwise moved to that time
+  };
+}
 
 @Injectable()
 export class AdminScheduleService {
@@ -70,6 +93,7 @@ export class AdminScheduleService {
             .select({
               bookingId: bookings.id,
               slotId: bookings.slotId,
+              memberId: bookings.memberId,
               displayName: members.displayName,
               attendanceStatus: attendance.status,
             })
@@ -78,6 +102,14 @@ export class AdminScheduleService {
             .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
             .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')))
             .orderBy(bookings.createdAt)
+        : [];
+
+    // Cancelled from these slots, and moved here from another slot (for "перейшла з 19:00")
+    const cancellations =
+      slotIds.length > 0
+        ? await this.memberCancellations(
+            or(inArray(bookings.slotId, slotIds), inArray(bookings.switchedToSlotId, slotIds))!,
+          )
         : [];
 
     return {
@@ -95,6 +127,8 @@ export class AdminScheduleService {
             bookingId: p.bookingId,
             displayName: p.displayName,
             attendanceStatus: (p.attendanceStatus ?? 'UNMARKED') as 'PRESENT' | 'ABSENT' | 'UNMARKED',
+            switchedFromTime:
+              cancellations.find((c) => c.switchedToSlotId === s.id && c.memberId === p.memberId)?.slotTime ?? null,
           }));
         return {
           id: s.id,
@@ -104,6 +138,7 @@ export class AdminScheduleService {
           capacity: s.capacity,
           bookedCount: s.bookedCount,
           participants,
+          cancellations: cancellations.filter((c) => c.slotId === s.id).map(toCancellationView),
         };
       }),
     };
@@ -492,6 +527,18 @@ export class AdminScheduleService {
 
   // Coach's client list. trainerNote is admin-only — keep it out of member-facing queries
   async getMembers() {
+    const since = new Date(Date.now() - CANCELLATION_STATS_DAYS * 24 * 60 * 60 * 1000);
+    // Cancellations only (a move to another slot isn't a missed training)
+    // Raw, fully qualified SQL: in a single-table select drizzle drops table names, and an unqualified
+    // "id" inside the subquery would bind to bookings.id
+    const cancelledCount = sql<number>`(
+      SELECT count(*)::int FROM bookings b
+      WHERE b.member_id = "members"."id"
+        AND b.status = 'CANCELLED'
+        AND b.cancellation_reason IS NOT NULL
+        AND b.switched_to_slot_id IS NULL
+        AND b.cancelled_at >= ${since}
+    )`;
     return this.database.db
       .select({
         id: members.id,
@@ -499,9 +546,48 @@ export class AdminScheduleService {
         displayName: members.displayName,
         trainerNote: members.trainerNote,
         createdAt: members.createdAt,
+        recentCancellations: cancelledCount,
       })
       .from(members)
       .orderBy(asc(members.displayName));
+  }
+
+  // Calendar modal: who cancelled or moved away from this slot and why
+  async getSlotCancellations(slotId: string) {
+    return (await this.memberCancellations(eq(bookings.slotId, slotId))).map(toCancellationView);
+  }
+
+  // Clients page: one member's latest cancellations and moves
+  async getMemberCancellations(memberId: string) {
+    const rows = await this.memberCancellations(eq(bookings.memberId, memberId), MEMBER_HISTORY_LIMIT);
+    return rows.map((r) => ({ ...toCancellationView(r), localDate: r.localDate, slotTime: r.slotTime }));
+  }
+
+  // Bookings the member cancelled or moved themselves (they always write a reason). System cancellations
+  // (expired payment, coach cancelled the slot) have no reason and are left out
+  private async memberCancellations(filter: SQL, limit?: number) {
+    const target = alias(trainingSlots, 'target_slot');
+    const query = this.database.db
+      .select({
+        bookingId: bookings.id,
+        slotId: bookings.slotId,
+        memberId: bookings.memberId,
+        displayName: members.displayName,
+        reason: bookings.cancellationReason,
+        cancelledAt: bookings.cancelledAt,
+        slotTime: trainingSlots.slotTime,
+        localDate: trainingDays.localDate,
+        switchedToSlotId: bookings.switchedToSlotId,
+        switchedToTime: target.slotTime,
+      })
+      .from(bookings)
+      .innerJoin(members, eq(members.id, bookings.memberId))
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
+      .innerJoin(trainingDays, eq(trainingDays.id, bookings.trainingDayId))
+      .leftJoin(target, eq(target.id, bookings.switchedToSlotId))
+      .where(and(eq(bookings.status, 'CANCELLED'), isNotNull(bookings.cancellationReason), filter))
+      .orderBy(desc(bookings.cancelledAt));
+    return limit ? query.limit(limit) : query;
   }
 
   async updateMemberNote(memberId: string, dto: UpdateMemberNoteDto) {

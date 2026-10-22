@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   ConflictException,
   NotFoundException,
   BadRequestException,
@@ -17,6 +18,8 @@ type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 @Injectable()
 export class BookingService {
+  private readonly logger = new Logger(BookingService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly notifications: NotificationService,
@@ -143,13 +146,21 @@ export class BookingService {
       });
     }
 
+    if (day && slotBefore) {
+      await this.notifyCoach(booking.id, memberId, slotBefore.slotTime, day.localDate, reason, null);
+    }
+
     return { ok: true };
   }
 
   // Moves the member's group booking to the other group slot of the same day
   async switchSlot(memberId: string, newSlotId: string, reason: string, reasonAt: Date) {
     const [target] = await this.database.db
-      .select({ trainingDayId: trainingSlots.trainingDayId, trainingType: trainingSlots.trainingType })
+      .select({
+        trainingDayId: trainingSlots.trainingDayId,
+        trainingType: trainingSlots.trainingType,
+        slotTime: trainingSlots.slotTime,
+      })
       .from(trainingSlots)
       .where(eq(trainingSlots.id, newSlotId))
       .limit(1);
@@ -209,7 +220,13 @@ export class BookingService {
 
         const [moved] = await tx
           .update(bookings)
-          .set({ status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason, cancellationReasonAt: reasonAt })
+          .set({
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancellationReason: reason,
+            cancellationReasonAt: reasonAt,
+            switchedToSlotId: newSlotId,
+          })
           .where(and(eq(bookings.id, current.id), eq(bookings.status, 'ACTIVE')))
           .returning({ id: bookings.id });
         if (!moved) throw new ConflictException('Booking has changed, refresh and try again');
@@ -248,7 +265,38 @@ export class BookingService {
       });
     }
 
+    if (day && oldSlotBefore) {
+      await this.notifyCoach(current.id, memberId, oldSlotBefore.slotTime, day.localDate, reason, target.slotTime);
+    }
+
     return { ok: true };
+  }
+
+  // Push to the coach with the member's reason. A failed push must not fail the member's action
+  private async notifyCoach(
+    bookingId: string,
+    memberId: string,
+    slotTime: string,
+    localDate: string,
+    reason: string,
+    switchedToTime: string | null,
+  ) {
+    try {
+      const [member] = await this.database.db
+        .select({ displayName: members.displayName })
+        .from(members)
+        .where(eq(members.id, memberId))
+        .limit(1);
+      await this.notifications.enqueueAndProcess('MEMBER_CANCELLED', `member-cancelled:${bookingId}`, {
+        displayName: member?.displayName ?? '',
+        slotTime,
+        localDate,
+        reason,
+        switchedToTime,
+      });
+    } catch (err) {
+      this.logger.error(`Coach push for booking ${bookingId} failed`, err);
+    }
   }
 
   // Serializes one member's group bookings (book / switch), so two parallel requests can't both pass the per-day check

@@ -12,8 +12,9 @@ import timeGridPlugin from "@fullcalendar/react/timegrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
 import ukLocale from "@fullcalendar/react/locales/uk";
 import type { DatesSetInfo, EventClickInfo, DateClickInfo } from "@fullcalendar/react";
-import { api, AdminMember, CalendarSlot, TrainingType } from "@/lib/api";
+import { api, AdminMember, CalendarSlot, Cancellation, TrainingType } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
+import { CancellationList } from "@/components/admin/CancellationList";
 
 const TYPE_COLORS: Record<TrainingType, { bg: string; border: string; text: string }> = {
   групові:       { bg: "#14532d", border: "#93d23c", text: "#bbf7d0" },
@@ -92,6 +93,8 @@ export default function CalendarPage() {
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Loaded when an event's modal opens; keyed by slot so a late answer for another slot is ignored
+  const [cancellations, setCancellations] = useState<{ slotId: string; items: Cancellation[] } | null>(null);
 
   const handleAuthError = useCallback((err: unknown) => {
     const status = (err as { status?: number }).status;
@@ -167,6 +170,10 @@ export default function CalendarPage() {
     setMemberIds(fieldsFor(slot.trainingType, slot.members.map((m) => m.id)));
     setError("");
     setModal({ mode: "edit", slot });
+    setCancellations(null);
+    api.getSlotCancellations(slot.slotId)
+      .then((items) => setCancellations({ slotId: slot.slotId, items }))
+      .catch(() => setCancellations({ slotId: slot.slotId, items: [] }));
   };
 
   const selectType = (type: TrainingType) => {
@@ -337,6 +344,10 @@ export default function CalendarPage() {
                   );
                 })}
               </ul>
+            )}
+
+            {editing && cancellations?.slotId === editing.slotId && (
+              <CancellationList title="Скасували" items={cancellations.items} withDate />
             )}
 
             {/* Тип — тільки при додаванні. Ще одне тренування в цей день: клікніть день знову */}

@@ -60,6 +60,7 @@ Auth endpoints:
 - `BookingModule` — book / cancel / switch slot (group slots; cancel takes `slotId`, since a member can hold several bookings a day)
 - `AdminModule` — admin schedule management, slot cancellation, attendance, clients list (`GET /admin/members`, `PATCH /admin/members/:id/note`)
   - group slots: `PUT /admin/training-days/:date/slots/:slotTime` (19:00 / 20:00 only); assigned: `POST /admin/training-days/:date/assigned-slots` `{slotTime, trainingType, memberIds}`, `PUT /admin/slots/:id/members`
+  - cancellation reasons: `GET /admin/slots/:id/cancellations`, `GET /admin/members/:id/cancellations`; `GET /admin/schedule` slots carry `cancellations` and participants' `switchedFromTime`; `GET /admin/members` has `recentCancellations` (30 days, moves not counted)
   - `members.trainer_note` is a **coach-only** note (max 300). Member-facing code must select explicit columns and never return it (SessionGuard and `/auth/me` already do)
 - `NotificationsModule` — push subscriptions, vacancy alerts, internal cron
   - `/internal/cron/*` routes must be **`@Get`** — Vercel Cron invokes with GET (`vercel-cron/1.0`); a POST route answers 404 and the job silently never runs. Protected by `CRON_SECRET` (`Authorization: Bearer …`, sent by Vercel automatically); missing secret in production → 403. Trigger manually: `vercel crons run /internal/cron/<job>`. Hobby plan: once per day, any minute within the scheduled hour
@@ -71,6 +72,14 @@ Auth endpoints:
   - `GET /payments/status?order=` — member's own order; while PENDING asks LiqPay status API directly (used by `/payment/return`)
   - Expiry: lazily on `GET /schedule/next` (`expireStale()`), PENDING older than `PAYMENT_EXPIRY_MINUTES` — reconciles with LiqPay status API first (lost callback → PAID, LiqPay unreachable → skip)
 - `HealthModule` — `GET /health`
+
+### Cancellation reasons — rules
+
+- A member always writes a reason when cancelling or moving 19:00 ↔ 20:00 (`bookings.cancellation_reason`). A **move** also sets `bookings.switched_to_slot_id` on the old booking; reason without it = plain cancel. System cancellations (expired payment, coach cancelled the slot) have no reason and are never shown as the member's.
+- The coach sees reasons in four places: today page (block «Скасували» under each slot, «з 19:00» next to a moved participant), calendar event modal, clients page (count for 30 days, red from 3, expandable history), and a push to the coach (`MEMBER_CANCELLED`, sent from `BookingService`; a failed push never fails the member's action).
+- Coach push subscriptions live in **`admin_push_subscriptions`**, separate from members' `push_subscriptions`, so member-wide sends (BOOKING_OPEN) never reach the coach. `POST /push/subscriptions` routes by session type. The frontend re-sends an existing browser subscription on load (`syncSubscription`), because the same browser may have subscribed under the other role.
+- Raw SQL subqueries: write table names explicitly. In a single-table select drizzle drops table names, so `${members.id}` inside a subquery on `bookings` renders as `"id"` and binds to `bookings.id`.
+- Migration: `node backend/scripts/migrate-cancellation-reasons.js`.
 
 ### Training types — rules
 

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api, AdminSlotView, AttendanceStatus } from "@/lib/api";
+import { CancellationList } from "./CancellationList";
 
 interface SlotCardProps {
   slot: AdminSlotView;
@@ -65,7 +66,12 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
             <ul className="mb-3 space-y-2">
               {slot.participants.map((p) => (
                 <li key={p.bookingId} className="flex items-center justify-between space-x-2">
-                  <span className="text-body text-sm">{p.displayName}</span>
+                  <span className="text-body text-sm">
+                    {p.displayName}
+                    {p.switchedFromTime && (
+                      <span className="ml-2 text-xs text-amber-400">з {p.switchedFromTime}</span>
+                    )}
+                  </span>
                   <button
                     disabled={allPresent}
                     onClick={() =>
@@ -81,6 +87,12 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                 </li>
               ))}
             </ul>
+          )}
+
+          {slot.cancellations.length > 0 && (
+            <div className="border-t border-dashed border-line pt-3 mb-3">
+              <CancellationList title="Скасували" items={slot.cancellations} />
+            </div>
           )}
 
           <div className="flex flex-col space-y-2">

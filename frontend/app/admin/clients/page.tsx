@@ -1,11 +1,40 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, AdminMember } from "@/lib/api";
+import { api, AdminMember, MemberCancellation } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
+import { CancellationList } from "@/components/admin/CancellationList";
 
 const NOTE_MAX = 300;
+// Highlight clients who cancel often (count over the last 30 days)
+const FREQUENT_CANCELLATIONS = 3;
+
+function trainingLabel(c: MemberCancellation) {
+  const day = new Date(c.localDate + "T12:00:00").toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+  return `${day}, ${c.slotTime}`;
+}
+
+// Latest cancellations and moves of one client, loaded when the row is expanded
+function CancellationHistory({ memberId }: { memberId: string }) {
+  const [items, setItems] = useState<MemberCancellation[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    api.getMemberCancellations(memberId).then(setItems).catch(() => setFailed(true));
+  }, [memberId]);
+
+  if (failed) return <p className="text-danger text-xs">Не вдалося завантажити історію</p>;
+  if (!items) return <p className="text-muted text-xs">Завантаження...</p>;
+  if (items.length === 0) return <p className="text-muted text-xs">Скасувань і перенесень не було</p>;
+  return (
+    <CancellationList
+      title="Історія скасувань"
+      items={items.map((c) => ({ ...c, label: trainingLabel(c) }))}
+      withDate
+    />
+  );
+}
 
 function NoteCell({ member, onSaved }: { member: AdminMember; onSaved: (note: string | null) => void }) {
   const [editing, setEditing] = useState(false);
@@ -72,6 +101,7 @@ export default function ClientsPage() {
   const router = useRouter();
   const [members, setMembers] = useState<AdminMember[] | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [openHistory, setOpenHistory] = useState<string | null>(null);
 
   useEffect(() => {
     api.getMembers()
@@ -109,20 +139,42 @@ export default function ClientsPage() {
           <thead>
             <tr className="text-muted text-xs text-left border-b border-line">
               <th className="py-2 pr-3 font-medium w-2/5">Клієнт</th>
-              <th className="py-2 font-medium">Нотатка</th>
+              <th className="py-2 pr-3 font-medium">Нотатка</th>
+              <th className="py-2 font-medium text-right" title="Скасування за останні 30 днів">Скасувань</th>
             </tr>
           </thead>
           <tbody>
             {members.map((m) => (
-              <tr key={m.id} className="border-b border-line align-top">
-                <td className="py-3 pr-3">
-                  <div className="text-heading">{m.displayName}</div>
-                  <div className="text-muted text-xs">{m.memberCode}</div>
-                </td>
-                <td className="py-3">
-                  <NoteCell member={m} onSaved={(note) => updateNote(m.id, note)} />
-                </td>
-              </tr>
+              <Fragment key={m.id}>
+                <tr className={`align-top ${openHistory === m.id ? "" : "border-b border-line"}`}>
+                  <td className="py-3 pr-3">
+                    <div className="text-heading">{m.displayName}</div>
+                    <div className="text-muted text-xs">{m.memberCode}</div>
+                  </td>
+                  <td className="py-3 pr-3">
+                    <NoteCell member={m} onSaved={(note) => updateNote(m.id, note)} />
+                  </td>
+                  <td className="py-3 text-right">
+                    <button
+                      onClick={() => setOpenHistory(openHistory === m.id ? null : m.id)}
+                      aria-expanded={openHistory === m.id}
+                      title="Показати історію скасувань"
+                      className={`tabular-nums hover:text-heading transition-colors ${m.recentCancellations >= FREQUENT_CANCELLATIONS ? "text-danger font-medium" : "text-body"}`}
+                    >
+                      {m.recentCancellations} {openHistory === m.id ? "▴" : "▾"}
+                    </button>
+                  </td>
+                </tr>
+                {openHistory === m.id && (
+                  <tr className="border-b border-line">
+                    <td colSpan={3} className="pb-4">
+                      <div className="bg-surface border border-line rounded-xl p-3">
+                        <CancellationHistory memberId={m.id} />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>

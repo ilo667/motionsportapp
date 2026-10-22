@@ -9,10 +9,11 @@ function kyivAt(hour: number, minute = 0): DateTime {
 }
 
 // Proxy-based drizzle mock: each `await` on a read chain consumes the next result.
-// Write chains (insert/update) resolve to undefined without consuming results.
-function makeDb(results: unknown[][] = []) {
+// Write chains resolve to `writeResult()` (what UPDATE … RETURNING gives back); `.set()` payloads go to `sets`
+function makeDb(results: unknown[][] = [], writeResult: () => unknown = () => undefined) {
   let idx = 0;
   const next = () => results[idx++] ?? [];
+  const sets: Record<string, unknown>[] = [];
 
   function readLink(): any {
     const then = (resolve: (v: unknown) => void) => resolve(next());
@@ -24,11 +25,12 @@ function makeDb(results: unknown[][] = []) {
   }
 
   function writeLink(): any {
-    const then = (resolve: (v: void) => void) => resolve();
+    const then = (resolve: (v: unknown) => void) => resolve(writeResult());
     const chain: any = { then };
-    for (const m of ['set', 'where', 'values', 'onConflictDoNothing', 'returning']) {
+    for (const m of ['where', 'values', 'onConflictDoNothing', 'returning']) {
       chain[m] = jest.fn().mockImplementation(() => writeLink());
     }
+    chain.set = jest.fn().mockImplementation((v: Record<string, unknown>) => { sets.push(v); return writeLink(); });
     return chain;
   }
 
@@ -38,7 +40,7 @@ function makeDb(results: unknown[][] = []) {
     update: jest.fn().mockImplementation(() => writeLink()),
     transaction: jest.fn().mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(db)),
   };
-  return { db };
+  return { db, sets };
 }
 
 const TODAY = '2026-10-20';
@@ -185,5 +187,41 @@ describe('BookingService — switch slot', () => {
     const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'групові' }], []]);
     const service = makeService(db, kyivAt(15));
     await expect(service.switchSlot('member-1', 'slot-2', 'reason', new Date())).rejects.toThrow(NotFoundException);
+  });
+});
+describe('BookingService — coach push with the reason', () => {
+  it('sends MEMBER_CANCELLED with the reason when a member cancels', async () => {
+    const booking = { id: 'booking-1', slotId: 'slot-1', trainingDayId: 'day-1', memberId: 'member-1', status: 'ACTIVE' };
+    const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '19:00', trainingType: 'групові' };
+    const { db } = makeDb([[booking], [validDay], [groupSlot], [{ displayName: 'Оля' }]]);
+    const service = makeService(db, kyivAt(17));
+    await service.cancel('member-1', 'slot-1', 'Захворіла', new Date());
+
+    expect((service as any).notifications.enqueueAndProcess).toHaveBeenCalledWith(
+      'MEMBER_CANCELLED',
+      'member-cancelled:booking-1',
+      { displayName: 'Оля', slotTime: '19:00', localDate: TODAY, reason: 'Захворіла', switchedToTime: null },
+    );
+  });
+
+  it('records the target slot and sends the new time when a member moves 19:00 → 20:00', async () => {
+    const current = { id: 'booking-1', slotId: 'slot-1', trainingDayId: 'day-1', memberId: 'member-1' };
+    const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '20:00' };
+    const slot1 = { id: 'slot-1', status: 'ACTIVE', capacity: 8, bookedCount: 3 };
+    const slot2 = { id: 'slot-2', status: 'ACTIVE', capacity: 8, bookedCount: 2 };
+    const { db, sets } = makeDb(
+      [[target], [current], [validDay], [{ bookedCount: 3, capacity: 8, slotTime: '19:00' }], MEMBER, [slot1], [slot2], [{ displayName: 'Іра' }]],
+      () => [{ id: 'booking-1' }], // the old booking's conditional UPDATE … RETURNING wins
+    );
+    const service = makeService(db, kyivAt(17));
+
+    await service.switchSlot('member-1', 'slot-2', 'Не встигаю', new Date());
+
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED', switchedToSlotId: 'slot-2', cancellationReason: 'Не встигаю' }));
+    expect((service as any).notifications.enqueueAndProcess).toHaveBeenCalledWith(
+      'MEMBER_CANCELLED',
+      'member-cancelled:booking-1',
+      expect.objectContaining({ displayName: 'Іра', slotTime: '19:00', switchedToTime: '20:00' }),
+    );
   });
 });
