@@ -18,6 +18,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type TrainingType = "групові" | "персональні" | "спліт";
 
+// Natural order for names: "Member 2" before "Member 10", Ukrainian alphabet (є, і, ї in place)
+const nameCollator = new Intl.Collator("uk", { numeric: true, sensitivity: "base" });
+
 export interface AdminMember {
   id: string;
   memberCode: string;
@@ -247,7 +250,10 @@ export const api = {
   getPaymentStatus: (orderId: string) =>
     request<{ status: PaymentStatus; errCode?: string; expiresAt?: string }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
 
-  getMembers: () => request<AdminMember[]>("/admin/members"),
+  getMembers: () =>
+    request<AdminMember[]>("/admin/members").then((list) =>
+      list.sort((a, b) => nameCollator.compare(a.displayName, b.displayName)),
+    ),
 
   getCoaches: () => request<Coach[]>("/admin/coaches"),
 
