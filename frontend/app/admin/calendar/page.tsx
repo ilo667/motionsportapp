@@ -4,9 +4,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import "@fullcalendar/react/skeleton.css";
 import "@fullcalendar/react/themes/classic/theme.css";
+import "@fullcalendar/react/themes/classic/palette.css";
 import FullCalendar from "@fullcalendar/react";
 import classicThemePlugin from "@fullcalendar/react/themes/classic";
 import dayGridPlugin from "@fullcalendar/react/daygrid";
+import timeGridPlugin from "@fullcalendar/react/timegrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
 import ukLocale from "@fullcalendar/react/locales/uk";
 import type { DatesSetInfo, EventClickInfo, DateClickInfo } from "@fullcalendar/react";
@@ -37,7 +39,8 @@ export default function CalendarPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [slots, setSlots] = useState<CalendarSlot[]>([]);
-  const [currentMonth, setCurrentMonth] = useState("");
+  // Months covering the visible range ("2026-10,2026-11"): a week can span two months
+  const [visibleMonths, setVisibleMonths] = useState("");
 
   useEffect(() => { setMounted(true); }, []);
   const [modal, setModal] = useState<Modal | null>(null);
@@ -46,10 +49,11 @@ export default function CalendarPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchMonth = useCallback(async (month: string) => {
+  const fetchMonths = useCallback(async (months: string) => {
+    if (!months) return;
     try {
-      const data = await api.getCalendar(month);
-      setSlots(data);
+      const data = await Promise.all(months.split(",").map((m) => api.getCalendar(m)));
+      setSlots(data.flat());
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
       if (status === 401 || status === 403) router.push("/admin/login");
@@ -57,30 +61,37 @@ export default function CalendarPage() {
   }, [router]);
 
   const handleDatesSet = useCallback((arg: DatesSetInfo) => {
-    const mid = new Date((arg.start.getTime() + arg.end.getTime()) / 2);
-    const month = `${mid.getFullYear()}-${String(mid.getMonth() + 1).padStart(2, "0")}`;
-    if (month !== currentMonth) {
-      setCurrentMonth(month);
-      fetchMonth(month);
+    // Every month touched by the visible range: a week can span 2 months, the month view 3 (with edge days)
+    const lastVisible = new Date(arg.end.getTime() - 1); // end is exclusive
+    const list: string[] = [];
+    for (let d = new Date(arg.start.getFullYear(), arg.start.getMonth(), 1); d <= lastVisible; d.setMonth(d.getMonth() + 1)) {
+      list.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
     }
-  }, [currentMonth, fetchMonth]);
+    const months = list.join(",");
+    if (months !== visibleMonths) {
+      setVisibleMonths(months);
+      fetchMonths(months);
+    }
+  }, [visibleMonths, fetchMonths]);
 
   const events = slots.map((s) => {
     const colors = TYPE_COLORS[s.trainingType];
     return {
       id: s.slotId,
-      title: `${s.slotTime} · ${TYPE_LABELS[s.trainingType]} · ${s.bookedCount}/${s.capacity}`,
-      date: s.localDate,
-      backgroundColor: colors.bg,
-      borderColor: colors.border,
-      textColor: colors.text,
+      title: `${TYPE_LABELS[s.trainingType]} · ${s.bookedCount}/${s.capacity}`,
+      // Timed events (1 h) so the week-with-hours view places them on their hour; the time is shown by FullCalendar
+      start: `${s.localDate}T${s.slotTime}:00`,
+      end: `${s.localDate}T${s.slotTime === "19:00" ? "20:00" : "21:00"}:00`,
+      // v7 names (v6 backgroundColor/borderColor/textColor are ignored)
+      color: colors.bg,
+      contrastColor: colors.text,
       extendedProps: { slot: s },
     };
   });
 
-  const openAddModal = (date: string) => {
+  const openAddModal = (date: string, time: "19:00" | "20:00" = "19:00") => {
     setSelectedType("групові");
-    setSelectedTime("19:00");
+    setSelectedTime(time);
     setError("");
     setModal({ date, existingSlot: null });
   };
@@ -100,9 +111,11 @@ export default function CalendarPage() {
   const handleDateClick = (arg: DateClickInfo) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const clicked = new Date(arg.dateStr + "T12:00:00");
+    // Month view gives "YYYY-MM-DD", week-with-hours gives "YYYY-MM-DDTHH:mm:ss+03:00"
+    const date = arg.dateStr.slice(0, 10);
+    const clicked = new Date(date + "T12:00:00");
     if (clicked < today) return;
-    openAddModal(arg.dateStr);
+    openAddModal(date, arg.dateStr.slice(11, 13) === "20" ? "20:00" : "19:00");
   };
 
   const handleSave = async () => {
@@ -118,7 +131,7 @@ export default function CalendarPage() {
       } else {
         await api.upsertCalendarSlot(modal.date, selectedTime, selectedType);
       }
-      await fetchMonth(currentMonth);
+      await fetchMonths(visibleMonths);
       setModal(null);
     } catch {
       setError("Помилка збереження. Спробуйте ще раз.");
@@ -133,7 +146,7 @@ export default function CalendarPage() {
     setError("");
     try {
       await api.cancelSlot(modal.existingSlot.slotId);
-      await fetchMonth(currentMonth);
+      await fetchMonths(visibleMonths);
       setModal(null);
     } catch {
       setError("Помилка. Спробуйте ще раз.");
@@ -162,40 +175,49 @@ export default function CalendarPage() {
         ))}
       </div>
 
+      {/* FullCalendar v7 has no stable fc-* class names — theme it only via palette variables.
+          The selector beats palette.css's [data-color-scheme=dark] (higher specificity). */}
       <style>{`
-        .fc { --fc-border-color: #1a2040; --fc-today-bg-color: rgba(147,210,60,0.06); --fc-page-bg-color: transparent; color: #c8d4ec; font-size: 0.8125rem; }
-        .fc .fc-toolbar-title { font-size: 0.8125rem; font-weight: 600; color: #d8e4f8; }
-        .fc .fc-toolbar { align-items: center; }
-        .fc .fc-toolbar-chunk { display: flex; align-items: center; }
-        .fc .fc-button { background: transparent; border-color: #1a2040; color: #c8d4ec; font-size: 0.75rem; padding: 0.25rem 0.625rem; line-height: 1; }
-        .fc .fc-button:hover { background: #1a2040; color: #d8e4f8; border-color: #1a2040; }
-        .fc .fc-button:focus { box-shadow: none; }
-        .fc .fc-button-primary:not(:disabled).fc-button-active, .fc .fc-button-primary:not(:disabled):active { background: #1a2040; border-color: #93d23c; box-shadow: none; }
-        .fc .fc-col-header-cell { background: #0d1019; }
-        .fc .fc-col-header-cell-cushion { color: #4a5a80; font-weight: 500; text-transform: uppercase; font-size: 0.6875rem; letter-spacing: 0.05em; }
-        .fc .fc-daygrid-day-number { color: #c8d4ec; font-size: 0.75rem; }
-        .fc .fc-day-other .fc-daygrid-day-number { color: #1a2040; }
-        .fc .fc-day-today .fc-daygrid-day-number { color: #93d23c; font-weight: 700; }
-        .fc .fc-event { cursor: pointer; border-width: 1px; border-radius: 4px; padding: 1px 4px; --fc-event-bg-color: transparent; --fc-event-border-color: transparent; }
-        .fc .fc-event-title { font-size: 0.6875rem; font-weight: 500; }
-        .fc .fc-daygrid-day { cursor: pointer; }
-        .fc .fc-daygrid-day:hover { background: rgba(26,32,64,0.4); }
-        .fc th, .fc td { border-color: #1a2040; }
-        .fc .fc-scrollgrid { border-color: #1a2040; }
-        .fc .fc-scrollgrid-sync-table { border-color: #1a2040; }
+        .mg-calendar [data-color-scheme] {
+          --fc-classic-background: transparent;
+          --fc-classic-foreground: var(--color-body);
+          --fc-classic-muted-foreground: var(--color-muted);
+          --fc-classic-faint-foreground: var(--color-line);
+          --fc-classic-border: var(--color-line);
+          --fc-classic-strong-border: var(--color-line);
+          --fc-classic-faint: rgba(26, 32, 64, 0.3);
+          --fc-classic-muted: rgba(26, 32, 64, 0.5);
+          --fc-classic-strong: var(--color-line);
+          --fc-classic-today: rgba(147, 210, 60, 0.08);
+          --fc-classic-highlight: rgba(147, 210, 60, 0.15);
+          --fc-classic-primary: var(--color-accent);
+          --fc-classic-primary-foreground: var(--color-on-teal);
+          --fc-classic-button: transparent;
+          --fc-classic-button-border: var(--color-line);
+          --fc-classic-button-strong: var(--color-line);
+          --fc-classic-button-strong-border: var(--color-line);
+          --fc-classic-button-outline: var(--color-line);
+          --fc-classic-button-foreground: var(--color-body);
+        }
       `}</style>
 
-      <div className="rounded-xl border border-line p-3 overflow-hidden">
+      <div className="mg-calendar rounded-xl border border-line p-3 overflow-hidden">
         {!mounted ? <div className="h-64 flex items-center justify-center text-muted text-sm">Завантаження...</div> : <FullCalendar
-          plugins={[classicThemePlugin, dayGridPlugin, interactionPlugin]}
-          initialView="dayGridMonth"
+          plugins={[classicThemePlugin, dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          colorScheme="dark"
+          initialView="timeGridWeek"
           locale={ukLocale}
           height="auto"
           events={events}
           datesSet={handleDatesSet}
           eventClick={handleEventClick}
           dateClick={handleDateClick}
-          headerToolbar={{ left: "prev,next", center: "title", right: "" }}
+          headerToolbar={{ left: "prev,next", center: "title", right: "timeGridWeek,dayGridMonth" }}
+          firstDay={1}
+          slotMinTime="17:00:00"
+          slotMaxTime="22:00:00"
+          allDaySlot={false}
+          eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           fixedWeekCount={false}
         />}
       </div>

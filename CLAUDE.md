@@ -107,6 +107,11 @@ Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts`, 
   - `variant="top"` — mini `Header` (logo + optional `action`) + content below (schedule/admin pages)
   - `loading` prop — shows `GymLoader` instead of children
 - Schedule polling (`app/page.tsx`, `nextPollDelay`): 5 s inside the booking window; outside it no periodic polling — wake at `bookingOpenAt`/`bookingCloseAt` (computed in server time from `serverTime`) or every 5 min as a safety net; paused while the tab is hidden. Every `fetchSchedule()` reschedules the next poll. Admin page polls every 15 s
+- Admin calendar (`app/admin/calendar/page.tsx`) uses **FullCalendar v7**, not v6. Don't copy v6 examples:
+  - event colors are `color` / `contrastColor` (v6 `backgroundColor`/`borderColor`/`textColor` are silently ignored);
+  - there are no stable `fc-*` class names (theme classes are hashed), so style only via `--fc-classic-*` palette variables (override in `.mg-calendar [data-color-scheme]`, dark mode via `colorScheme="dark"`, `palette.css` must stay imported);
+  - no calendar-level `buttonText`: view button labels come from the `uk` locale.
+  Default view `timeGridWeek` (17:00–22:00) with a `dayGridMonth` toggle. Data is fetched per month for **every** month the visible range touches
 - Auth state: `mg_authed` in `localStorage` — set on login, cleared on logout/401. Home page skips API call when flag is absent (avoids 401 in console for unauthenticated users)
 
 ## Vercel deployment
