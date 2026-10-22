@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { announcementExamples, announcements, aiGenerations, trainingDays } from '../database/schema';
-import { AnnouncementGeneratorService } from './announcement-generator.service';
+import { AnnouncementGeneratorService, PROMPT_VERSION } from './announcement-generator.service';
 
 @Injectable()
 export class AnnouncementsService {
@@ -73,6 +73,7 @@ export class AnnouncementsService {
     const result = await this.generator.generate(
       exampleRows.map((e) => e.text),
       ann.topic,
+      localDate,
     );
 
     const [updated] = await this.database.db
@@ -85,7 +86,7 @@ export class AnnouncementsService {
       announcementId: ann.id,
       provider: 'google',
       model: result.model,
-      promptVersion: 'v1',
+      promptVersion: PROMPT_VERSION,
       latencyMs: result.latencyMs ?? null,
       tokenUsage: result.tokenUsage ?? null,
       status: result.source === 'ai' ? 'success' : 'fallback',
@@ -141,6 +142,7 @@ export class AnnouncementsService {
     const result = await this.generator.generate(
       exampleRows.map((e) => e.text),
       ann.topic,
+      localDate,
     );
 
     const now = new Date();
@@ -153,7 +155,7 @@ export class AnnouncementsService {
       announcementId: ann.id,
       provider: 'google',
       model: result.model,
-      promptVersion: 'v1',
+      promptVersion: PROMPT_VERSION,
       latencyMs: result.latencyMs ?? null,
       tokenUsage: result.tokenUsage ?? null,
       status: result.source === 'ai' ? 'success' : 'fallback',

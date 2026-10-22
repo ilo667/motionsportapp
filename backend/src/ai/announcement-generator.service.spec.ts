@@ -3,10 +3,13 @@ import { AnnouncementGeneratorService } from './announcement-generator.service';
 const GYM_NAMES = ['MotionSport', 'Motion Gym', 'MotionGym', 'мотіонспорт', 'моушн джим'];
 
 let capturedPrompt = '';
+let capturedSystem = '';
 
 jest.mock('@google/generative-ai', () => ({
   GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
-    getGenerativeModel: jest.fn().mockReturnValue({
+    getGenerativeModel: jest.fn().mockImplementation((opts: { systemInstruction?: string }) => {
+      capturedSystem = opts.systemInstruction ?? '';
+      return {
       generateContent: jest.fn().mockImplementation((prompt: string) => {
         capturedPrompt = prompt;
         return Promise.resolve({
@@ -16,6 +19,7 @@ jest.mock('@google/generative-ai', () => ({
           },
         });
       }),
+      };
     }),
   })),
 }));
@@ -25,6 +29,7 @@ describe('AnnouncementGeneratorService', () => {
 
   beforeEach(() => {
     capturedPrompt = '';
+    capturedSystem = '';
     service = new AnnouncementGeneratorService();
   });
 
@@ -55,11 +60,25 @@ describe('AnnouncementGeneratorService', () => {
       expect(result.text).toBe('Записуйтесь на тренування сьогодні! 💪');
     });
 
-    it('prompt does not mention the gym name', async () => {
+    it('prompt and system instruction do not mention the gym name', async () => {
       await service.generate(['Приклад оголошення']);
       for (const name of GYM_NAMES) {
         expect(capturedPrompt.toLowerCase()).not.toContain(name.toLowerCase());
+        expect(capturedSystem.toLowerCase()).not.toContain(name.toLowerCase());
       }
+    });
+
+    it('system instruction holds the weekly programme (Mon legs, Wed circuit, Fri arms)', async () => {
+      await service.generate([]);
+      expect(capturedSystem).toContain('понеділок: ноги');
+      expect(capturedSystem).toContain('середа: кругове тренування');
+      expect(capturedSystem).toContain('пʼятниця: руки');
+    });
+
+    it('prompt names the weekday of the training so the model picks the topic', async () => {
+      await service.generate([], null, '2026-10-26');
+      expect(capturedPrompt).toContain('понеділок, 26 жовтня');
+      expect(capturedPrompt).not.toContain('Окрема тема');
     });
 
     it('prompt includes provided examples', async () => {
@@ -68,9 +87,9 @@ describe('AnnouncementGeneratorService', () => {
       expect(capturedPrompt).toContain('Другий приклад');
     });
 
-    it('prompt includes topic when provided', async () => {
-      await service.generate([], 'Кардіо');
-      expect(capturedPrompt).toContain('Кардіо');
+    it('a topic set for the day goes into the prompt as an override', async () => {
+      await service.generate([], 'Спина', '2026-10-26');
+      expect(capturedPrompt).toContain('Окрема тема на цей день: Спина');
     });
 
     it('returns fallback when Gemini returns empty text', async () => {

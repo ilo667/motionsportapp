@@ -1,8 +1,31 @@
 import { Injectable } from '@nestjs/common';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { DateTime } from 'luxon';
+import { KY_ZONE } from '../schedule/training-types';
 
 const FALLBACK_TEXT = 'Записуйтесь на тренування! 💪 Чекаємо вас сьогодні.';
 const GEMINI_MODEL = 'gemini-3.5-flash-lite';
+// Bump when the instructions change (stored in ai_generations.prompt_version)
+export const PROMPT_VERSION = 'v2';
+
+// Stable part of every request: who writes, the gym's weekly programme, and the format.
+// The model picks the topic from the weekday it gets in the prompt
+const SYSTEM_INSTRUCTION = `Ти тренер жіночого фітнес-залу. Пишеш короткі мотиваційні оголошення українською мовою, щоб запросити записатися на групове тренування.
+
+Тижнева програма групових тренувань:
+- понеділок: ноги
+- середа: кругове тренування
+- пʼятниця: руки
+
+Якщо в запиті вказано окрему тему на цей день, вона важливіша за тижневу програму.
+
+Вимоги до оголошення:
+- 1-2 речення, максимум 150 символів
+- згадай тему тренування
+- дружній, енергійний, мотивуючий тон
+- можна 1-2 емодзі
+- тільки текст оголошення, без пояснень і заголовків
+- не називай зал`;
 
 export interface GenerateResult {
   text: string;
@@ -24,7 +47,8 @@ export class AnnouncementGeneratorService {
     return this.genAI;
   }
 
-  async generate(examples: string[], topic?: string | null): Promise<GenerateResult> {
+  // localDate gives the weekday (→ topic from the weekly programme); topic overrides it for that day
+  async generate(examples: string[], topic?: string | null, localDate?: string): Promise<GenerateResult> {
     const ai = this.ensureInit();
     if (!ai) {
       return { text: FALLBACK_TEXT, model: GEMINI_MODEL, source: 'fallback', fallbackReason: 'GEMINI_API_KEY not set' };
@@ -35,22 +59,19 @@ export class AnnouncementGeneratorService {
         ? examples.map((e, i) => `${i + 1}. ${e}`).join('\n')
         : '1. Сьогодні тренуємось! 💪 Записуйтесь — місця обмежені.';
 
-    const prompt = `Ти тренер жіночого фітнес-залу. Напиши одне коротке мотиваційне оголошення українською мовою для запрошення записатися на тренування сьогодні.
+    const day = localDate
+      ? DateTime.fromISO(localDate, { zone: KY_ZONE }).setLocale('uk').toFormat('cccc, d MMMM')
+      : null;
+
+    const prompt = `Напиши одне оголошення про тренування сьогодні${day ? ` (${day})` : ''}.
 
 Стиль (приклади попередніх оголошень):
 ${examplesText}
-
-${topic ? `Тема тренування: ${topic}` : 'Загальне запрошення на тренування.'}
-
-Вимоги:
-- 1-2 речення, максимум 150 символів
-- Дружній, енергійний, мотивуючий тон
-- Можна використовувати 1-2 емодзі
-- Тільки текст оголошення, без пояснень і заголовків`;
+${topic ? `\nОкрема тема на цей день: ${topic}` : ''}`;
 
     const start = Date.now();
     try {
-      const geminiModel = ai.getGenerativeModel({ model: GEMINI_MODEL });
+      const geminiModel = ai.getGenerativeModel({ model: GEMINI_MODEL, systemInstruction: SYSTEM_INSTRUCTION });
       const result = await geminiModel.generateContent(prompt);
       const latencyMs = Date.now() - start;
       const raw = result.response.text().trim().replace(/\n+/g, ' ');
