@@ -233,10 +233,14 @@ describe('PaymentService — getStatus', () => {
     expect(sets).toHaveLength(0);
   });
 
-  it('returns errCode for a rejected attempt (try_again) and keeps booking', async () => {
-    mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'try_again', err_code: 'limit' });
+  // Real responses from LiqPay sandbox test cards (see CLAUDE.md → LiqPay rules)
+  it.each([
+    ['limit', 'Limit is exceeded', '4000000000000002'],
+    ['9859', 'Insufficient funds', '4000000000009995'],
+  ])('returns errCode=%s for a rejected attempt (try_again) and keeps booking', async (errCode, errDescription) => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'try_again', err_code: errCode, err_description: errDescription });
     const { db, sets } = makeDb([[pending]]);
-    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING', errCode: 'limit', expiresAt: '2026-10-21T19:15:00.000Z' });
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PENDING', errCode, expiresAt: '2026-10-21T19:15:00.000Z' });
     expect(sets).toHaveLength(0);
   });
 
