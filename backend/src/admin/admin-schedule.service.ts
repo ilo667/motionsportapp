@@ -193,6 +193,7 @@ export class AdminScheduleService {
     const now = await this.demoService.getNow();
     if (startsAt <= now) throw new BadRequestException('Training time is in the past');
 
+    const capacity = PERSONAL_MEMBER_LIMITS[dto.trainingType].max;
     const slotId = await this.database.db.transaction(async (tx) => {
       const dayId = await this.ensureDay(tx, date);
       const [slot] = await tx
@@ -202,12 +203,12 @@ export class AdminScheduleService {
           slotTime: dto.slotTime,
           status: 'ACTIVE',
           trainingType: dto.trainingType,
-          capacity: dto.memberIds.length,
+          capacity,
           bookedCount: 0,
         })
         .onConflictDoUpdate({
           target: [trainingSlots.trainingDayId, trainingSlots.slotTime],
-          set: { trainingType: dto.trainingType, status: 'ACTIVE', capacity: dto.memberIds.length, bookedCount: 0, cancelledAt: null },
+          set: { trainingType: dto.trainingType, status: 'ACTIVE', capacity, bookedCount: 0, cancelledAt: null },
           // Only a cancelled slot may be re-used (its bookings are all cancelled)
           setWhere: eq(trainingSlots.status, 'CANCELLED'),
         })
@@ -249,7 +250,6 @@ export class AdminScheduleService {
 
       await tx.delete(slotMembers).where(eq(slotMembers.slotId, slotId));
       await tx.insert(slotMembers).values(memberIds.map((memberId) => ({ slotId, memberId })));
-      await tx.update(trainingSlots).set({ capacity: memberIds.length }).where(eq(trainingSlots.id, slotId));
     });
 
     return { ok: true };

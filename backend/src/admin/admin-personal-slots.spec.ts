@@ -75,12 +75,12 @@ describe('Personal slots — DTO validation', () => {
 });
 
 describe('Personal slots — createPersonalSlot', () => {
-  it('creates a split for 2 members: capacity 2 and one slot_members row each', async () => {
+  it('creates a split for 2 members: capacity 3 and one slot_members row each', async () => {
     const { db, values } = makeDb([[{ id: M1 }, { id: M2 }]]);
     const result = await makeService(db).createPersonalSlot('2026-10-21', { slotTime: '10:30', trainingType: 'спліт', memberIds: [M1, M2] });
 
     expect(result).toEqual({ ok: true, slotId: 'slot-new' });
-    expect(values).toContainEqual(expect.objectContaining({ slotTime: '10:30', trainingType: 'спліт', capacity: 2 }));
+    expect(values).toContainEqual(expect.objectContaining({ slotTime: '10:30', trainingType: 'спліт', capacity: 3 }));
     expect(values).toContainEqual([{ slotId: 'slot-new', memberId: M1 }, { slotId: 'slot-new', memberId: M2 }]);
   });
 
@@ -125,11 +125,11 @@ describe('Personal slots — updateSlotMembers', () => {
     expect(db.delete).not.toHaveBeenCalled();
   });
 
-  it('replaces members and sets capacity to their count', async () => {
+  it('replaces members without changing capacity', async () => {
     const { db, values, sets } = makeDb([[split], [{ id: M1 }, { id: M2 }, { id: M3 }], [{ memberId: M1 }]]);
     await makeService(db).updateSlotMembers('slot-1', [M1, M2, M3]);
     expect(values).toContainEqual([M1, M2, M3].map((memberId) => ({ slotId: 'slot-1', memberId })));
-    expect(sets).toContainEqual({ capacity: 3 });
+    expect(sets).not.toContainEqual(expect.objectContaining({ capacity: expect.anything() }));
   });
 
   it('refuses group slots (open to everyone)', async () => {

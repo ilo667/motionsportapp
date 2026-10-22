@@ -19,6 +19,13 @@ async function migrate() {
       `CREATE UNIQUE INDEX IF NOT EXISTS bookings_member_slot_active_idx ON bookings (member_id, slot_id) WHERE status = 'ACTIVE'`,
     );
     console.log('✓ bookings_member_slot_active_idx');
+    // Fixed capacity for personal slots (older ones were created with 8)
+    const fixed = await pool.query(
+      `UPDATE training_slots SET capacity = CASE training_type WHEN 'індивідуальні' THEN 1 ELSE 3 END
+       WHERE training_type IN ('індивідуальні', 'спліт')
+         AND capacity <> CASE training_type WHEN 'індивідуальні' THEN 1 ELSE 3 END`,
+    );
+    console.log(`✓ personal slot capacity (${fixed.rowCount} fixed)`);
   } finally {
     await pool.end();
   }
