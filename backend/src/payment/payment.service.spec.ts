@@ -140,29 +140,29 @@ describe('PaymentService — createCheckout', () => {
     await expect(svc.createCheckout('slot-1', 'member-1')).rejects.toThrow('does not require payment');
   });
 
-  const personal = { id: 'slot-1', status: 'ACTIVE', trainingType: 'спліт', slotTime: '20:00', bookedCount: 0, capacity: 2, trainingDayId: 'day-1' };
+  const assigned = { id: 'slot-1', status: 'ACTIVE', trainingType: 'спліт', slotTime: '20:00', bookedCount: 0, capacity: 2, trainingDayId: 'day-1' };
 
-  it('hides a personal slot from a member the coach did not assign (404)', async () => {
-    const { db } = makeDb([[personal], []]);
+  it('hides an assigned slot from a member the coach did not assign (404)', async () => {
+    const { db } = makeDb([[assigned], []]);
     await expect(makeService(db).createCheckout('slot-1', 'member-2')).rejects.toThrow(NotFoundException);
     expect(db.insert).not.toHaveBeenCalled();
   });
 
   it('refuses payment once the training has started', async () => {
-    const { db } = makeDb([[personal], ASSIGNED, DAY]);
+    const { db } = makeDb([[assigned], ASSIGNED, DAY]);
     await expect(makeService(db, kyiv(20)).createCheckout('slot-1', 'member-1')).rejects.toThrow('already started');
     expect(db.insert).not.toHaveBeenCalled();
   });
 
-  it('books a personal slot even when the member has other bookings that day', async () => {
+  it('books an assigned slot even when the member has other bookings that day', async () => {
     // no PENDING to resume, locked slot, no booking on this slot
-    const { db } = makeDb([[personal], ASSIGNED, DAY, [], [personal], []]);
+    const { db } = makeDb([[assigned], ASSIGNED, DAY, [], [assigned], []]);
     await expect(makeService(db).createCheckout('slot-1', 'member-1')).resolves.toHaveProperty('data');
     expect(db.insert).toHaveBeenCalled();
   });
 
   it('returns 409 when the member already booked this slot', async () => {
-    const { db } = makeDb([[personal], ASSIGNED, DAY, [], [personal], [{ id: 'booking-paid' }]]);
+    const { db } = makeDb([[assigned], ASSIGNED, DAY, [], [assigned], [{ id: 'booking-paid' }]]);
     await expect(makeService(db).createCheckout('slot-1', 'member-1')).rejects.toThrow('already booked this training');
   });
 });

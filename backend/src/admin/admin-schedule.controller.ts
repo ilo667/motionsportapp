@@ -20,7 +20,7 @@ import { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { UpdateMemberNoteDto } from './dto/update-member-note.dto';
-import { CreatePersonalSlotDto } from './dto/create-personal-slot.dto';
+import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { SlotMembersDto } from './dto/update-slot-members.dto';
 
 @Controller('admin')
@@ -57,7 +57,7 @@ export class AdminScheduleController {
     return this.adminScheduleService.upsertTrainingDay(date, dto);
   }
 
-  // Group slot (19:00 / 20:00). Personal slots: POST training-days/:date/personal-slots
+  // Group slot (19:00 / 20:00). Assigned slots: POST training-days/:date/assigned-slots
   @Put('training-days/:date/slots/:slotTime')
   @HttpCode(HttpStatus.OK)
   upsertCalendarSlot(
@@ -67,9 +67,9 @@ export class AdminScheduleController {
     return this.adminScheduleService.upsertGroupSlot(date, slotTime);
   }
 
-  @Post('training-days/:date/personal-slots')
-  createPersonalSlot(@Param('date') date: string, @Body() dto: CreatePersonalSlotDto) {
-    return this.adminScheduleService.createPersonalSlot(date, dto);
+  @Post('training-days/:date/assigned-slots')
+  createAssignedSlot(@Param('date') date: string, @Body() dto: CreateAssignedSlotDto) {
+    return this.adminScheduleService.createAssignedSlot(date, dto);
   }
 
   @Put('slots/:slotId/members')

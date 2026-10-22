@@ -47,7 +47,7 @@ export class InternalCronController {
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
     }
-    // A day with only personal trainings has nothing to book for everyone
+    // A day with only assigned trainings has nothing to book for everyone
     if (!(await this.hasActiveGroupSlots(day.id))) {
       return { ok: true, skipped: 'no group trainings today' };
     }

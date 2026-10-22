@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
-import { api, PersonalSlotView } from "@/lib/api";
+import { api, AssignedSlotView } from "@/lib/api";
 import { redirectToLiqPay, PRICE_UAH } from "@/lib/liqpay";
 import { CancellationReasonModal } from "./CancellationReasonModal";
 
-const TYPE_LABELS: Record<PersonalSlotView["trainingType"], string> = {
+const TYPE_LABELS: Record<AssignedSlotView["trainingType"], string> = {
   персональні: "Персональне",
   спліт: "Спліт",
 };
@@ -18,14 +18,14 @@ function formatDay(localDate: string): string {
   }).format(new Date(localDate + "T12:00:00"));
 }
 
-interface PersonalSlotCardProps {
-  slot: PersonalSlotView;
+interface AssignedSlotCardProps {
+  slot: AssignedSlotView;
   onMutate: (fn: () => Promise<unknown>) => void;
   onRefresh: () => void;
 }
 
-// Individual / split the coach assigned to this member. Paid via LiqPay; payment and cancel until the start
-export function PersonalSlotCard({ slot, onMutate, onRefresh }: PersonalSlotCardProps) {
+// Personal / split the coach assigned to this member. Paid via LiqPay; payment and cancel until the start
+export function AssignedSlotCard({ slot, onMutate, onRefresh }: AssignedSlotCardProps) {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);

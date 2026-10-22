@@ -5,12 +5,12 @@ import { DatabaseService } from '../database/database.service';
 import { trainingDays, trainingSlots, bookings, vacancyAlerts, announcements, slotMembers } from '../database/schema';
 import { DemoService } from '../demo/demo.service';
 import { PaymentService } from '../payment/payment.service';
-import { GROUP_SLOT_TIMES, GROUP_TYPE, KY_ZONE, PERSONAL_TYPES, slotStartsAt } from './training-types';
+import { GROUP_SLOT_TIMES, GROUP_TYPE, KY_ZONE, ASSIGNED_TYPES, slotStartsAt } from './training-types';
 
 const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
 const SLOT_TIMES = GROUP_SLOT_TIMES;
-// A personal training stays on the member's page until it ends (payment and cancel only until it starts)
-const PERSONAL_SHOWN_FOR_MINUTES = 60;
+// An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
+const ASSIGNED_SHOWN_FOR_MINUTES = 60;
 
 type DayRow = typeof trainingDays.$inferSelect;
 
@@ -29,9 +29,9 @@ export class ScheduleService {
     const now = await this.demoService.getNow();
     const today = now.toISODate()!;
 
-    const personalSlots = memberId ? await this.getPersonalSlots(memberId, now) : [];
+    const assignedSlots = memberId ? await this.getAssignedSlots(memberId, now) : [];
 
-    // "Наступне тренування" is the next group day; days with only personal trainings are skipped
+    // "Наступне тренування" is the next group day; days with only assigned trainings are skipped
     const upcoming = await this.withGroupSlots(
       await this.database.db
         .select()
@@ -132,7 +132,7 @@ export class ScheduleService {
         myPaymentStatus: s.id === myBookingSlotId ? myPaymentStatus : null,
         isMyVacancyAlert: myVacancyAlertSlotIds.has(s.id),
       })),
-      personalSlots,
+      assignedSlots,
       serverTime: now.toUTC().toISO(),
       announcement,
       isDemoMode: this.demoService.isDemoMode(),
@@ -150,8 +150,8 @@ export class ScheduleService {
     return days.filter((d) => withGroup.has(d.id));
   }
 
-  // Upcoming personal trainings the coach assigned to this member, on any day
-  private async getPersonalSlots(memberId: string, now: DateTime) {
+  // Upcoming assigned trainings the coach assigned to this member, on any day
+  private async getAssignedSlots(memberId: string, now: DateTime) {
     const rows = await this.database.db
       .select({
         id: trainingSlots.id,
@@ -169,13 +169,13 @@ export class ScheduleService {
           gte(trainingDays.localDate, now.toISODate()!),
           eq(trainingDays.status, 'SCHEDULED'),
           eq(trainingSlots.status, 'ACTIVE'),
-          inArray(trainingSlots.trainingType, PERSONAL_TYPES),
+          inArray(trainingSlots.trainingType, ASSIGNED_TYPES),
         ),
       )
       .orderBy(trainingDays.localDate, trainingSlots.slotTime);
 
     const visible = rows.filter(
-      (r) => now < slotStartsAt(r.localDate, r.slotTime).plus({ minutes: PERSONAL_SHOWN_FOR_MINUTES }),
+      (r) => now < slotStartsAt(r.localDate, r.slotTime).plus({ minutes: ASSIGNED_SHOWN_FOR_MINUTES }),
     );
     if (visible.length === 0) return [];
 

@@ -3,10 +3,10 @@ import { and, eq, inArray, lt, ne, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { trainingSlots, trainingDays, bookings, payments, slotMembers } from '../database/schema';
 import { DemoService } from '../demo/demo.service';
-import { PERSONAL_TYPES, slotStartsAt } from '../schedule/training-types';
+import { ASSIGNED_TYPES, slotStartsAt } from '../schedule/training-types';
 import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } from './liqpay.helper';
 
-const PAYMENT_TYPES = PERSONAL_TYPES;
+const PAYMENT_TYPES = ASSIGNED_TYPES;
 const SUCCESS_STATUSES = ['success', 'sandbox'];
 const FAILED_STATUSES = ['failure', 'error', 'reversed'];
 
@@ -54,7 +54,7 @@ export class PaymentService {
       throw new BadRequestException('This slot does not require payment');
     }
 
-    // Personal slots are visible and payable only for the members the coach assigned
+    // Assigned slots are visible and payable only for the members the coach assigned
     const [assigned] = await this.database.db
       .select({ memberId: slotMembers.memberId })
       .from(slotMembers)
@@ -94,7 +94,7 @@ export class PaymentService {
         if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is no longer available');
         if (locked.bookedCount >= locked.capacity) throw new ConflictException('Slot is full');
 
-        // Personal bookings don't limit other bookings that day, only a second one on the same slot
+        // Assigned bookings don't limit other bookings that day, only a second one on the same slot
         const [existing] = await tx
           .select({ id: bookings.id })
           .from(bookings)

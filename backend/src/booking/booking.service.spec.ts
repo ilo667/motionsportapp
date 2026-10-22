@@ -122,7 +122,7 @@ describe('BookingService — slot validation', () => {
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Slot is full');
   });
 
-  it('refuses a personal slot (booked only through payment)', async () => {
+  it('refuses an assigned slot (booked only through payment)', async () => {
     const { db } = makeDb([[{ ...validSlot, trainingType: 'персональні' }]]);
     const service = makeService(db, at15);
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('requires payment');
@@ -139,7 +139,7 @@ describe('BookingService — slot validation', () => {
 
 describe('BookingService — cancel', () => {
   const booking = { id: 'booking-1', slotId: 'slot-p', trainingDayId: 'day-1', memberId: 'member-1', status: 'ACTIVE' };
-  const personalSlot = { bookedCount: 1, capacity: 1, slotTime: '21:30', trainingType: 'персональні' };
+  const assignedSlot = { bookedCount: 1, capacity: 1, slotTime: '21:30', trainingType: 'персональні' };
 
   it('throws NotFoundException when there is no active booking on that slot', async () => {
     const { db } = makeDb([[]]);
@@ -147,14 +147,14 @@ describe('BookingService — cancel', () => {
     await expect(service.cancel('member-1', 'slot-1', 'reason', new Date())).rejects.toThrow(NotFoundException);
   });
 
-  it('cancels a personal booking after 21:00 while the training has not started', async () => {
-    const { db } = makeDb([[booking], [validDay], [personalSlot]]);
+  it('cancels an assigned booking after 21:00 while the training has not started', async () => {
+    const { db } = makeDb([[booking], [validDay], [assignedSlot]]);
     const service = makeService(db, kyivAt(21, 10));
     await expect(service.cancel('member-1', 'slot-p', 'reason', new Date())).resolves.toEqual({ ok: true });
   });
 
-  it('refuses to cancel a personal booking once the training has started', async () => {
-    const { db } = makeDb([[booking], [validDay], [personalSlot]]);
+  it('refuses to cancel an assigned booking once the training has started', async () => {
+    const { db } = makeDb([[booking], [validDay], [assignedSlot]]);
     const service = makeService(db, kyivAt(21, 30));
     await expect(service.cancel('member-1', 'slot-p', 'reason', new Date())).rejects.toThrow('already started');
   });
@@ -175,13 +175,13 @@ describe('BookingService — switch slot', () => {
     await expect(service.switchSlot('member-1', 'slot-1', 'reason', new Date())).rejects.toThrow('Already booked on this slot');
   });
 
-  it('refuses to switch onto a personal slot', async () => {
+  it('refuses to switch onto an assigned slot', async () => {
     const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'спліт' }]]);
     const service = makeService(db, kyivAt(15));
     await expect(service.switchSlot('member-1', 'slot-p', 'reason', new Date())).rejects.toThrow('Only group trainings');
   });
 
-  it('throws NotFoundException when the member has no group booking that day (personal ones do not count)', async () => {
+  it('throws NotFoundException when the member has no group booking that day (assigned ones do not count)', async () => {
     const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'групові' }], []]);
     const service = makeService(db, kyivAt(15));
     await expect(service.switchSlot('member-1', 'slot-2', 'reason', new Date())).rejects.toThrow(NotFoundException);

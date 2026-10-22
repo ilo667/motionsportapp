@@ -4,7 +4,7 @@ import { api, SlotView } from "@/lib/api";
 import { ensurePushSubscribed } from "@/lib/pushUtils";
 import { CancellationReasonModal } from "./CancellationReasonModal";
 
-// Group slot (19:00 / 20:00, free). Personal paid trainings: PersonalSlotCard
+// Group slot (19:00 / 20:00, free). Assigned paid trainings: AssignedSlotCard
 interface SlotCardProps {
   slot: SlotView;
   allSlots: SlotView[];

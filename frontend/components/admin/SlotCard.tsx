@@ -28,7 +28,7 @@ function nextStatus(current: AttendanceStatus): AttendanceStatus {
 export function SlotCard({ slot, onMutate }: SlotCardProps) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const isGroup = slot.trainingType === "групові";
-  // "мало учасників" is about group trainings; personal ones are for 1–3 assigned people
+  // "мало учасників" is about group trainings; assigned ones are for 1–3 assigned people
   const belowMin = isGroup && slot.status === "ACTIVE" && slot.bookedCount < 3;
   const allPresent = slot.participants.length > 0 && slot.participants.every(p => p.attendanceStatus === "PRESENT");
 

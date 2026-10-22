@@ -48,8 +48,8 @@ export interface SlotView {
   isMyVacancyAlert?: boolean;
 }
 
-// Individual / split the coach assigned to this member (any day, any time); paid, bookable until the start
-export interface PersonalSlotView {
+// Personal / split the coach assigned to this member (any day, any time); paid, bookable until the start
+export interface AssignedSlotView {
   id: string;
   localDate: string;
   slotTime: string;
@@ -68,7 +68,7 @@ export interface ScheduleNext {
   bookingOpenAt: string;
   bookingCloseAt: string;
   slots: SlotView[]; // group slots of the next group day
-  personalSlots?: PersonalSlotView[];
+  assignedSlots?: AssignedSlotView[];
   serverTime: string;
   announcement?: string | null;
   isDemoMode?: boolean;
@@ -137,7 +137,7 @@ export interface CalendarSlot {
   trainingType: TrainingType;
   bookedCount: number;
   capacity: number;
-  // Assigned members, personal slots only. paymentStatus: PENDING = on LiqPay (seat held), null = has not started paying
+  // Assigned members, assigned slots only. paymentStatus: PENDING = on LiqPay (seat held), null = has not started paying
   members: { id: string; displayName: string; paymentStatus: "PAID" | "PENDING" | null }[];
 }
 
@@ -240,8 +240,8 @@ export const api = {
       method: "PUT",
     }),
 
-  createPersonalSlot: (date: string, body: { slotTime: string; trainingType: TrainingType; memberIds: string[] }) =>
-    request<{ ok: boolean; slotId: string }>(`/admin/training-days/${date}/personal-slots`, {
+  createAssignedSlot: (date: string, body: { slotTime: string; trainingType: TrainingType; memberIds: string[] }) =>
+    request<{ ok: boolean; slotId: string }>(`/admin/training-days/${date}/assigned-slots`, {
       method: "POST",
       body: JSON.stringify(body),
     }),

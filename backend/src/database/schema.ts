@@ -70,7 +70,7 @@ export const trainingSlots = pgTable(
   (table) => [uniqueIndex('training_slots_day_time_idx').on(table.trainingDayId, table.slotTime)],
 );
 
-// Who may see and book a personal slot (персональні: 1 member, спліт: 1–3). Групові have no rows here
+// Who may see and book an assigned slot (персональні: 1 member, спліт: 1–3). Групові have no rows here
 export const slotMembers = pgTable(
   'slot_members',
   {
@@ -107,7 +107,7 @@ export const bookings = pgTable(
   },
   (table) => [
     // One active booking per member per slot. "One group booking per day" is checked in BookingService
-    // (personal trainings don't count), under a lock on the member row
+    // (assigned trainings don't count), under a lock on the member row
     uniqueIndex('bookings_member_slot_active_idx')
       .on(table.memberId, table.slotId)
       .where(sql`${table.status} = 'ACTIVE'`),

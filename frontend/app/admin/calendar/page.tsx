@@ -49,7 +49,7 @@ const PAYMENT_LABELS = {
 
 const ERROR_TEXTS: [string, string][] = [
   ["Time is already taken", "На цей час уже є тренування"],
-  ["taken by a personal training", "На 19:00 чи 20:00 уже стоїть персональне тренування"],
+  ["taken by an assigned training", "На 19:00 чи 20:00 уже стоїть персональне тренування"],
   ["in the past", "Цей час уже минув"],
   ["already booked", "Ця людина вже оплатила, її не можна прибрати"],
 ];
@@ -124,7 +124,7 @@ export default function CalendarPage() {
   const events = slots.map((s) => {
     const colors = TYPE_COLORS[s.trainingType];
     const start = `${s.localDate}T${s.slotTime}:00`;
-    // Group: how full it is. Personal: who paid ("Спліт · Катя ✓, Оля")
+    // Group: how full it is. Assigned: who paid ("Спліт · Катя ✓, Оля")
     const detail = s.trainingType === "групові"
       ? `${s.bookedCount}/${s.capacity}`
       : s.members.map((m) => `${m.displayName}${m.paymentStatus === "PAID" ? " ✓" : ""}`).join(", ") || "без людей";
@@ -141,7 +141,7 @@ export default function CalendarPage() {
     };
   });
 
-  // Evening by default; widen when a personal training is earlier or later
+  // Evening by default; widen when an assigned training is earlier or later
   const minHour = Math.min(17, ...slots.map((s) => hourOf(s.slotTime)));
   const maxHour = Math.min(24, Math.max(22, ...slots.map((s) => hourOf(s.slotTime) + 2)));
 
@@ -210,7 +210,7 @@ export default function CalendarPage() {
     if (!TIME_RE.test(time)) return setError("Вкажіть час з кроком 15 хвилин, наприклад 18:30");
     if (!memberIds[0]) return setError("Виберіть людину");
     return run(
-      () => api.createPersonalSlot(modal.date, { slotTime: time, trainingType: selectedType, memberIds: chosenMembers }),
+      () => api.createAssignedSlot(modal.date, { slotTime: time, trainingType: selectedType, memberIds: chosenMembers }),
       "Помилка збереження. Спробуйте ще раз.",
     );
   };
@@ -228,7 +228,7 @@ export default function CalendarPage() {
 
   const modalDate = modal ? (modal.mode === "add" ? modal.date : modal.slot.localDate) : "";
   const editing = modal?.mode === "edit" ? modal.slot : null;
-  const personal = selectedType !== "групові";
+  const assigned = selectedType !== "групові";
 
   return (
     <PageLayout variant="top" action={
@@ -347,11 +347,11 @@ export default function CalendarPage() {
               </div>
             )}
 
-            {!editing && !personal && (
+            {!editing && !assigned && (
               <p className="text-muted text-xs">Буде створено слоти 19:00 і 20:00, їх бачать усі</p>
             )}
 
-            {!editing && personal && (
+            {!editing && assigned && (
               <div>
                 <label htmlFor="slot-time" className="block text-muted text-xs mb-2 uppercase tracking-wide">Час</label>
                 <input
@@ -365,7 +365,7 @@ export default function CalendarPage() {
               </div>
             )}
 
-            {personal && (
+            {assigned && (
               <div className="flex flex-col space-y-2">
                 <p className="text-muted text-xs uppercase tracking-wide">
                   {selectedType === "спліт" ? "Люди (до трьох)" : "Людина"}
@@ -393,7 +393,7 @@ export default function CalendarPage() {
             {error && <p className="text-danger text-sm">{error}</p>}
 
             <div className="flex flex-col space-y-2">
-              {(!editing || personal) && (
+              {(!editing || assigned) && (
                 <button
                   onClick={editing ? handleSaveMembers : handleAdd}
                   disabled={saving}

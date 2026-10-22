@@ -5,7 +5,7 @@ import Link from "next/link";
 import { api, ScheduleNext } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { SlotCard } from "@/components/SlotCard";
-import { PersonalSlotCard } from "@/components/PersonalSlotCard";
+import { AssignedSlotCard } from "@/components/AssignedSlotCard";
 import DemoControls from "@/components/DemoControls";
 
 function formatLocalDate(localDate: string): string {
@@ -235,14 +235,14 @@ export default function SchedulePage() {
             ))}
           </div>
 
-          {!!schedule.personalSlots?.length && (
+          {!!schedule.assignedSlots?.length && (
             <>
               <h2 className="font-geologica font-semibold text-heading uppercase mt-8 mb-3">
-                Персональні тренування
+                Мої тренування
               </h2>
               <div className="flex flex-col space-y-3">
-                {schedule.personalSlots.map((slot) => (
-                  <PersonalSlotCard
+                {schedule.assignedSlots.map((slot) => (
+                  <AssignedSlotCard
                     key={slot.id}
                     slot={slot}
                     onMutate={handleMutate}

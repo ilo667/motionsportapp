@@ -7,15 +7,15 @@ import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
 import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import type { UpdateMemberNoteDto } from './dto/update-member-note.dto';
-import type { CreatePersonalSlotDto } from './dto/create-personal-slot.dto';
+import type { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { NotificationService } from '../notifications/notification.service';
 import { DemoService } from '../demo/demo.service';
 import {
   GROUP_SLOT_TIMES,
   GROUP_TYPE,
   KY_ZONE,
-  PERSONAL_MEMBER_LIMITS,
-  isPersonalType,
+  ASSIGNED_MEMBER_LIMITS,
+  isAssignedType,
   slotStartsAt,
 } from '../schedule/training-types';
 
@@ -138,23 +138,23 @@ export class AdminScheduleService {
       )
       .orderBy(trainingDays.localDate, trainingSlots.slotTime);
 
-    const personalIds = rows.filter((r) => isPersonalType(r.trainingType)).map((r) => r.slotId);
+    const assignedIds = rows.filter((r) => isAssignedType(r.trainingType)).map((r) => r.slotId);
     const assigned =
-      personalIds.length > 0
+      assignedIds.length > 0
         ? await this.database.db
             .select({ slotId: slotMembers.slotId, id: members.id, displayName: members.displayName })
             .from(slotMembers)
             .innerJoin(members, eq(members.id, slotMembers.memberId))
-            .where(inArray(slotMembers.slotId, personalIds))
+            .where(inArray(slotMembers.slotId, assignedIds))
             .orderBy(slotMembers.createdAt)
         : [];
     // Per-member payment state: the coach needs who paid, not a count
     const booked =
-      personalIds.length > 0
+      assignedIds.length > 0
         ? await this.database.db
             .select({ slotId: bookings.slotId, memberId: bookings.memberId, paymentStatus: bookings.paymentStatus })
             .from(bookings)
-            .where(and(inArray(bookings.slotId, personalIds), eq(bookings.status, 'ACTIVE')))
+            .where(and(inArray(bookings.slotId, assignedIds), eq(bookings.status, 'ACTIVE')))
         : [];
 
     return rows.map((r) => ({
@@ -176,7 +176,7 @@ export class AdminScheduleService {
     }));
   }
 
-  // Group slot at 19:00 / 20:00. Re-activates a cancelled slot at that time, but never takes over an active personal one
+  // Group slot at 19:00 / 20:00. Re-activates a cancelled slot at that time, but never takes over an active assigned one
   async upsertGroupSlot(date: string, slotTime: string) {
     if (!SLOT_TIMES.includes(slotTime)) throw new BadRequestException('Group trainings are at 19:00 and 20:00');
 
@@ -192,16 +192,16 @@ export class AdminScheduleService {
         })
         .returning({ id: trainingSlots.id });
 
-      if (!slot) throw new ConflictException('Time is taken by a personal training');
-      // A re-used cancelled personal slot must not stay visible only to its old members
+      if (!slot) throw new ConflictException('Time is taken by an assigned training');
+      // A re-used cancelled assigned slot must not stay visible only to its old members
       await tx.delete(slotMembers).where(eq(slotMembers.slotId, slot.id));
     });
 
     return { ok: true };
   }
 
-  // Individual (1 member) or split (1–3 members) at any time; seen and booked only by those members
-  async createPersonalSlot(date: string, dto: CreatePersonalSlotDto) {
+  // Personal (1 member) or split (1–3 members) at any time; seen and booked only by those members
+  async createAssignedSlot(date: string, dto: CreateAssignedSlotDto) {
     await this.validateSlotMembers(dto.trainingType, dto.memberIds);
 
     const startsAt = slotStartsAt(date, dto.slotTime);
@@ -209,7 +209,7 @@ export class AdminScheduleService {
     const now = await this.demoService.getNow();
     if (startsAt <= now) throw new BadRequestException('Training time is in the past');
 
-    const capacity = PERSONAL_MEMBER_LIMITS[dto.trainingType].max;
+    const capacity = ASSIGNED_MEMBER_LIMITS[dto.trainingType].max;
     const slotId = await this.database.db.transaction(async (tx) => {
       const dayId = await this.ensureDay(tx, date);
       const [slot] = await tx
@@ -240,7 +240,7 @@ export class AdminScheduleService {
     return { ok: true, slotId };
   }
 
-  // Change who a personal slot is for. Members who already booked it cannot be removed
+  // Change who an assigned slot is for. Members who already booked it cannot be removed
   async updateSlotMembers(slotId: string, memberIds: string[]) {
     await this.database.db.transaction(async (tx) => {
       const [slot] = await tx
@@ -251,7 +251,7 @@ export class AdminScheduleService {
         .limit(1);
 
       if (!slot) throw new NotFoundException('Slot not found');
-      if (!isPersonalType(slot.trainingType)) throw new BadRequestException('Group trainings are open to everyone');
+      if (!isAssignedType(slot.trainingType)) throw new BadRequestException('Group trainings are open to everyone');
       if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
 
       await this.validateSlotMembers(slot.trainingType, memberIds, tx);
@@ -272,7 +272,7 @@ export class AdminScheduleService {
   }
 
   private async validateSlotMembers(trainingType: string, memberIds: string[], db: Db | Tx = this.database.db) {
-    const limits = PERSONAL_MEMBER_LIMITS[trainingType];
+    const limits = ASSIGNED_MEMBER_LIMITS[trainingType];
     if (!limits || memberIds.length < limits.min || memberIds.length > limits.max) {
       throw new BadRequestException(`${trainingType}: ${limits?.min}–${limits?.max} members`);
     }

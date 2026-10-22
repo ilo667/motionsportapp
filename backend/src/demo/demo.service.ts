@@ -3,7 +3,7 @@ import { DateTime } from 'luxon';
 import { eq, and } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { demoState, trainingDays, trainingSlots, bookings, members, attendance, payments, slotMembers } from '../database/schema';
-import { GROUP_TYPE, PERSONAL_MEMBER_LIMITS } from '../schedule/training-types';
+import { GROUP_TYPE, ASSIGNED_MEMBER_LIMITS } from '../schedule/training-types';
 
 const KY_ZONE = 'Europe/Kyiv';
 
@@ -120,7 +120,7 @@ export class DemoService {
         .values({ trainingDayId: day.id, slotTime, status: 'ACTIVE', trainingType, capacity: 8, bookedCount: 0 })
         .onConflictDoUpdate({
           target: [trainingSlots.trainingDayId, trainingSlots.slotTime],
-          set: { status: 'ACTIVE', trainingType, capacity: trainingType === GROUP_TYPE ? 8 : PERSONAL_MEMBER_LIMITS[trainingType].max, bookedCount: 0 },
+          set: { status: 'ACTIVE', trainingType, capacity: trainingType === GROUP_TYPE ? 8 : ASSIGNED_MEMBER_LIMITS[trainingType].max, bookedCount: 0 },
         });
     }
 
@@ -130,7 +130,7 @@ export class DemoService {
       .where(and(eq(trainingSlots.trainingDayId, day.id), eq(trainingSlots.status, 'ACTIVE')))
       .orderBy(trainingSlots.slotTime);
 
-    // The coach may have added personal trainings that day, so pick the 19:00 / 20:00 slots by time
+    // The coach may have added assigned trainings that day, so pick the 19:00 / 20:00 slots by time
     const slot1 = slots.find((s) => s.slotTime === '19:00');
     const slot2 = slots.find((s) => s.slotTime === '20:00');
     if (!slot1 || !slot2) return;
@@ -170,7 +170,7 @@ export class DemoService {
       .select({ id: members.id })
       .from(members);
 
-    // A personal 20:00 (payment test) is assigned to every real member, so whoever tests sees it
+    // An assigned 20:00 (payment test) is assigned to every real member, so whoever tests sees it
     for (const slot of [slot1, slot2]) {
       await this.database.db.delete(slotMembers).where(eq(slotMembers.slotId, slot.id));
       if (slot.trainingType === GROUP_TYPE) continue;

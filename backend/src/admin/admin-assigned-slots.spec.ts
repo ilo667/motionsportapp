@@ -3,7 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { DateTime } from 'luxon';
 import { AdminScheduleService } from './admin-schedule.service';
-import { CreatePersonalSlotDto } from './dto/create-personal-slot.dto';
+import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 
 const M1 = '11111111-1111-4111-8111-111111111111';
 const M2 = '22222222-2222-4222-8222-222222222222';
@@ -50,58 +50,58 @@ async function errorsOf(cls: any, body: object) {
   return validate(plainToInstance(cls, body) as object);
 }
 
-describe('Personal slots — DTO validation', () => {
+describe('Assigned slots — DTO validation', () => {
   const valid = { slotTime: '18:15', trainingType: 'спліт', memberIds: [M1, M2] };
 
   it('accepts any time in 15-minute steps', async () => {
-    expect(await errorsOf(CreatePersonalSlotDto, valid)).toHaveLength(0);
-    expect(await errorsOf(CreatePersonalSlotDto, { ...valid, slotTime: '07:45' })).toHaveLength(0);
+    expect(await errorsOf(CreateAssignedSlotDto, valid)).toHaveLength(0);
+    expect(await errorsOf(CreateAssignedSlotDto, { ...valid, slotTime: '07:45' })).toHaveLength(0);
   });
 
   it('rejects other minutes and malformed times', async () => {
-    expect(await errorsOf(CreatePersonalSlotDto, { ...valid, slotTime: '18:10' })).not.toHaveLength(0);
-    expect(await errorsOf(CreatePersonalSlotDto, { ...valid, slotTime: '24:00' })).not.toHaveLength(0);
+    expect(await errorsOf(CreateAssignedSlotDto, { ...valid, slotTime: '18:10' })).not.toHaveLength(0);
+    expect(await errorsOf(CreateAssignedSlotDto, { ...valid, slotTime: '24:00' })).not.toHaveLength(0);
   });
 
-  it('rejects групові as a personal slot type', async () => {
-    expect(await errorsOf(CreatePersonalSlotDto, { ...valid, trainingType: 'групові' })).not.toHaveLength(0);
+  it('rejects групові as an assigned slot type', async () => {
+    expect(await errorsOf(CreateAssignedSlotDto, { ...valid, trainingType: 'групові' })).not.toHaveLength(0);
   });
 
   it('requires 1 to 3 distinct members', async () => {
-    expect(await errorsOf(CreatePersonalSlotDto, { ...valid, memberIds: [] })).not.toHaveLength(0);
-    expect(await errorsOf(CreatePersonalSlotDto, { ...valid, memberIds: [M1, M2, M3, M4] })).not.toHaveLength(0);
-    expect(await errorsOf(CreatePersonalSlotDto, { ...valid, memberIds: [M1, M1] })).not.toHaveLength(0);
+    expect(await errorsOf(CreateAssignedSlotDto, { ...valid, memberIds: [] })).not.toHaveLength(0);
+    expect(await errorsOf(CreateAssignedSlotDto, { ...valid, memberIds: [M1, M2, M3, M4] })).not.toHaveLength(0);
+    expect(await errorsOf(CreateAssignedSlotDto, { ...valid, memberIds: [M1, M1] })).not.toHaveLength(0);
   });
 });
 
-describe('Personal slots — createPersonalSlot', () => {
+describe('Assigned slots — createAssignedSlot', () => {
   it('creates a split for 2 members: capacity 3 and one slot_members row each', async () => {
     const { db, values } = makeDb([[{ id: M1 }, { id: M2 }]]);
-    const result = await makeService(db).createPersonalSlot('2026-10-21', { slotTime: '10:30', trainingType: 'спліт', memberIds: [M1, M2] });
+    const result = await makeService(db).createAssignedSlot('2026-10-21', { slotTime: '10:30', trainingType: 'спліт', memberIds: [M1, M2] });
 
     expect(result).toEqual({ ok: true, slotId: 'slot-new' });
     expect(values).toContainEqual(expect.objectContaining({ slotTime: '10:30', trainingType: 'спліт', capacity: 3 }));
     expect(values).toContainEqual([{ slotId: 'slot-new', memberId: M1 }, { slotId: 'slot-new', memberId: M2 }]);
   });
 
-  it('allows exactly one member for an individual training', async () => {
+  it('allows exactly one member for a personal training', async () => {
     const { db } = makeDb([[{ id: M1 }, { id: M2 }]]);
     await expect(
-      makeService(db).createPersonalSlot('2026-10-21', { slotTime: '10:30', trainingType: 'персональні', memberIds: [M1, M2] }),
+      makeService(db).createAssignedSlot('2026-10-21', { slotTime: '10:30', trainingType: 'персональні', memberIds: [M1, M2] }),
     ).rejects.toThrow(BadRequestException);
   });
 
   it('throws NotFound when a member does not exist', async () => {
     const { db } = makeDb([[{ id: M1 }]]);
     await expect(
-      makeService(db).createPersonalSlot('2026-10-21', { slotTime: '10:30', trainingType: 'спліт', memberIds: [M1, M2] }),
+      makeService(db).createAssignedSlot('2026-10-21', { slotTime: '10:30', trainingType: 'спліт', memberIds: [M1, M2] }),
     ).rejects.toThrow(NotFoundException);
   });
 
   it('refuses a time that has already passed', async () => {
     const { db } = makeDb([[{ id: M1 }]]);
     await expect(
-      makeService(db).createPersonalSlot('2026-10-20', { slotTime: '11:45', trainingType: 'персональні', memberIds: [M1] }),
+      makeService(db).createAssignedSlot('2026-10-20', { slotTime: '11:45', trainingType: 'персональні', memberIds: [M1] }),
     ).rejects.toThrow('in the past');
     expect(db.insert).not.toHaveBeenCalled();
   });
@@ -111,12 +111,12 @@ describe('Personal slots — createPersonalSlot', () => {
     let call = 0;
     const { db } = makeDb([[{ id: M1 }]], () => (call++ === 0 ? [{ id: 'day-1' }] : []));
     await expect(
-      makeService(db).createPersonalSlot('2026-10-21', { slotTime: '19:00', trainingType: 'персональні', memberIds: [M1] }),
+      makeService(db).createAssignedSlot('2026-10-21', { slotTime: '19:00', trainingType: 'персональні', memberIds: [M1] }),
     ).rejects.toThrow(ConflictException);
   });
 });
 
-describe('Personal slots — updateSlotMembers', () => {
+describe('Assigned slots — updateSlotMembers', () => {
   const split = { id: 'slot-1', trainingType: 'спліт', status: 'ACTIVE' };
 
   it('cannot remove a member who already booked the training', async () => {
@@ -144,15 +144,15 @@ describe('Group slots — upsertGroupSlot', () => {
     await expect(makeService(db).upsertGroupSlot('2026-10-21', '18:00')).rejects.toThrow(BadRequestException);
   });
 
-  it('does not take over an active personal training at that time', async () => {
+  it('does not take over an active assigned training at that time', async () => {
     let call = 0;
     const { db } = makeDb([], () => (call++ === 0 ? [{ id: 'day-1' }] : []));
     await expect(makeService(db).upsertGroupSlot('2026-10-21', '19:00')).rejects.toThrow(ConflictException);
   });
 });
 
-describe('Calendar — personal slot members', () => {
-  it('returns assigned members with their payment state for personal slots only', async () => {
+describe('Calendar — assigned slot members', () => {
+  it('returns assigned members with their payment state for assigned slots only', async () => {
     const rows = [
       { localDate: '2026-10-21', slotId: 'g1', slotTime: '19:00', trainingType: 'групові', bookedCount: 3, capacity: 8 },
       { localDate: '2026-10-21', slotId: 'p1', slotTime: '10:30', trainingType: 'спліт', bookedCount: 0, capacity: 2 },

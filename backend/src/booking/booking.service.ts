@@ -32,7 +32,7 @@ export class BookingService {
 
     if (!slot) throw new NotFoundException('Slot not found');
     if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
-    // Personal trainings are booked only through payment (PaymentService.createCheckout)
+    // Assigned trainings are booked only through payment (PaymentService.createCheckout)
     if (slot.trainingType !== GROUP_TYPE) throw new BadRequestException('This slot requires payment');
 
     const [day] = await this.database.db
@@ -85,7 +85,7 @@ export class BookingService {
     return { ok: true };
   }
 
-  // A member can hold a group booking and several personal ones, so the slot says which one to cancel
+  // A member can hold a group booking and several assigned ones, so the slot says which one to cancel
   async cancel(memberId: string, slotId: string, reason: string, reasonAt: Date) {
     const [booking] = await this.database.db
       .select()
@@ -117,7 +117,7 @@ export class BookingService {
       await this.validateBeforeStart(day.localDate, slotBefore.slotTime);
     }
 
-    // Vacancy alerts exist only for group slots (personal ones are not open to others)
+    // Vacancy alerts exist only for group slots (assigned ones are not open to others)
     const wasAtCapacity =
       slotBefore?.trainingType === GROUP_TYPE && slotBefore.bookedCount >= slotBefore.capacity;
 
@@ -256,7 +256,7 @@ export class BookingService {
     await tx.select({ id: members.id }).from(members).where(eq(members.id, memberId)).for('update').limit(1);
   }
 
-  // The member's active group booking on that day (personal bookings don't count)
+  // The member's active group booking on that day (assigned bookings don't count)
   private async findGroupBooking(db: Db | Tx, memberId: string, trainingDayId: string) {
     const [row] = await db
       .select({ id: bookings.id, slotId: bookings.slotId, trainingDayId: bookings.trainingDayId, memberId: bookings.memberId })

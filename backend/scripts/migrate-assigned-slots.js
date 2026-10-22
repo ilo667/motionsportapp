@@ -13,7 +13,7 @@ async function migrate() {
         PRIMARY KEY (slot_id, member_id)
       )`);
     console.log('✓ slot_members');
-    // Personal trainings: a member may have a group booking and several personal ones on the same day
+    // Assigned trainings: a member may have a group booking and several assigned ones on the same day
     await pool.query('DROP INDEX IF EXISTS bookings_member_day_active_idx');
     await pool.query(
       `CREATE UNIQUE INDEX IF NOT EXISTS bookings_member_slot_active_idx ON bookings (member_id, slot_id) WHERE status = 'ACTIVE'`,
@@ -26,13 +26,13 @@ async function migrate() {
       );
       console.log(`✓ ${table}: індивідуальні → персональні (${renamed.rowCount})`);
     }
-    // Fixed capacity for personal slots (older ones were created with 8)
+    // Fixed capacity for assigned slots (older ones were created with 8)
     const fixed = await pool.query(
       `UPDATE training_slots SET capacity = CASE training_type WHEN 'персональні' THEN 1 ELSE 3 END
        WHERE training_type IN ('персональні', 'спліт')
          AND capacity <> CASE training_type WHEN 'персональні' THEN 1 ELSE 3 END`,
     );
-    console.log(`✓ personal slot capacity (${fixed.rowCount} fixed)`);
+    console.log(`✓ assigned slot capacity (${fixed.rowCount} fixed)`);
   } finally {
     await pool.end();
   }

@@ -5,18 +5,18 @@ export const KY_ZONE = 'Europe/Kyiv';
 export type TrainingType = 'групові' | 'персональні' | 'спліт';
 
 export const GROUP_TYPE = 'групові';
-// Personal slots: visible only to members listed in slot_members, paid via LiqPay, bookable until the start
-export const PERSONAL_TYPES = ['персональні', 'спліт'];
+// Assigned slots: visible only to members listed in slot_members, paid via LiqPay, bookable until the start
+export const ASSIGNED_TYPES = ['персональні', 'спліт'];
 export const GROUP_SLOT_TIMES = ['19:00', '20:00'];
-// Members a personal slot is assigned to: персональні exactly 1, спліт 1–3.
+// Members an assigned slot is assigned to: персональні exactly 1, спліт 1–3.
 // Capacity is always `max` (персональні 1, спліт 3), however many members are assigned
-export const PERSONAL_MEMBER_LIMITS: Record<string, { min: number; max: number }> = {
+export const ASSIGNED_MEMBER_LIMITS: Record<string, { min: number; max: number }> = {
   персональні: { min: 1, max: 1 },
   спліт: { min: 1, max: 3 },
 };
 
-export function isPersonalType(trainingType: string) {
-  return PERSONAL_TYPES.includes(trainingType);
+export function isAssignedType(trainingType: string) {
+  return ASSIGNED_TYPES.includes(trainingType);
 }
 
 export function slotStartsAt(localDate: string, slotTime: string) {
