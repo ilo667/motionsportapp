@@ -298,7 +298,6 @@ export class ScheduleService {
         dates.map((localDate) => ({
           localDate,
           status: 'SCHEDULED',
-          isException: false,
         })),
       )
       .onConflictDoNothing();

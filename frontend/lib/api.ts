@@ -251,7 +251,7 @@ export const api = {
   cancelTrainingDay: (date: string) =>
     request<{ ok: boolean }>(`/admin/training-days/${date}`, {
       method: "PUT",
-      body: JSON.stringify({ status: "CANCELLED", isException: true }),
+      body: JSON.stringify({ status: "CANCELLED" }),
     }),
 
   createCheckout: (slotId: string) =>

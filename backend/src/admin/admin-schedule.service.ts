@@ -12,7 +12,6 @@ import type { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { NotificationService } from '../notifications/notification.service';
 import { ClockService } from '../clock/clock.service';
 import {
-  DEFAULT_WEEKDAYS,
   GROUP_SLOT_TIMES,
   GROUP_TYPE,
   KY_ZONE,
@@ -395,10 +394,9 @@ export class AdminScheduleService {
 
   // Training day row for the date, (re)scheduled. Returns its id
   private async ensureDay(tx: Tx, date: string) {
-    const isException = !DEFAULT_WEEKDAYS.includes(DateTime.fromISO(date, { zone: KY_ZONE }).weekday);
     const [day] = await tx
       .insert(trainingDays)
-      .values({ localDate: date, status: 'SCHEDULED', isException, updatedAt: new Date() })
+      .values({ localDate: date, status: 'SCHEDULED', updatedAt: new Date() })
       .onConflictDoUpdate({
         target: trainingDays.localDate,
         set: { status: 'SCHEDULED', updatedAt: new Date() },
@@ -469,7 +467,7 @@ export class AdminScheduleService {
       // Other coaches' trainings that day keep the day scheduled
       await tx
         .update(trainingDays)
-        .set({ status: 'CANCELLED', isException: dto.isException ?? true, updatedAt: new Date() })
+        .set({ status: 'CANCELLED', updatedAt: new Date() })
         .where(
           and(
             eq(trainingDays.id, day.id),

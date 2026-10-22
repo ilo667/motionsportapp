@@ -48,7 +48,6 @@ export const trainingDays = pgTable('training_days', {
   id: uuid('id').primaryKey().defaultRandom(),
   localDate: date('local_date').notNull().unique(),
   status: text('status').notNull().default('SCHEDULED'),
-  isException: boolean('is_exception').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -41,7 +41,7 @@ function makeDb(results: unknown[][] = []) {
 
 const TODAY = '2026-10-20';
 
-const trainingDay = { id: 'day-1', localDate: TODAY, status: 'SCHEDULED', isException: false };
+const trainingDay = { id: 'day-1', localDate: TODAY, status: 'SCHEDULED' };
 const slots = [
   { id: 'slot-1', slotTime: '19:00', status: 'ACTIVE', capacity: 8, bookedCount: 5 },
   { id: 'slot-2', slotTime: '20:00', status: 'ACTIVE', capacity: 8, bookedCount: 3 },
@@ -114,8 +114,8 @@ describe('ScheduleService — booking window flag', () => {
 });
 describe('ScheduleService — assigned trainings', () => {
   it('skips a day that has only assigned trainings when picking the next group day', async () => {
-    const assignedOnly = { id: 'day-p', localDate: TODAY, status: 'SCHEDULED', isException: true };
-    const groupDay = { id: 'day-2', localDate: '2026-10-21', status: 'SCHEDULED', isException: false };
+    const assignedOnly = { id: 'day-p', localDate: TODAY, status: 'SCHEDULED' };
+    const groupDay = { id: 'day-2', localDate: '2026-10-21', status: 'SCHEDULED' };
     const { db } = makeDb([[assignedOnly, groupDay], [{ dayId: 'day-2' }], slots, []]);
     const result = await makeService(db, kyivAt(15)).getNext();
     expect(result?.localDate).toBe('2026-10-21');
