@@ -69,6 +69,10 @@ export const trainingSlots = pgTable(
     capacity: integer('capacity').notNull().default(8),
     bookedCount: integer('booked_count').notNull().default(0),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    // Whose training it is: the coach sees only own slots in calendar, today page and history
+    coachId: uuid('coach_id')
+      .notNull()
+      .references((): AnyPgColumn => admins.id),
   },
   (table) => [uniqueIndex('training_slots_day_time_idx').on(table.trainingDayId, table.slotTime)],
 );

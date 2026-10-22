@@ -11,17 +11,12 @@ import timeGridPlugin from "@fullcalendar/react/timegrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
 import ukLocale from "@fullcalendar/react/locales/uk";
 import type { DatesSetInfo, EventClickInfo, DateClickInfo } from "@fullcalendar/react";
-import { api, AdminMember, CalendarSlot, Cancellation, TrainingType } from "@/lib/api";
+import { api, AdminMember, BusyCalendarSlot, CalendarSlot, Cancellation, TrainingType } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { useIsClient } from "@/lib/clientStore";
+import { TYPE_COLORS } from "@/lib/trainingTypes";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { AdminMenu } from "@/components/admin/AdminMenu";
-
-const TYPE_COLORS: Record<TrainingType, { bg: string; border: string; text: string }> = {
-  групові:       { bg: "#14532d", border: "#93d23c", text: "#bbf7d0" },
-  персональні: { bg: "#3b2f00", border: "#eab308", text: "#fef08a" },
-  спліт:         { bg: "#7c2d12", border: "#fb923c", text: "#fed7aa" },
-};
 
 const TYPE_LABELS: Record<TrainingType, string> = {
   групові: "Групові",
@@ -35,6 +30,10 @@ const TYPE_SHORT: Record<TrainingType, string> = {
   персональні: "Перс.",
   спліт: "Спліт",
 };
+
+// Other coaches' trainings in the calendar
+const BUSY_COLOR = "#1a2040";
+const BUSY_TEXT = "#6a7aa0";
 
 const TYPES: TrainingType[] = ["групові", "персональні", "спліт"];
 const GROUP_TIMES = ["19:00", "20:00"];
@@ -82,7 +81,7 @@ export default function CalendarPage() {
   const router = useRouter();
   // FullCalendar renders in the browser only
   const mounted = useIsClient();
-  const [slots, setSlots] = useState<CalendarSlot[]>([]);
+  const [slots, setSlots] = useState<(CalendarSlot | BusyCalendarSlot)[]>([]);
   const [members, setMembers] = useState<AdminMember[]>([]);
   // Months covering the visible range ("2026-10,2026-11"): a week can span two months
   const [visibleMonths, setVisibleMonths] = useState("");
@@ -131,8 +130,22 @@ export default function CalendarPage() {
   }, [visibleMonths, fetchMonths]);
 
   const events = slots.map((s) => {
-    const colors = TYPE_COLORS[s.trainingType];
     const start = `${s.localDate}T${s.slotTime}:00`;
+    const end = new Date(new Date(start).getTime() + 60 * 60 * 1000);
+    // Another coach's training: a grey busy block, not clickable (one gym, nothing of theirs is shown)
+    if (!s.isMine) {
+      return {
+        id: s.slotId,
+        title: "Зайнято",
+        start,
+        end,
+        color: BUSY_COLOR,
+        contrastColor: BUSY_TEXT,
+        interactive: false, // no role="button", no pointer, no click
+        extendedProps: { slot: s },
+      };
+    }
+    const colors = TYPE_COLORS[s.trainingType];
     // Group: how full it is. Assigned: who paid ("Спліт · Катя ✓, Оля")
     const detail = s.trainingType === "групові"
       ? `${s.bookedCount}/${s.capacity}`
@@ -142,7 +155,7 @@ export default function CalendarPage() {
       title: `${TYPE_SHORT[s.trainingType]} · ${detail}`,
       // Timed events (1 h) so the week-with-hours view places them on their hour; the time is shown by FullCalendar
       start,
-      end: new Date(new Date(start).getTime() + 60 * 60 * 1000),
+      end,
       // v7 names (v6 backgroundColor/borderColor/textColor are ignored)
       color: colors.bg,
       contrastColor: colors.text,
@@ -183,7 +196,8 @@ export default function CalendarPage() {
   };
 
   const handleEventClick = (arg: EventClickInfo) => {
-    openEditModal(arg.event.extendedProps.slot as CalendarSlot);
+    const slot = arg.event.extendedProps.slot as CalendarSlot | BusyCalendarSlot;
+    if (slot.isMine) openEditModal(slot);
   };
 
   const handleDateClick = (arg: DateClickInfo) => {

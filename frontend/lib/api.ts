@@ -13,7 +13,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       body,
     });
   }
-  return res.json() as Promise<T>;
+  // NestJS sends an empty body for a null result (e.g. a coach with no upcoming trainings)
+  const text = await res.text();
+  return (text ? JSON.parse(text) : null) as T;
 }
 
 export type TrainingType = "групові" | "персональні" | "спліт";
@@ -85,12 +87,13 @@ export interface AssignedSlotView {
   started: boolean;
 }
 
+// localDate null: no group training in the calendar ahead (assigned trainings may still be there)
 export interface ScheduleNext {
-  localDate: string;
-  status: string;
+  localDate: string | null;
+  status: string | null;
   bookingWindowOpen: boolean;
-  bookingOpenAt: string;
-  bookingCloseAt: string;
+  bookingOpenAt: string | null;
+  bookingCloseAt: string | null;
   slots: SlotView[]; // group slots of the next group day
   assignedSlots?: AssignedSlotView[];
   serverTime: string;
@@ -156,7 +159,23 @@ export interface AdminSchedule {
   isDemoMode?: boolean;
 }
 
+// A past training day in the coach's history; slots carry the same data as the today page
+export interface HistoryDay {
+  localDate: string;
+  status: "SCHEDULED" | "CANCELLED";
+  slots: AdminSlotView[];
+}
+
+// Another coach's training: only the busy time is shown (one gym), no type, counts or names
+export interface BusyCalendarSlot {
+  isMine: false;
+  localDate: string;
+  slotId: string;
+  slotTime: string;
+}
+
 export interface CalendarSlot {
+  isMine: true;
   localDate: string;
   slotId: string;
   slotTime: string;
@@ -220,7 +239,13 @@ export const api = {
       body: JSON.stringify({ username, password }),
     }),
 
-  getAdminSchedule: () => request<AdminSchedule>("/admin/schedule"),
+  getAdminSchedule: () => request<AdminSchedule | null>("/admin/schedule"),
+
+  // Newest first; pass the returned nextBefore to load older days
+  getHistory: (before?: string) =>
+    request<{ days: HistoryDay[]; nextBefore: string | null }>(
+      `/admin/history${before ? `?before=${before}` : ""}`,
+    ),
 
   cancelSlot: (slotId: string) =>
     request<{ ok: boolean }>(`/admin/slots/${slotId}`, {
@@ -276,7 +301,7 @@ export const api = {
     }),
 
   getCalendar: (month: string) =>
-    request<CalendarSlot[]>(`/admin/calendar?month=${month}`),
+    request<(CalendarSlot | BusyCalendarSlot)[]>(`/admin/calendar?month=${month}`),
 
   upsertGroupSlot: (date: string, slotTime: string) =>
     request<{ ok: boolean }>(`/admin/training-days/${date}/slots/${encodeURIComponent(slotTime)}`, {

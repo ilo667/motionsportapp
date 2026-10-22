@@ -14,6 +14,7 @@ import {
   announcementExamples,
 } from '../src/database/schema';
 import { DEMO_MEMBER_IDS, DEMO_SCENARIOS } from '../src/demo/demo.service';
+import { getDefaultCoachId } from '../src/schedule/default-coach';
 
 const BCRYPT_ROUNDS = 12;
 const KY_ZONE = 'Europe/Kyiv';
@@ -56,6 +57,9 @@ async function main() {
     await db.insert(admins).values({ username: DEMO_ADMIN.username, passwordHash: adminHash });
     console.log('  Created demo admin');
   }
+
+  // Slots belong to the first coach account, like the app's default schedule
+  const coachId = (await getDefaultCoachId(db as never))!;
 
   console.log('Seeding background demo members...');
   const recoveryPlaceholder = await bcrypt.hash('demo-recovery', BCRYPT_ROUNDS);
@@ -137,8 +141,8 @@ async function main() {
       await db
         .insert(trainingSlots)
         .values([
-          { trainingDayId: day.id, slotTime: '19:00', status: 'ACTIVE', capacity: 8, bookedCount: 0 },
-          { trainingDayId: day.id, slotTime: '20:00', status: 'ACTIVE', capacity: 8, bookedCount: 0 },
+          { trainingDayId: day.id, slotTime: '19:00', status: 'ACTIVE', capacity: 8, bookedCount: 0, coachId },
+          { trainingDayId: day.id, slotTime: '20:00', status: 'ACTIVE', capacity: 8, bookedCount: 0, coachId },
         ])
         .onConflictDoNothing();
     }

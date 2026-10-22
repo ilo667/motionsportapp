@@ -1,21 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
-import { and, eq, gte, lte, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { trainingDays, trainingSlots, bookings, vacancyAlerts, announcements, slotMembers } from '../database/schema';
+import {
+  trainingDays,
+  trainingSlots,
+  bookings,
+  vacancyAlerts,
+  announcements,
+  slotMembers,
+} from '../database/schema';
 import { DemoService } from '../demo/demo.service';
 import { PaymentService } from '../payment/payment.service';
-import { GROUP_SLOT_TIMES, GROUP_TYPE, KY_ZONE, ASSIGNED_TYPES, slotStartsAt } from './training-types';
+import {
+  GROUP_SLOT_TIMES,
+  GROUP_TYPE,
+  KY_ZONE,
+  ASSIGNED_TYPES,
+  slotStartsAt,
+} from './training-types';
+import { getDefaultCoachId } from './default-coach';
 
-const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
-const SLOT_TIMES = GROUP_SLOT_TIMES;
 // An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
 const ASSIGNED_SHOWN_FOR_MINUTES = 60;
 
 type DayRow = typeof trainingDays.$inferSelect;
 
+// Group trainings appear by themselves on these weekdays, so they exist even if the coach forgets
+const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
+const DEFAULT_HORIZON_DAYS = 21;
+
 @Injectable()
 export class ScheduleService {
+  // Date on which this instance last created the default group slots (see ensureDefaultGroupSlots)
+  private defaultSlotsEnsuredFor: string | null = null;
+
   constructor(
     private readonly database: DatabaseService,
     private readonly demoService: DemoService,
@@ -24,51 +43,70 @@ export class ScheduleService {
 
   async getNext(memberId?: string) {
     await this.paymentService.expireStale();
-    await this.materializeUpcoming(21);
+    await this.ensureDefaultGroupSlots();
 
     const now = await this.demoService.getNow();
     const today = now.toISODate()!;
 
-    const assignedSlots = memberId ? await this.getAssignedSlots(memberId, now) : [];
+    const assignedSlots = memberId
+      ? await this.getAssignedSlots(memberId, now)
+      : [];
 
     // "Наступне тренування" is the next group day; days with only assigned trainings are skipped
     const upcoming = await this.withGroupSlots(
       await this.database.db
         .select()
         .from(trainingDays)
-        .where(and(gte(trainingDays.localDate, today), eq(trainingDays.status, 'SCHEDULED')))
+        .where(
+          and(
+            gte(trainingDays.localDate, today),
+            eq(trainingDays.status, 'SCHEDULED'),
+          ),
+        )
         .orderBy(trainingDays.localDate)
         .limit(10),
     );
 
-    let targetDay = upcoming.find((day) => {
-      const closeAt = DateTime.fromISO(`${day.localDate}T21:00:00`, { zone: KY_ZONE });
+    const targetDay = upcoming.find((day) => {
+      const closeAt = DateTime.fromISO(`${day.localDate}T21:00:00`, {
+        zone: KY_ZONE,
+      });
       return now < closeAt;
     });
 
+    // No group day ahead (e.g. the coach cancelled them): the member still gets their assigned trainings
     if (!targetDay) {
-      await this.materializeUpcoming(42);
-      const more = await this.withGroupSlots(
-        await this.database.db
-          .select()
-          .from(trainingDays)
-          .where(and(gte(trainingDays.localDate, today), eq(trainingDays.status, 'SCHEDULED')))
-          .orderBy(trainingDays.localDate)
-          .limit(10),
-      );
-      targetDay = more[0];
+      return {
+        localDate: null,
+        status: null,
+        bookingWindowOpen: false,
+        bookingOpenAt: null,
+        bookingCloseAt: null,
+        slots: [],
+        assignedSlots,
+        serverTime: now.toUTC().toISO(),
+        announcement: null,
+        isDemoMode: this.demoService.isDemoMode(),
+      };
     }
 
-    if (!targetDay) return null;
-
-    const openAt = DateTime.fromISO(`${targetDay.localDate}T14:00:00`, { zone: KY_ZONE });
-    const closeAt = DateTime.fromISO(`${targetDay.localDate}T21:00:00`, { zone: KY_ZONE });
+    const openAt = DateTime.fromISO(`${targetDay.localDate}T14:00:00`, {
+      zone: KY_ZONE,
+    });
+    const closeAt = DateTime.fromISO(`${targetDay.localDate}T21:00:00`, {
+      zone: KY_ZONE,
+    });
     const bookingWindowOpen = now >= openAt && now < closeAt;
 
     const slots = await this.database.db
       .select()
       .from(trainingSlots)
-      .where(and(eq(trainingSlots.trainingDayId, targetDay.id), eq(trainingSlots.trainingType, GROUP_TYPE)))
+      .where(
+        and(
+          eq(trainingSlots.trainingDayId, targetDay.id),
+          eq(trainingSlots.trainingType, GROUP_TYPE),
+        ),
+      )
       .orderBy(trainingSlots.slotTime);
 
     let myBookingSlotId: string | null = null;
@@ -78,12 +116,18 @@ export class ScheduleService {
 
     if (memberId && slots.length > 0) {
       const [mine] = await this.database.db
-        .select({ slotId: bookings.slotId, paymentStatus: bookings.paymentStatus })
+        .select({
+          slotId: bookings.slotId,
+          paymentStatus: bookings.paymentStatus,
+        })
         .from(bookings)
         .where(
           and(
             eq(bookings.memberId, memberId),
-            inArray(bookings.slotId, slots.map((s) => s.id)),
+            inArray(
+              bookings.slotId,
+              slots.map((s) => s.id),
+            ),
             eq(bookings.status, 'ACTIVE'),
           ),
         )
@@ -108,12 +152,16 @@ export class ScheduleService {
     }
 
     const [ann] = await this.database.db
-      .select({ text: announcements.text, publishedAt: announcements.publishedAt })
+      .select({
+        text: announcements.text,
+        publishedAt: announcements.publishedAt,
+      })
       .from(announcements)
       .where(eq(announcements.trainingDayId, targetDay.id))
       .limit(1);
 
-    const announcement = bookingWindowOpen && ann?.publishedAt && ann.text ? ann.text : null;
+    const announcement =
+      bookingWindowOpen && ann?.publishedAt && ann.text ? ann.text : null;
 
     return {
       localDate: targetDay.localDate,
@@ -145,7 +193,15 @@ export class ScheduleService {
     const rows = await this.database.db
       .selectDistinct({ dayId: trainingSlots.trainingDayId })
       .from(trainingSlots)
-      .where(and(inArray(trainingSlots.trainingDayId, days.map((d) => d.id)), eq(trainingSlots.trainingType, GROUP_TYPE)));
+      .where(
+        and(
+          inArray(
+            trainingSlots.trainingDayId,
+            days.map((d) => d.id),
+          ),
+          eq(trainingSlots.trainingType, GROUP_TYPE),
+        ),
+      );
     const withGroup = new Set(rows.map((r) => r.dayId));
     return days.filter((d) => withGroup.has(d.id));
   }
@@ -163,7 +219,13 @@ export class ScheduleService {
       })
       .from(trainingSlots)
       .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
-      .innerJoin(slotMembers, and(eq(slotMembers.slotId, trainingSlots.id), eq(slotMembers.memberId, memberId)))
+      .innerJoin(
+        slotMembers,
+        and(
+          eq(slotMembers.slotId, trainingSlots.id),
+          eq(slotMembers.memberId, memberId),
+        ),
+      )
       .where(
         and(
           gte(trainingDays.localDate, now.toISODate()!),
@@ -175,18 +237,28 @@ export class ScheduleService {
       .orderBy(trainingDays.localDate, trainingSlots.slotTime);
 
     const visible = rows.filter(
-      (r) => now < slotStartsAt(r.localDate, r.slotTime).plus({ minutes: ASSIGNED_SHOWN_FOR_MINUTES }),
+      (r) =>
+        now <
+        slotStartsAt(r.localDate, r.slotTime).plus({
+          minutes: ASSIGNED_SHOWN_FOR_MINUTES,
+        }),
     );
     if (visible.length === 0) return [];
 
     const mine = await this.database.db
-      .select({ slotId: bookings.slotId, paymentStatus: bookings.paymentStatus })
+      .select({
+        slotId: bookings.slotId,
+        paymentStatus: bookings.paymentStatus,
+      })
       .from(bookings)
       .where(
         and(
           eq(bookings.memberId, memberId),
           eq(bookings.status, 'ACTIVE'),
-          inArray(bookings.slotId, visible.map((r) => r.id)),
+          inArray(
+            bookings.slotId,
+            visible.map((r) => r.id),
+          ),
         ),
       );
 
@@ -202,49 +274,64 @@ export class ScheduleService {
     });
   }
 
-  async materializeUpcoming(days: number) {
+  // Mon/Wed/Fri 19:00 and 20:00 group slots for the next 3 weeks, owned by the first coach. Idempotent:
+  // a time already taken (by any training, even a cancelled one) is left alone, and days the coach
+  // cancelled are skipped, so the coach's changes are never undone
+  async ensureDefaultGroupSlots() {
     const now = await this.demoService.getNow();
+    // Runs on every schedule load (polled every 5 s in the booking window): once per day per instance is enough,
+    // the horizon only moves at midnight
     const today = now.toISODate()!;
-    const endDate = now.plus({ days }).toISODate()!;
+    if (this.defaultSlotsEnsuredFor === today) return;
 
-    const needed: string[] = [];
-    for (let i = 0; i < days; i++) {
+    const dates: string[] = [];
+    for (let i = 0; i < DEFAULT_HORIZON_DAYS; i++) {
       const d = now.plus({ days: i });
-      if (DEFAULT_WEEKDAYS.includes(d.weekday)) needed.push(d.toISODate()!);
+      if (DEFAULT_WEEKDAYS.includes(d.weekday)) dates.push(d.toISODate()!);
     }
-    if (needed.length === 0) return;
+    if (dates.length === 0) return;
 
-    const existing = await this.database.db
-      .select({ localDate: trainingDays.localDate })
-      .from(trainingDays)
-      .where(and(gte(trainingDays.localDate, today), lte(trainingDays.localDate, endDate)));
-
-    const existingSet = new Set(existing.map((d) => d.localDate));
-    const missing = needed.filter((d) => !existingSet.has(d));
-    if (missing.length === 0) return;
+    const coachId = await getDefaultCoachId(this.database.db);
+    if (!coachId) return; // no coach account yet
 
     await this.database.db
       .insert(trainingDays)
-      .values(missing.map((localDate) => ({ localDate, status: 'SCHEDULED', isException: false })))
+      .values(
+        dates.map((localDate) => ({
+          localDate,
+          status: 'SCHEDULED',
+          isException: false,
+        })),
+      )
       .onConflictDoNothing();
 
-    const newDays = await this.database.db
-      .select()
+    const days = await this.database.db
+      .select({ id: trainingDays.id })
       .from(trainingDays)
-      .where(inArray(trainingDays.localDate, missing));
-
-    if (newDays.length === 0) return;
-
-    const slotValues = newDays.flatMap((day) =>
-      SLOT_TIMES.map((slotTime) => ({
-        trainingDayId: day.id,
-        slotTime,
-        status: 'ACTIVE' as const,
-        capacity: 8,
-        bookedCount: 0,
-      })),
-    );
-
-    await this.database.db.insert(trainingSlots).values(slotValues).onConflictDoNothing();
+      .where(
+        and(
+          inArray(trainingDays.localDate, dates),
+          eq(trainingDays.status, 'SCHEDULED'),
+        ),
+      );
+    if (days.length > 0) {
+      await this.database.db
+        .insert(trainingSlots)
+        .values(
+          days.flatMap((day) =>
+            GROUP_SLOT_TIMES.map((slotTime) => ({
+              trainingDayId: day.id,
+              slotTime,
+              status: 'ACTIVE' as const,
+              trainingType: GROUP_TYPE,
+              capacity: 8,
+              bookedCount: 0,
+              coachId,
+            })),
+          ),
+        )
+        .onConflictDoNothing();
+    }
+    this.defaultSlotsEnsuredFor = today;
   }
 }

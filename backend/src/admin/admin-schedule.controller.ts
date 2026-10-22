@@ -30,8 +30,13 @@ export class AdminScheduleController {
   constructor(private readonly adminScheduleService: AdminScheduleService) {}
 
   @Get('schedule')
-  getSchedule() {
-    return this.adminScheduleService.getSchedule();
+  getSchedule(@CurrentUser() user: SessionUser) {
+    return this.adminScheduleService.getSchedule(user.id);
+  }
+
+  @Get('history')
+  getHistory(@CurrentUser() user: SessionUser, @Query('before') before?: string) {
+    return this.adminScheduleService.getHistory(user.id, before && /^\d{4}-\d{2}-\d{2}$/.test(before) ? before : undefined);
   }
 
   @Get('members')
@@ -59,8 +64,8 @@ export class AdminScheduleController {
   }
 
   @Get('slots/:slotId/cancellations')
-  getSlotCancellations(@Param('slotId', ParseUUIDPipe) slotId: string) {
-    return this.adminScheduleService.getSlotCancellations(slotId);
+  getSlotCancellations(@Param('slotId', ParseUUIDPipe) slotId: string, @CurrentUser() user: SessionUser) {
+    return this.adminScheduleService.getSlotCancellations(user.id, slotId);
   }
 
   @Patch('members/:memberId/note')
@@ -73,8 +78,8 @@ export class AdminScheduleController {
   }
 
   @Get('calendar')
-  getCalendar(@Query('month') month: string) {
-    return this.adminScheduleService.getCalendar(month);
+  getCalendar(@Query('month') month: string, @CurrentUser() user: SessionUser) {
+    return this.adminScheduleService.getCalendar(user.id, month);
   }
 
   @Put('training-days/:date')
@@ -82,8 +87,9 @@ export class AdminScheduleController {
   upsertTrainingDay(
     @Param('date') date: string,
     @Body() dto: UpsertTrainingDayDto,
+    @CurrentUser() user: SessionUser,
   ) {
-    return this.adminScheduleService.upsertTrainingDay(date, dto);
+    return this.adminScheduleService.upsertTrainingDay(user.id, date, dto);
   }
 
   // Group slot (19:00 / 20:00). Assigned slots: POST training-days/:date/assigned-slots
@@ -92,25 +98,30 @@ export class AdminScheduleController {
   upsertCalendarSlot(
     @Param('date') date: string,
     @Param('slotTime') slotTime: string,
+    @CurrentUser() user: SessionUser,
   ) {
-    return this.adminScheduleService.upsertGroupSlot(date, slotTime);
+    return this.adminScheduleService.upsertGroupSlot(user.id, date, slotTime);
   }
 
   @Post('training-days/:date/assigned-slots')
-  createAssignedSlot(@Param('date') date: string, @Body() dto: CreateAssignedSlotDto) {
-    return this.adminScheduleService.createAssignedSlot(date, dto);
+  createAssignedSlot(@Param('date') date: string, @Body() dto: CreateAssignedSlotDto, @CurrentUser() user: SessionUser) {
+    return this.adminScheduleService.createAssignedSlot(user.id, date, dto);
   }
 
   @Put('slots/:slotId/members')
   @HttpCode(HttpStatus.OK)
-  updateSlotMembers(@Param('slotId', ParseUUIDPipe) slotId: string, @Body() dto: SlotMembersDto) {
-    return this.adminScheduleService.updateSlotMembers(slotId, dto.memberIds);
+  updateSlotMembers(
+    @Param('slotId', ParseUUIDPipe) slotId: string,
+    @Body() dto: SlotMembersDto,
+    @CurrentUser() user: SessionUser,
+  ) {
+    return this.adminScheduleService.updateSlotMembers(user.id, slotId, dto.memberIds);
   }
 
   @Patch('slots/:slotId')
   @HttpCode(HttpStatus.OK)
-  updateSlot(@Param('slotId') slotId: string, @Body() dto: UpdateSlotDto) {
-    return this.adminScheduleService.updateSlot(slotId, dto);
+  updateSlot(@Param('slotId', ParseUUIDPipe) slotId: string, @Body() dto: UpdateSlotDto, @CurrentUser() user: SessionUser) {
+    return this.adminScheduleService.updateSlot(user.id, slotId, dto);
   }
 
   @Put('slots/:slotId/attendance/all')

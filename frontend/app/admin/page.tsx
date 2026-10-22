@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api, AdminSchedule, Announcement, AnnouncementExample } from "@/lib/api";
 import { SlotCard as AdminSlotCard } from "@/components/admin/SlotCard";
 import DemoControls from "@/components/DemoControls";
@@ -21,6 +22,7 @@ function formatLocalDate(localDate: string): string {
 export default function AdminPage() {
   const router = useRouter();
   const [schedule, setSchedule] = useState<AdminSchedule | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mutateError, setMutateError] = useState("");
   const [confirmCancelDay, setConfirmCancelDay] = useState(false);
@@ -36,6 +38,9 @@ export default function AdminPage() {
     try {
       const data = await api.getAdminSchedule();
       setSchedule(data);
+      setLoadFailed(false);
+      // null: this coach has no upcoming trainings
+      if (!data) return;
       const [ann, exs] = await Promise.all([
         api.getAnnouncement(data.localDate).catch(() => null),
         api.listAnnouncementExamples().catch(() => []),
@@ -46,6 +51,8 @@ export default function AdminPage() {
       const status = (err as { status?: number }).status;
       if ((status === 401 || status === 403) && !authedRef.current) {
         router.push("/admin/login");
+      } else {
+        setLoadFailed(true);
       }
     }
   }, [router]);
@@ -103,8 +110,18 @@ export default function AdminPage() {
 
   if (!schedule) {
     return (
-      <PageLayout variant="top">
-        <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>
+      <PageLayout variant="top" action={<AdminMenu />}>
+        <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-3">
+          Панель тренера
+        </h1>
+        {loadFailed ? (
+          <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>
+        ) : (
+          <p className="text-muted text-sm">
+            Найближчих тренувань немає. Додайте їх у{" "}
+            <Link href="/admin/calendar" className="text-accent hover:underline">календарі</Link>.
+          </p>
+        )}
       </PageLayout>
     );
   }
@@ -172,19 +189,19 @@ export default function AdminPage() {
                 onClick={() => setConfirmCancelDay(true)}
                 className="btn-ghost hover-danger w-full py-3 rounded-lg border text-sm transition-colors"
               >
-                Скасувати весь день
+                Скасувати мої тренування цього дня
               </button>
             ) : (
               <div className="rounded-lg border border-danger bg-danger/5 p-4 space-y-3">
                 <p className="text-danger text-sm">
-                  Скасувати тренування {formatLocalDate(schedule.localDate)}? Всі записи буде відмінено.
+                  Скасувати ваші тренування {formatLocalDate(schedule.localDate)}? Усі записи на них буде відмінено. Тренування інших тренерів залишаться.
                 </p>
                 <div className="flex space-x-2">
                   <button
                     onClick={handleCancelDay}
                     className="btn-danger flex-1 py-2.5 rounded-md text-sm font-medium transition-colors"
                   >
-                    Скасувати день
+                    Скасувати
                   </button>
                   <button
                     onClick={() => setConfirmCancelDay(false)}

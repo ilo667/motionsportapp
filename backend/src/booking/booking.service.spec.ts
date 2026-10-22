@@ -192,10 +192,10 @@ describe('BookingService — switch slot', () => {
   });
 });
 describe('BookingService — coach push with the reason', () => {
-  it('sends MEMBER_CANCELLED with the reason when a member cancels', async () => {
+  it('sends MEMBER_CANCELLED with the reason to the coach of that training', async () => {
     const booking = { id: 'booking-1', slotId: 'slot-1', trainingDayId: 'day-1', memberId: 'member-1', status: 'ACTIVE' };
-    const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '19:00', trainingType: 'групові' };
-    const { db } = makeDb([[booking], [validDay], [groupSlot], [{ displayName: 'Оля', coachId: 'coach-1' }]]);
+    const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '19:00', trainingType: 'групові', coachId: 'coach-1' };
+    const { db } = makeDb([[booking], [validDay], [groupSlot], [{ displayName: 'Оля' }]]);
     const service = makeService(db, kyivAt(17));
     await service.cancel('member-1', 'slot-1', 'Захворіла');
 

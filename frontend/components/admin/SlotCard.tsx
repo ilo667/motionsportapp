@@ -1,29 +1,12 @@
 "use client";
 import { useState } from "react";
-import { api, AdminSlotView, AttendanceStatus } from "@/lib/api";
+import { api, AdminSlotView } from "@/lib/api";
 import { CancellationList } from "./CancellationList";
+import { AttendanceButton } from "./AttendanceButton";
 
 interface SlotCardProps {
   slot: AdminSlotView;
   onMutate: (fn: () => Promise<unknown>) => Promise<void>;
-}
-
-const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
-  PRESENT: "✓",
-  ABSENT: "✗",
-  UNMARKED: "—",
-};
-
-const ATTENDANCE_COLORS: Record<AttendanceStatus, string> = {
-  PRESENT: "bg-teal/10 text-teal border-teal",
-  ABSENT: "bg-danger/10 text-danger border-danger",
-  UNMARKED: "bg-surface text-body border-muted",
-};
-
-function nextStatus(current: AttendanceStatus): AttendanceStatus {
-  if (current === "UNMARKED") return "PRESENT";
-  if (current === "PRESENT") return "ABSENT";
-  return "UNMARKED";
 }
 
 export function SlotCard({ slot, onMutate }: SlotCardProps) {
@@ -72,18 +55,12 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                       <span className="ml-2 text-xs text-amber-400">з {p.switchedFromTime}</span>
                     )}
                   </span>
-                  <button
-                    disabled={allPresent}
-                    onClick={() =>
-                      onMutate(() =>
-                        api.updateAttendance(p.bookingId, nextStatus(p.attendanceStatus))
-                      )
-                    }
-                    title={`Змінити відвідуваність: ${p.attendanceStatus}`}
-                    className={`w-8 h-8 rounded-full border text-xs font-bold shrink-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${ATTENDANCE_COLORS[p.attendanceStatus]}`}
-                  >
-                    {ATTENDANCE_LABELS[p.attendanceStatus]}
-                  </button>
+                  {/* Editable after "Підтвердити всіх" too: the coach can fix a mistake */}
+                  <AttendanceButton
+                    status={p.attendanceStatus}
+                    name={p.displayName}
+                    onChange={(next) => onMutate(() => api.updateAttendance(p.bookingId, next))}
+                  />
                 </li>
               ))}
             </ul>

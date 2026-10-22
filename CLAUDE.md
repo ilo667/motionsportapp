@@ -62,6 +62,8 @@ Auth endpoints:
   - group slots: `PUT /admin/training-days/:date/slots/:slotTime` (19:00 / 20:00 only); assigned: `POST /admin/training-days/:date/assigned-slots` `{slotTime, trainingType, memberIds}`, `PUT /admin/slots/:id/members`
   - cancellation reasons: `GET /admin/slots/:id/cancellations`, `GET /admin/members/:id/cancellations`; `GET /admin/schedule` slots carry `cancellations` and participants' `switchedFromTime`; `GET /admin/members` has `recentCancellations` (30 days, moves not counted)
   - coaches: `GET /admin/coaches` (id + username), `PATCH /admin/members/:id/coach` `{coachId}`
+  - history: `GET /admin/history?before=YYYY-MM-DD` — past training days (before today), newest first, 14 per page, `nextBefore` cursor; slots built by the same `buildSlotViews` as `GET /admin/schedule` (participants + attendance, «з 19:00», cancellations). Each coach sees only own trainings
+  - attendance is **editable at any time** (today page and history) via `PATCH /admin/bookings/:id/attendance`; "Підтвердити всіх" no longer locks the marks
   - `members.trainer_note` is a **coach-only** note (max 300). Member-facing code must select explicit columns and never return it (SessionGuard and `/auth/me` already do)
 - `NotificationsModule` — push subscriptions, vacancy alerts, internal cron
   - `/internal/cron/*` routes must be **`@Get`** — Vercel Cron invokes with GET (`vercel-cron/1.0`); a POST route answers 404 and the job silently never runs. Protected by `CRON_SECRET` (`Authorization: Bearer …`, sent by Vercel automatically); missing secret in production → 403. Trigger manually: `vercel crons run /internal/cron/<job>`. Hobby plan: once per day, any minute within the scheduled hour
@@ -76,12 +78,15 @@ Auth endpoints:
 
 ### Coaches — rules
 
-- Every `admins` row is a coach; all coaches are equal (no head coach yet). Schedule, calendar and attendance are **shared**; only the clients list is per coach.
-- `members.coach_id` → `admins.id`; null = not assigned (new registrations). A coach sees **own + unassigned** clients (`visibleTo(adminId)` in `AdminScheduleService`): clients list, note edit, cancellation history and reassign all go through it, so another coach's client answers 404.
-- Reassign: the current coach (or anyone, for an unassigned client) picks a coach under the client's name; «Забрати собі» claims an unassigned one. The trainer note moves with the client.
-- Coach push (`MEMBER_CANCELLED`) goes to the client's coach only; for an unassigned client, to every coach.
-- Calendar member picker lists own + unassigned clients, plus members already on the edited training (so another coach's client isn't dropped on save).
-- Add a coach: `ADMIN_USERNAME=… ADMIN_PASSWORD=… npm run seed:admin` (in `backend/`; command-line vars win over `.env`). Migration: `node backend/scripts/migrate-member-coach.js` (assigns existing members to the coach while there is only one).
+- A coach **is** an `admins` account (e.g. `admin`, `demo`); there is no separate coach entity. All coaches are equal (no head coach yet).
+- **Everything a coach sees in the admin is their own**: trainings (`training_slots.coach_id`, NOT NULL), clients (`members.coach_id`), today page, calendar, history. Another coach's slot, booking or client answers **404** like a missing one (`ownSlot()` / `visibleTo()` in `AdminScheduleService`). Members still see every coach's group slots.
+- One gym: `training_slots` stays UNIQUE (day, time). In the calendar other coaches' slots come as `{ isMine: false }` busy times (grey «Зайнято», `interactive: false`), with no type, counts or names.
+- **Default group trainings appear by themselves**: `ScheduleService.ensureDefaultGroupSlots()` (on `GET /schedule/next`, once per day per instance) adds 19:00 and 20:00 to every Mon/Wed/Fri for 3 weeks ahead, owned by the first coach account (`getDefaultCoachId()` = oldest `admins` row). They are real rows, so they show in the calendar and the coach edits or cancels them like any training. It never overwrites: a time already taken (even by a cancelled slot) is left alone and CANCELLED days are skipped. Demo scenario slots also belong to the first coach.
+- With no group training ahead, `GET /schedule/next` returns `localDate: null` and empty `slots`, but still the member's `assignedSlots`.
+- «Скасувати мої тренування цього дня» cancels only this coach's slots; the day becomes CANCELLED only when no active slot is left on it.
+- Clients: a coach sees **own + unassigned** clients («Без тренера», «Забрати собі»), reassigns under the client's name; the trainer note moves with the client. Assigned trainings can only be given to own/unassigned clients (members already on the slot may stay).
+- Coach push (`MEMBER_CANCELLED`) goes to the coach **whose training** it is.
+- Add a coach: `ADMIN_USERNAME=… ADMIN_PASSWORD=… npm run seed:admin` (in `backend/`). Migrations: `migrate-member-coach.js`, `migrate-slot-coach.js` (existing slots → first coach; run it before deploy, then `migrate-slot-coach.js finalize` after deploy for NOT NULL).
 
 ### Cancellation reasons — rules
 

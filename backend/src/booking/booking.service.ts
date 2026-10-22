@@ -115,6 +115,7 @@ export class BookingService {
         capacity: trainingSlots.capacity,
         slotTime: trainingSlots.slotTime,
         trainingType: trainingSlots.trainingType,
+        coachId: trainingSlots.coachId,
       })
       .from(trainingSlots)
       .where(eq(trainingSlots.id, booking.slotId))
@@ -152,7 +153,7 @@ export class BookingService {
     }
 
     if (day && slotBefore) {
-      await this.notifyCoach(booking.id, memberId, slotBefore.slotTime, day.localDate, reason, null);
+      await this.notifyCoach(booking.id, memberId, slotBefore.coachId, slotBefore.slotTime, day.localDate, reason, null);
     }
 
     return { ok: true };
@@ -189,7 +190,12 @@ export class BookingService {
     const oldSlotId = current.slotId;
 
     const [oldSlotBefore] = await this.database.db
-      .select({ bookedCount: trainingSlots.bookedCount, capacity: trainingSlots.capacity, slotTime: trainingSlots.slotTime })
+      .select({
+        bookedCount: trainingSlots.bookedCount,
+        capacity: trainingSlots.capacity,
+        slotTime: trainingSlots.slotTime,
+        coachId: trainingSlots.coachId,
+      })
       .from(trainingSlots)
       .where(eq(trainingSlots.id, oldSlotId))
       .limit(1);
@@ -273,16 +279,17 @@ export class BookingService {
     }
 
     if (day && oldSlotBefore) {
-      await this.notifyCoach(current.id, memberId, oldSlotBefore.slotTime, day.localDate, reason, target.slotTime);
+      await this.notifyCoach(current.id, memberId, oldSlotBefore.coachId, oldSlotBefore.slotTime, day.localDate, reason, target.slotTime);
     }
 
     return { ok: true };
   }
 
-  // Push to the coach with the member's reason. A failed push must not fail the member's action
+  // Push to the coach whose training it is, with the member's reason. A failed push must not fail the member's action
   private async notifyCoach(
     bookingId: string,
     memberId: string,
+    coachId: string,
     slotTime: string,
     localDate: string,
     reason: string,
@@ -290,13 +297,13 @@ export class BookingService {
   ) {
     try {
       const [member] = await this.database.db
-        .select({ displayName: members.displayName, coachId: members.coachId })
+        .select({ displayName: members.displayName })
         .from(members)
         .where(eq(members.id, memberId))
         .limit(1);
       await this.notifications.enqueueAndProcess('MEMBER_CANCELLED', `member-cancelled:${bookingId}`, {
         displayName: member?.displayName ?? '',
-        coachId: member?.coachId ?? null,
+        coachId,
         slotTime,
         localDate,
         reason,

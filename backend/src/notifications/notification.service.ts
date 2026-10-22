@@ -128,7 +128,7 @@ export class NotificationService {
     const title = switchedToTime
       ? `Перенесення ${slotTime} → ${switchedToTime}, ${this.fmtDate(localDate)}`
       : `Скасування ${slotTime}, ${this.fmtDate(localDate)}`;
-    // The member's coach only; an unassigned member's news goes to every coach
+    // The coach whose training it is (older events without coachId go to every coach)
     const subscriptions = coachId ? await this.subs.findAdminByAdminId(coachId) : await this.subs.findAllAdmin();
     for (const sub of subscriptions) {
       const result = await this.push.send(sub, { title, body: `${displayName}: ${reason}`, icon: ICON, url: '/admin' });

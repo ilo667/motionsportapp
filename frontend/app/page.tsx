@@ -30,6 +30,8 @@ function nextPollDelay(data: ScheduleNext | undefined): number {
   if (data.bookingWindowOpen) return POLL_OPEN_MS;
 
   const serverNow = Date.parse(data.serverTime);
+  // No group day in the calendar: nothing to wake up for except the safety refresh
+  if (!data.bookingOpenAt || !data.bookingCloseAt) return POLL_IDLE_MAX_MS;
   const openAt = Date.parse(data.bookingOpenAt);
   const closeAt = Date.parse(data.bookingCloseAt);
   // Window should be open by now but server still says closed (clock skew) — retry soon
@@ -182,8 +184,8 @@ export default function SchedulePage() {
   }
 
   const now = schedule ? new Date(schedule.serverTime) : null;
-  const openAt = schedule ? new Date(schedule.bookingOpenAt) : null;
-  const closeAt = schedule ? new Date(schedule.bookingCloseAt) : null;
+  const openAt = schedule?.bookingOpenAt ? new Date(schedule.bookingOpenAt) : null;
+  const closeAt = schedule?.bookingCloseAt ? new Date(schedule.bookingCloseAt) : null;
   const beforeWindow = now && openAt ? now < openAt : false;
   const afterWindow = now && closeAt ? now >= closeAt : false;
 
@@ -195,6 +197,10 @@ export default function SchedulePage() {
             Наступне тренування
           </h1>
 
+          {!schedule.localDate ? (
+            <p className="text-muted text-sm mb-4">Групових тренувань поки не заплановано.</p>
+          ) : (
+          <>
           <p className="text-muted text-sm mb-4 capitalize">
             {formatLocalDate(schedule.localDate)}
           </p>
@@ -237,6 +243,8 @@ export default function SchedulePage() {
               />
             ))}
           </div>
+          </>
+          )}
 
           {!!schedule.assignedSlots?.length && (
             <>
