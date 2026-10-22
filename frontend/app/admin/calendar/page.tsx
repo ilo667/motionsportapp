@@ -27,6 +27,13 @@ const TYPE_LABELS: Record<TrainingType, string> = {
   спліт: "Спліт",
 };
 
+// Short labels for calendar events — full names don't fit a day column
+const TYPE_SHORT: Record<TrainingType, string> = {
+  групові: "Груп.",
+  індивідуальні: "Інд.",
+  спліт: "Спліт",
+};
+
 const TYPES: TrainingType[] = ["групові", "індивідуальні", "спліт"];
 const SLOT_TIMES = ["19:00", "20:00"] as const;
 
@@ -78,7 +85,7 @@ export default function CalendarPage() {
     const colors = TYPE_COLORS[s.trainingType];
     return {
       id: s.slotId,
-      title: `${TYPE_LABELS[s.trainingType]} · ${s.bookedCount}/${s.capacity}`,
+      title: `${TYPE_SHORT[s.trainingType]} · ${s.bookedCount}/${s.capacity}`,
       // Timed events (1 h) so the week-with-hours view places them on their hour; the time is shown by FullCalendar
       start: `${s.localDate}T${s.slotTime}:00`,
       end: `${s.localDate}T${s.slotTime === "19:00" ? "20:00" : "21:00"}:00`,
@@ -217,6 +224,11 @@ export default function CalendarPage() {
           slotMinTime="17:00:00"
           slotMaxTime="22:00:00"
           allDaySlot={false}
+          eventDisplay="block"
+          views={{
+            // "26 жовт. – 1 лист." instead of "жовт. 2026 р. – лист. 2026 р.", which pushed the view buttons to a new row
+            timeGridWeek: { titleFormat: { day: "numeric", month: "short" } },
+          }}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           fixedWeekCount={false}
         />}
