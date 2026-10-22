@@ -44,6 +44,17 @@ describe('liqpay helper', () => {
     const sig = liqpaySign(privateKey, data);
     expect(liqpayVerify('wrong_key', data, sig)).toBe(false);
   });
+
+  it('verify returns false (does not throw) for signature of different length', () => {
+    const data = liqpayEncode(params);
+    expect(liqpayVerify(privateKey, data, 'short')).toBe(false);
+  });
+
+  it('verify returns false for empty or missing signature', () => {
+    const data = liqpayEncode(params);
+    expect(liqpayVerify(privateKey, data, '')).toBe(false);
+    expect(liqpayVerify(privateKey, data, undefined as unknown as string)).toBe(false);
+  });
 });
 
 // ── PaymentService ─────────────────────────────────────────────────────────

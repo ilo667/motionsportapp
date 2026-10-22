@@ -13,7 +13,10 @@ export function liqpayDecode(data: string): Record<string, unknown> {
 }
 
 export function liqpayVerify(privateKey: string, data: string, signature: string): boolean {
-  return liqpaySign(privateKey, data) === signature;
+  const expected = Buffer.from(liqpaySign(privateKey, data));
+  const actual = Buffer.from(signature ?? '');
+  // timingSafeEqual throws on length mismatch, so check the length first
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
 const LIQPAY_API_URL = 'https://www.liqpay.ua/api/request';
