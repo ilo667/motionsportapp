@@ -9,6 +9,8 @@ import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } fr
 const PAYMENT_TYPES = ASSIGNED_TYPES;
 const SUCCESS_STATUSES = ['success', 'sandbox'];
 const FAILED_STATUSES = ['failure', 'error', 'reversed'];
+// Stale PENDING payments handled per expireStale() run; the rest wait for the next schedule load
+const EXPIRE_BATCH = 10;
 
 // REPLACED: superseded by a newer attempt for the same booking (member pressed "Оплатити" again)
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'REPLACED';
@@ -290,32 +292,34 @@ export class PaymentService {
     const stale = await this.database.db
       .select({ id: payments.id, bookingId: payments.bookingId, orderId: payments.orderId })
       .from(payments)
-      .where(and(eq(payments.status, 'PENDING'), lt(payments.createdAt, cutoff)));
+      .where(and(eq(payments.status, 'PENDING'), lt(payments.createdAt, cutoff)))
+      .limit(EXPIRE_BATCH);
 
-    let expired = 0;
-
-    for (const p of stale) {
-      // Reconcile before cancelling — the callback may have been lost while the member actually paid
-      const remote = await this.fetchLiqpayStatus(p.orderId);
-      if (!remote) {
-        this.logger.warn(`Expire: order=${p.orderId} skipped — LiqPay unreachable, retry next run`);
-        continue; // retry next run rather than cancel a possibly paid booking
-      }
-      if (remote.result === 'ok' && SUCCESS_STATUSES.includes(remote.status as string)) {
-        this.logger.warn(`Expire: order=${p.orderId} was actually paid (lost callback) → PAID`);
-        await this.applyLiqpayStatus(p, remote);
-        continue;
-      }
-
-      if (await this.cancelPayment(p, 'EXPIRED')) {
-        this.logger.log(`Expire: order=${p.orderId} → EXPIRED, booking=${p.bookingId} cancelled`);
-        expired++;
-      } else {
-        this.logger.log(`Expire: order=${p.orderId} skipped — already handled by another request`);
-      }
-    }
-
+    // In parallel: runs on every schedule load, so a slow LiqPay costs one timeout, not one per payment
+    const results = await Promise.all(stale.map((p) => this.expireOne(p)));
+    const expired = results.filter(Boolean).length;
     return { expired };
+  }
+
+  // true when this call cancelled the payment
+  private async expireOne(p: { id: string; bookingId: string; orderId: string }): Promise<boolean> {
+    // Reconcile before cancelling — the callback may have been lost while the member actually paid
+    const remote = await this.fetchLiqpayStatus(p.orderId);
+    if (!remote) {
+      this.logger.warn(`Expire: order=${p.orderId} skipped — LiqPay unreachable, retry next run`);
+      return false; // retry next run rather than cancel a possibly paid booking
+    }
+    if (remote.result === 'ok' && SUCCESS_STATUSES.includes(remote.status as string)) {
+      this.logger.warn(`Expire: order=${p.orderId} was actually paid (lost callback) → PAID`);
+      await this.applyLiqpayStatus(p, remote);
+      return false;
+    }
+    if (await this.cancelPayment(p, 'EXPIRED')) {
+      this.logger.log(`Expire: order=${p.orderId} → EXPIRED, booking=${p.bookingId} cancelled`);
+      return true;
+    }
+    this.logger.log(`Expire: order=${p.orderId} skipped — already handled by another request`);
+    return false;
   }
 
   // Single place that maps a LiqPay status onto our payment + booking.

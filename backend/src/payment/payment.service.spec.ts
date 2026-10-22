@@ -320,6 +320,20 @@ describe('PaymentService — expireStale', () => {
     expect(sets).toContainEqual(expect.objectContaining({ status: 'EXPIRED' }));
     expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED' }));
   });
+
+  it('asks LiqPay about all stale payments at once, not one after another', async () => {
+    // Every status call stays unanswered until all of them have started
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    mockLiqpayStatus.mockImplementation(async () => {
+      if (mockLiqpayStatus.mock.calls.length === 2) release();
+      await gate;
+      return { result: 'error', status: 'error', err_code: 'payment_not_found' };
+    });
+    const { db } = makeDb([[stale, { id: 'pay-2', bookingId: 'booking-2', orderId: 'mg-2' }]]);
+    await expect(makeService(db).expireStale()).resolves.toEqual({ expired: 2 });
+    expect(mockLiqpayStatus).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('PaymentService — resume PENDING checkout', () => {
