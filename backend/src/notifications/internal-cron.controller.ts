@@ -13,6 +13,7 @@ import { AnnouncementsService } from '../ai/announcements.service';
 import { DemoService } from '../demo/demo.service';
 import { PaymentService } from '../payment/payment.service';
 import { trainingDays, trainingSlots, bookings, attendance, admins } from '../database/schema';
+import { GROUP_TYPE } from '../schedule/training-types';
 
 const KY_ZONE = 'Europe/Kyiv';
 
@@ -45,6 +46,10 @@ export class InternalCronController {
 
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
+    }
+    // A day with only personal trainings has nothing to book for everyone
+    if (!(await this.hasActiveGroupSlots(day.id))) {
+      return { ok: true, skipped: 'no group trainings today' };
     }
 
     const openAt = DateTime.fromISO(`${today}T14:00:00`, { zone: KY_ZONE });
@@ -84,6 +89,10 @@ export class InternalCronController {
 
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
+    }
+    // The announcement is shown with group slots only
+    if (!(await this.hasActiveGroupSlots(day.id))) {
+      return { ok: true, skipped: 'no group trainings today' };
     }
 
     await this.announcementsService.autoGenerate(todayAnn);
@@ -154,6 +163,21 @@ export class InternalCronController {
   async expirePayments(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);
     return this.paymentService.expireStale();
+  }
+
+  private async hasActiveGroupSlots(dayId: string) {
+    const [slot] = await this.database.db
+      .select({ id: trainingSlots.id })
+      .from(trainingSlots)
+      .where(
+        and(
+          eq(trainingSlots.trainingDayId, dayId),
+          eq(trainingSlots.trainingType, GROUP_TYPE),
+          eq(trainingSlots.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+    return !!slot;
   }
 
   private verifyCronSecret(auth: string | undefined) {

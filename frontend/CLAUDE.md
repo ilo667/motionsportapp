@@ -6,8 +6,9 @@ Next.js 16 App Router PWA. Backend API runs on port 3001 (proxied via `/api` rew
 
 Key files:
 - `app/` — pages: `/` (schedule + unauthenticated landing), `/login`, `/register`, `/forgot`, `/admin`, `/admin/login`, `/admin/calendar`, `/admin/clients`, `/payment/return`, `/demo`
-- `components/` — `Header`, `MotionGymLogo`, `PageLayout`, `LoginForm` (member/admin login), `PaymentResult` (`/payment/return` status), `SwRegister`, `SlotCard`, `GymLoader`, `DemoControls`, `admin/SlotCard`
+- `components/` — `Header`, `MotionGymLogo`, `PageLayout`, `LoginForm` (member/admin login), `PaymentResult` (`/payment/return` status), `SwRegister`, `SlotCard` (group slot), `PersonalSlotCard` (individual / split, LiqPay), `GymLoader`, `DemoControls`, `admin/SlotCard`
 - `lib/api.ts` — typed fetch wrapper for all backend calls
+- `lib/liqpay.ts` — `redirectToLiqPay(slotId)` (checkout form POST), `PRICE_UAH`
 
 Page container (`max-w-xl`, `px-5`, `pt-8 sm:pt-12 pb-12`) is defined once in `app/layout.tsx`. Pages return content directly without wrapper `<main>` tags.
 

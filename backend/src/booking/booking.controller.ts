@@ -22,7 +22,7 @@ export class BookingController {
   @HttpCode(HttpStatus.OK)
   async cancelCurrent(@CurrentUser() user: SessionUser, @Body() dto: CancelBookingDto) {
     if (user.type !== 'member') throw new Error('Members only');
-    return this.bookingService.cancelCurrent(user.id, dto.reason, new Date(dto.reasonAt));
+    return this.bookingService.cancel(user.id, dto.slotId, dto.reason, new Date(dto.reasonAt));
   }
 
   @Patch('current')

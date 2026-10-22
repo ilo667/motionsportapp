@@ -1,17 +1,29 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { eq, and, inArray, gte, lte, asc } from 'drizzle-orm';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { eq, and, or, inArray, gte, lte, asc } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
-import { trainingDays, trainingSlots, bookings, members, attendance } from '../database/schema';
+import { trainingDays, trainingSlots, bookings, members, attendance, slotMembers } from '../database/schema';
 import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
 import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import type { UpdateMemberNoteDto } from './dto/update-member-note.dto';
+import type { CreatePersonalSlotDto } from './dto/create-personal-slot.dto';
 import { NotificationService } from '../notifications/notification.service';
 import { DemoService } from '../demo/demo.service';
+import {
+  GROUP_SLOT_TIMES,
+  GROUP_TYPE,
+  KY_ZONE,
+  PERSONAL_MEMBER_LIMITS,
+  isPersonalType,
+  slotStartsAt,
+} from '../schedule/training-types';
 
-const SLOT_TIMES = ['19:00', '20:00'];
-const KY_ZONE = 'Europe/Kyiv';
+const SLOT_TIMES = GROUP_SLOT_TIMES;
+const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
+
+type Db = DatabaseService['db'];
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 @Injectable()
 export class AdminScheduleService {
@@ -88,6 +100,7 @@ export class AdminScheduleService {
           id: s.id,
           slotTime: s.slotTime,
           status: s.status,
+          trainingType: s.trainingType,
           capacity: s.capacity,
           bookedCount: s.bookedCount,
           participants,
@@ -125,6 +138,17 @@ export class AdminScheduleService {
       )
       .orderBy(trainingDays.localDate, trainingSlots.slotTime);
 
+    const personalIds = rows.filter((r) => isPersonalType(r.trainingType)).map((r) => r.slotId);
+    const assigned =
+      personalIds.length > 0
+        ? await this.database.db
+            .select({ slotId: slotMembers.slotId, id: members.id, displayName: members.displayName })
+            .from(slotMembers)
+            .innerJoin(members, eq(members.id, slotMembers.memberId))
+            .where(inArray(slotMembers.slotId, personalIds))
+            .orderBy(slotMembers.createdAt)
+        : [];
+
     return rows.map((r) => ({
       localDate: r.localDate,
       slotId: r.slotId,
@@ -132,36 +156,126 @@ export class AdminScheduleService {
       trainingType: r.trainingType,
       bookedCount: r.bookedCount,
       capacity: r.capacity,
+      members: assigned.filter((a) => a.slotId === r.slotId).map(({ id, displayName }) => ({ id, displayName })),
     }));
   }
 
-  async upsertCalendarSlot(date: string, slotTime: string, trainingType: string) {
-    const dayOfWeek = new Date(`${date}T12:00:00`).getDay();
-    const isException = dayOfWeek !== 2 && dayOfWeek !== 4;
+  // Group slot at 19:00 / 20:00. Re-activates a cancelled slot at that time, but never takes over an active personal one
+  async upsertGroupSlot(date: string, slotTime: string) {
+    if (!SLOT_TIMES.includes(slotTime)) throw new BadRequestException('Group trainings are at 19:00 and 20:00');
 
-    await this.database.db
+    await this.database.db.transaction(async (tx) => {
+      const dayId = await this.ensureDay(tx, date);
+      const [slot] = await tx
+        .insert(trainingSlots)
+        .values({ trainingDayId: dayId, slotTime, status: 'ACTIVE', trainingType: GROUP_TYPE, capacity: 8, bookedCount: 0 })
+        .onConflictDoUpdate({
+          target: [trainingSlots.trainingDayId, trainingSlots.slotTime],
+          set: { trainingType: GROUP_TYPE, status: 'ACTIVE', capacity: 8, cancelledAt: null },
+          setWhere: or(eq(trainingSlots.status, 'CANCELLED'), eq(trainingSlots.trainingType, GROUP_TYPE)),
+        })
+        .returning({ id: trainingSlots.id });
+
+      if (!slot) throw new ConflictException('Time is taken by a personal training');
+      // A re-used cancelled personal slot must not stay visible only to its old members
+      await tx.delete(slotMembers).where(eq(slotMembers.slotId, slot.id));
+    });
+
+    return { ok: true };
+  }
+
+  // Individual (1 member) or split (1–3 members) at any time; seen and booked only by those members
+  async createPersonalSlot(date: string, dto: CreatePersonalSlotDto) {
+    await this.validateSlotMembers(dto.trainingType, dto.memberIds);
+
+    const startsAt = slotStartsAt(date, dto.slotTime);
+    if (!startsAt.isValid) throw new BadRequestException('Invalid date');
+    const now = await this.demoService.getNow();
+    if (startsAt <= now) throw new BadRequestException('Training time is in the past');
+
+    const slotId = await this.database.db.transaction(async (tx) => {
+      const dayId = await this.ensureDay(tx, date);
+      const [slot] = await tx
+        .insert(trainingSlots)
+        .values({
+          trainingDayId: dayId,
+          slotTime: dto.slotTime,
+          status: 'ACTIVE',
+          trainingType: dto.trainingType,
+          capacity: dto.memberIds.length,
+          bookedCount: 0,
+        })
+        .onConflictDoUpdate({
+          target: [trainingSlots.trainingDayId, trainingSlots.slotTime],
+          set: { trainingType: dto.trainingType, status: 'ACTIVE', capacity: dto.memberIds.length, bookedCount: 0, cancelledAt: null },
+          // Only a cancelled slot may be re-used (its bookings are all cancelled)
+          setWhere: eq(trainingSlots.status, 'CANCELLED'),
+        })
+        .returning({ id: trainingSlots.id });
+
+      if (!slot) throw new ConflictException('Time is already taken');
+
+      await tx.delete(slotMembers).where(eq(slotMembers.slotId, slot.id));
+      await tx.insert(slotMembers).values(dto.memberIds.map((memberId) => ({ slotId: slot.id, memberId })));
+      return slot.id;
+    });
+
+    return { ok: true, slotId };
+  }
+
+  // Change who a personal slot is for. Members who already booked it cannot be removed
+  async updateSlotMembers(slotId: string, memberIds: string[]) {
+    await this.database.db.transaction(async (tx) => {
+      const [slot] = await tx
+        .select()
+        .from(trainingSlots)
+        .where(eq(trainingSlots.id, slotId))
+        .for('update')
+        .limit(1);
+
+      if (!slot) throw new NotFoundException('Slot not found');
+      if (!isPersonalType(slot.trainingType)) throw new BadRequestException('Group trainings are open to everyone');
+      if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
+
+      await this.validateSlotMembers(slot.trainingType, memberIds, tx);
+
+      const booked = await tx
+        .select({ memberId: bookings.memberId })
+        .from(bookings)
+        .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
+      if (booked.some((b) => !memberIds.includes(b.memberId))) {
+        throw new ConflictException('Member already booked this training');
+      }
+
+      await tx.delete(slotMembers).where(eq(slotMembers.slotId, slotId));
+      await tx.insert(slotMembers).values(memberIds.map((memberId) => ({ slotId, memberId })));
+      await tx.update(trainingSlots).set({ capacity: memberIds.length }).where(eq(trainingSlots.id, slotId));
+    });
+
+    return { ok: true };
+  }
+
+  private async validateSlotMembers(trainingType: string, memberIds: string[], db: Db | Tx = this.database.db) {
+    const limits = PERSONAL_MEMBER_LIMITS[trainingType];
+    if (!limits || memberIds.length < limits.min || memberIds.length > limits.max) {
+      throw new BadRequestException(`${trainingType}: ${limits?.min}–${limits?.max} members`);
+    }
+    const found = await db.select({ id: members.id }).from(members).where(inArray(members.id, memberIds));
+    if (found.length !== new Set(memberIds).size) throw new NotFoundException('Member not found');
+  }
+
+  // Training day row for the date, (re)scheduled. Returns its id
+  private async ensureDay(tx: Tx, date: string) {
+    const isException = !DEFAULT_WEEKDAYS.includes(DateTime.fromISO(date, { zone: KY_ZONE }).weekday);
+    const [day] = await tx
       .insert(trainingDays)
       .values({ localDate: date, status: 'SCHEDULED', isException, updatedAt: new Date() })
       .onConflictDoUpdate({
         target: trainingDays.localDate,
         set: { status: 'SCHEDULED', updatedAt: new Date() },
-      });
-
-    const [day] = await this.database.db
-      .select()
-      .from(trainingDays)
-      .where(eq(trainingDays.localDate, date))
-      .limit(1);
-
-    await this.database.db
-      .insert(trainingSlots)
-      .values({ trainingDayId: day.id, slotTime, status: 'ACTIVE', trainingType, capacity: 8, bookedCount: 0 })
-      .onConflictDoUpdate({
-        target: [trainingSlots.trainingDayId, trainingSlots.slotTime],
-        set: { trainingType, status: 'ACTIVE', cancelledAt: null },
-      });
-
-    return { ok: true };
+      })
+      .returning({ id: trainingDays.id });
+    return day.id;
   }
 
   async upsertTrainingDay(date: string, dto: UpsertTrainingDayDto) {

@@ -12,7 +12,7 @@ import timeGridPlugin from "@fullcalendar/react/timegrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
 import ukLocale from "@fullcalendar/react/locales/uk";
 import type { DatesSetInfo, EventClickInfo, DateClickInfo } from "@fullcalendar/react";
-import { api, CalendarSlot, TrainingType } from "@/lib/api";
+import { api, AdminMember, CalendarSlot, TrainingType } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 
 const TYPE_COLORS: Record<TrainingType, { bg: string; border: string; text: string }> = {
@@ -35,26 +35,61 @@ const TYPE_SHORT: Record<TrainingType, string> = {
 };
 
 const TYPES: TrainingType[] = ["групові", "індивідуальні", "спліт"];
-const SLOT_TIMES = ["19:00", "20:00"] as const;
+const GROUP_TIMES = ["19:00", "20:00"];
+// Member pickers per type: індивідуальні exactly 1, спліт 1 required + 2 optional
+const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, індивідуальні: 1, спліт: 3 };
+const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
+const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 
-interface Modal {
-  date: string;
-  existingSlot: CalendarSlot | null; // if editing a specific slot
+const ERROR_TEXTS: [string, string][] = [
+  ["Time is already taken", "На цей час уже є тренування"],
+  ["taken by a personal training", "На 19:00 чи 20:00 уже стоїть персональне тренування"],
+  ["in the past", "Цей час уже минув"],
+  ["already booked", "Ця людина вже оплатила, її не можна прибрати"],
+];
+
+function errorText(err: unknown, fallback: string) {
+  const raw = err instanceof Error ? err.message : "";
+  return ERROR_TEXTS.find(([needle]) => raw.includes(needle))?.[1] ?? fallback;
 }
+
+function hourOf(slotTime: string) {
+  return parseInt(slotTime.slice(0, 2), 10);
+}
+
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+type Modal =
+  | { mode: "add"; date: string }
+  | { mode: "edit"; slot: CalendarSlot };
 
 export default function CalendarPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [slots, setSlots] = useState<CalendarSlot[]>([]);
+  const [members, setMembers] = useState<AdminMember[]>([]);
   // Months covering the visible range ("2026-10,2026-11"): a week can span two months
   const [visibleMonths, setVisibleMonths] = useState("");
 
   useEffect(() => { setMounted(true); }, []);
   const [modal, setModal] = useState<Modal | null>(null);
   const [selectedType, setSelectedType] = useState<TrainingType>("групові");
-  const [selectedTime, setSelectedTime] = useState<"19:00" | "20:00">("19:00");
+  const [time, setTime] = useState("");
+  // One entry per member picker; "" = not chosen
+  const [memberIds, setMemberIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const handleAuthError = useCallback((err: unknown) => {
+    const status = (err as { status?: number }).status;
+    if (status === 401 || status === 403) router.push("/admin/login");
+  }, [router]);
+
+  useEffect(() => {
+    api.getMembers().then(setMembers).catch(handleAuthError);
+  }, [handleAuthError]);
 
   const fetchMonths = useCallback(async (months: string) => {
     if (!months) return;
@@ -62,17 +97,16 @@ export default function CalendarPage() {
       const data = await Promise.all(months.split(",").map((m) => api.getCalendar(m)));
       setSlots(data.flat());
     } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      if (status === 401 || status === 403) router.push("/admin/login");
+      handleAuthError(err);
     }
-  }, [router]);
+  }, [handleAuthError]);
 
   const handleDatesSet = useCallback((arg: DatesSetInfo) => {
     // Every month touched by the visible range: a week can span 2 months, the month view 3 (with edge days)
     const lastVisible = new Date(arg.end.getTime() - 1); // end is exclusive
     const list: string[] = [];
     for (let d = new Date(arg.start.getFullYear(), arg.start.getMonth(), 1); d <= lastVisible; d.setMonth(d.getMonth() + 1)) {
-      list.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      list.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
     }
     const months = list.join(",");
     if (months !== visibleMonths) {
@@ -83,12 +117,14 @@ export default function CalendarPage() {
 
   const events = slots.map((s) => {
     const colors = TYPE_COLORS[s.trainingType];
+    const names = s.members.map((m) => m.displayName).join(", ");
+    const start = `${s.localDate}T${s.slotTime}:00`;
     return {
       id: s.slotId,
-      title: `${TYPE_SHORT[s.trainingType]} · ${s.bookedCount}/${s.capacity}`,
+      title: `${TYPE_SHORT[s.trainingType]} · ${s.bookedCount}/${s.capacity}${names ? ` · ${names}` : ""}`,
       // Timed events (1 h) so the week-with-hours view places them on their hour; the time is shown by FullCalendar
-      start: `${s.localDate}T${s.slotTime}:00`,
-      end: `${s.localDate}T${s.slotTime === "19:00" ? "20:00" : "21:00"}:00`,
+      start,
+      end: new Date(new Date(start).getTime() + 60 * 60 * 1000),
       // v7 names (v6 backgroundColor/borderColor/textColor are ignored)
       color: colors.bg,
       contrastColor: colors.text,
@@ -96,73 +132,94 @@ export default function CalendarPage() {
     };
   });
 
-  const openAddModal = (date: string, time: "19:00" | "20:00" = "19:00") => {
+  // Evening by default; widen when a personal training is earlier or later
+  const minHour = Math.min(17, ...slots.map((s) => hourOf(s.slotTime)));
+  const maxHour = Math.min(24, Math.max(22, ...slots.map((s) => hourOf(s.slotTime) + 2)));
+
+  const fieldsFor = (type: TrainingType, ids: string[] = []) =>
+    Array.from({ length: MEMBER_FIELDS[type] }, (_, i) => ids[i] ?? "");
+
+  const openAddModal = (date: string, clickedTime = "") => {
     setSelectedType("групові");
-    setSelectedTime(time);
+    setTime(clickedTime);
+    setMemberIds([]);
     setError("");
-    setModal({ date, existingSlot: null });
+    setModal({ mode: "add", date });
   };
 
   const openEditModal = (slot: CalendarSlot) => {
     setSelectedType(slot.trainingType);
-    setSelectedTime(slot.slotTime);
+    setTime(slot.slotTime);
+    setMemberIds(fieldsFor(slot.trainingType, slot.members.map((m) => m.id)));
     setError("");
-    setModal({ date: slot.localDate, existingSlot: slot });
+    setModal({ mode: "edit", slot });
+  };
+
+  const selectType = (type: TrainingType) => {
+    setSelectedType(type);
+    setMemberIds((ids) => fieldsFor(type, ids));
   };
 
   const handleEventClick = (arg: EventClickInfo) => {
-    const slot = arg.event.extendedProps.slot as CalendarSlot;
-    openEditModal(slot);
+    openEditModal(arg.event.extendedProps.slot as CalendarSlot);
   };
 
   const handleDateClick = (arg: DateClickInfo) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    // Month view gives "YYYY-MM-DD", week-with-hours gives "YYYY-MM-DDTHH:mm:ss+03:00"
+    // Month view gives "YYYY-MM-DD", week-with-hours gives "YYYY-MM-DDTHH:mm:ss+03:00" (prefills the time)
     const date = arg.dateStr.slice(0, 10);
     const clicked = new Date(date + "T12:00:00");
     if (clicked < today) return;
-    openAddModal(date, arg.dateStr.slice(11, 13) === "20" ? "20:00" : "19:00");
+    openAddModal(date, arg.dateStr.slice(11, 16));
   };
 
-  const handleSave = async () => {
-    if (!modal) return;
+  const chosenMembers = memberIds.filter(Boolean);
+
+  const run = async (fn: () => Promise<unknown>, fallback: string) => {
     setSaving(true);
     setError("");
     try {
-      if (selectedType === "групові") {
-        // групові = обидва слоти
-        await Promise.all(
-          SLOT_TIMES.map((t) => api.upsertCalendarSlot(modal.date, t, selectedType))
-        );
-      } else {
-        await api.upsertCalendarSlot(modal.date, selectedTime, selectedType);
-      }
+      await fn();
       await fetchMonths(visibleMonths);
       setModal(null);
-    } catch {
-      setError("Помилка збереження. Спробуйте ще раз.");
+    } catch (err: unknown) {
+      setError(errorText(err, fallback));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCancelSlot = async () => {
-    if (!modal?.existingSlot) return;
-    setSaving(true);
-    setError("");
-    try {
-      await api.cancelSlot(modal.existingSlot.slotId);
-      await fetchMonths(visibleMonths);
-      setModal(null);
-    } catch {
-      setError("Помилка. Спробуйте ще раз.");
-    } finally {
-      setSaving(false);
+  const handleAdd = () => {
+    if (modal?.mode !== "add") return;
+    if (selectedType === "групові") {
+      return run(
+        () => Promise.all(GROUP_TIMES.map((t) => api.upsertGroupSlot(modal.date, t))),
+        "Помилка збереження. Спробуйте ще раз.",
+      );
     }
+    if (!TIME_RE.test(time)) return setError("Вкажіть час з кроком 15 хвилин, наприклад 18:30");
+    if (!memberIds[0]) return setError("Виберіть людину");
+    return run(
+      () => api.createPersonalSlot(modal.date, { slotTime: time, trainingType: selectedType, memberIds: chosenMembers }),
+      "Помилка збереження. Спробуйте ще раз.",
+    );
   };
 
-  const isEditing = !!modal?.existingSlot;
+  const handleSaveMembers = () => {
+    if (modal?.mode !== "edit") return;
+    if (!memberIds[0]) return setError("Виберіть людину");
+    return run(() => api.updateSlotMembers(modal.slot.slotId, chosenMembers), "Помилка збереження. Спробуйте ще раз.");
+  };
+
+  const handleCancelSlot = () => {
+    if (modal?.mode !== "edit") return;
+    return run(() => api.cancelSlot(modal.slot.slotId), "Помилка. Спробуйте ще раз.");
+  };
+
+  const modalDate = modal ? (modal.mode === "add" ? modal.date : modal.slot.localDate) : "";
+  const editing = modal?.mode === "edit" ? modal.slot : null;
+  const personal = selectedType !== "групові";
 
   return (
     <PageLayout variant="top" action={
@@ -221,8 +278,8 @@ export default function CalendarPage() {
           dateClick={handleDateClick}
           headerToolbar={{ left: "prev,next", center: "title", right: "timeGridWeek,dayGridMonth" }}
           firstDay={1}
-          slotMinTime="17:00:00"
-          slotMaxTime="22:00:00"
+          slotMinTime={`${pad(minHour)}:00:00`}
+          slotMaxTime={`${pad(maxHour)}:00:00`}
           allDaySlot={false}
           eventDisplay="block"
           views={{
@@ -237,71 +294,98 @@ export default function CalendarPage() {
       {modal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setModal(null)}>
           <div className="absolute inset-0 bg-black/60" />
-          <div className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-5 space-y-4 max-h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div>
               <p className="text-muted text-xs uppercase tracking-wide mb-1">
-                {new Date(modal.date + "T12:00:00").toLocaleDateString("uk-UA", { weekday: "long", day: "numeric", month: "long" })}
+                {new Date(modalDate + "T12:00:00").toLocaleDateString("uk-UA", { weekday: "long", day: "numeric", month: "long" })}
               </p>
               <p className="font-geologica font-semibold text-heading">
-                {isEditing ? `Редагувати ${modal.existingSlot!.slotTime}` : "Додати тренування"}
+                {editing ? `${TYPE_LABELS[editing.trainingType]} ${editing.slotTime}` : "Додати тренування"}
               </p>
+              {editing && (
+                <p className="text-muted text-xs mt-1">Записано {editing.bookedCount} з {editing.capacity}</p>
+              )}
             </div>
 
-            {/* Тип тренування */}
-            <div className="flex flex-col space-y-2">
-              {TYPES.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setSelectedType(t)}
-                  className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${selectedType === t ? "" : "border-line"}`}
-                  style={selectedType === t ? { borderColor: TYPE_COLORS[t].border, backgroundColor: TYPE_COLORS[t].bg, color: TYPE_COLORS[t].text } : {}}
-                >
-                  <span>{TYPE_LABELS[t]}</span>
-                  {selectedType === t && <span>✓</span>}
-                </button>
-              ))}
-            </div>
-
-            {/* Час — тільки для не-групових і тільки при додаванні нового */}
-            {!isEditing && selectedType !== "групові" && (
-              <div>
-                <p className="text-muted text-xs mb-2 uppercase tracking-wide">Час</p>
-                <div className="flex space-x-2">
-                  {SLOT_TIMES.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setSelectedTime(t)}
-                      className={`flex-1 py-2 rounded-lg border text-sm transition-colors ${selectedTime === t ? "border-teal bg-teal/10 text-teal" : "border-line text-muted"}`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-muted text-xs mt-2">Групові займають обидва слоти автоматично</p>
+            {/* Тип — тільки при додаванні. Ще одне тренування в цей день: клікніть день знову */}
+            {!editing && (
+              <div className="flex flex-col space-y-2">
+                {TYPES.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => selectType(t)}
+                    className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${selectedType === t ? "" : "border-line"}`}
+                    style={selectedType === t ? { borderColor: TYPE_COLORS[t].border, backgroundColor: TYPE_COLORS[t].bg, color: TYPE_COLORS[t].text } : {}}
+                  >
+                    <span>{TYPE_LABELS[t]}</span>
+                    {selectedType === t && <span>✓</span>}
+                  </button>
+                ))}
               </div>
             )}
 
-            {!isEditing && selectedType === "групові" && (
-              <p className="text-muted text-xs">Буде створено слоти 19:00 і 20:00</p>
+            {!editing && !personal && (
+              <p className="text-muted text-xs">Буде створено слоти 19:00 і 20:00, їх бачать усі</p>
+            )}
+
+            {!editing && personal && (
+              <div>
+                <label htmlFor="slot-time" className="block text-muted text-xs mb-2 uppercase tracking-wide">Час</label>
+                <input
+                  id="slot-time"
+                  type="time"
+                  step={900}
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className={`${FIELD_CLASS} [color-scheme:dark]`}
+                />
+              </div>
+            )}
+
+            {personal && (
+              <div className="flex flex-col space-y-2">
+                <p className="text-muted text-xs uppercase tracking-wide">
+                  {selectedType === "спліт" ? "Люди (до трьох)" : "Людина"}
+                </p>
+                {memberIds.map((id, i) => (
+                  <select
+                    key={i}
+                    aria-label={`Людина ${i + 1}`}
+                    value={id}
+                    onChange={(e) => setMemberIds((ids) => ids.map((v, j) => (j === i ? e.target.value : v)))}
+                    className={FIELD_CLASS}
+                  >
+                    <option value="">{i === 0 ? "Виберіть людину" : "Не вибрано (необовʼязково)"}</option>
+                    {members
+                      .filter((m) => m.id === id || !memberIds.includes(m.id))
+                      .map((m) => (
+                        <option key={m.id} value={m.id}>{m.displayName} · {m.memberCode}</option>
+                      ))}
+                  </select>
+                ))}
+                <p className="text-muted text-xs">Тренування побачать і зможуть оплатити тільки вибрані люди</p>
+              </div>
             )}
 
             {error && <p className="text-danger text-sm">{error}</p>}
 
             <div className="flex flex-col space-y-2">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="btn-primary w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-60"
-              >
-                {saving ? "Зачекайте..." : "Зберегти"}
-              </button>
-              {isEditing && (
+              {(!editing || personal) && (
+                <button
+                  onClick={editing ? handleSaveMembers : handleAdd}
+                  disabled={saving}
+                  className="btn-primary w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-60"
+                >
+                  {saving ? "Зачекайте..." : "Зберегти"}
+                </button>
+              )}
+              {editing && (
                 <button
                   onClick={handleCancelSlot}
                   disabled={saving}
                   className="btn-ghost hover-danger w-full py-3 rounded-xl border text-sm transition-colors disabled:opacity-60"
                 >
-                  Скасувати слот {modal.existingSlot!.slotTime}
+                  Скасувати тренування {editing.slotTime}
                 </button>
               )}
               <button

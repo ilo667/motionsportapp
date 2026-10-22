@@ -7,11 +7,13 @@ import {
 import { DateTime } from 'luxon';
 import { eq, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { bookings, trainingSlots, trainingDays } from '../database/schema';
+import { bookings, trainingSlots, trainingDays, members } from '../database/schema';
 import { NotificationService } from '../notifications/notification.service';
 import { DemoService } from '../demo/demo.service';
+import { GROUP_TYPE, KY_ZONE, slotStartsAt } from '../schedule/training-types';
 
-const KY_ZONE = 'Europe/Kyiv';
+type Db = DatabaseService['db'];
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 @Injectable()
 export class BookingService {
@@ -30,6 +32,8 @@ export class BookingService {
 
     if (!slot) throw new NotFoundException('Slot not found');
     if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
+    // Personal trainings are booked only through payment (PaymentService.createCheckout)
+    if (slot.trainingType !== GROUP_TYPE) throw new BadRequestException('This slot requires payment');
 
     const [day] = await this.database.db
       .select()
@@ -43,6 +47,8 @@ export class BookingService {
 
     try {
       await this.database.db.transaction(async (tx) => {
+        await this.lockMember(tx, memberId);
+
         const [locked] = await tx
           .select()
           .from(trainingSlots)
@@ -53,19 +59,9 @@ export class BookingService {
         if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is no longer available');
         if (locked.bookedCount >= locked.capacity) throw new ConflictException('Slot is full');
 
-        const [existing] = await tx
-          .select({ id: bookings.id })
-          .from(bookings)
-          .where(
-            and(
-              eq(bookings.memberId, memberId),
-              eq(bookings.trainingDayId, locked.trainingDayId),
-              eq(bookings.status, 'ACTIVE'),
-            ),
-          )
-          .limit(1);
-
-        if (existing) throw new ConflictException('You already have an active booking for this day');
+        if (await this.findGroupBooking(tx, memberId, locked.trainingDayId)) {
+          throw new ConflictException('You already have an active booking for this day');
+        }
 
         await tx.insert(bookings).values({
           memberId,
@@ -89,11 +85,12 @@ export class BookingService {
     return { ok: true };
   }
 
-  async cancelCurrent(memberId: string, reason: string, reasonAt: Date) {
+  // A member can hold a group booking and several personal ones, so the slot says which one to cancel
+  async cancel(memberId: string, slotId: string, reason: string, reasonAt: Date) {
     const [booking] = await this.database.db
       .select()
       .from(bookings)
-      .where(and(eq(bookings.memberId, memberId), eq(bookings.status, 'ACTIVE')))
+      .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
       .limit(1);
 
     if (!booking) throw new NotFoundException('No active booking found');
@@ -104,15 +101,25 @@ export class BookingService {
       .where(eq(trainingDays.id, booking.trainingDayId))
       .limit(1);
 
-    if (day) await this.validateBeforeClose(day.localDate);
-
     const [slotBefore] = await this.database.db
-      .select({ bookedCount: trainingSlots.bookedCount, capacity: trainingSlots.capacity, slotTime: trainingSlots.slotTime })
+      .select({
+        bookedCount: trainingSlots.bookedCount,
+        capacity: trainingSlots.capacity,
+        slotTime: trainingSlots.slotTime,
+        trainingType: trainingSlots.trainingType,
+      })
       .from(trainingSlots)
       .where(eq(trainingSlots.id, booking.slotId))
       .limit(1);
 
-    const wasAtCapacity = slotBefore && slotBefore.bookedCount >= slotBefore.capacity;
+    if (day && slotBefore?.trainingType === GROUP_TYPE) await this.validateBeforeClose(day.localDate);
+    if (day && slotBefore && slotBefore.trainingType !== GROUP_TYPE) {
+      await this.validateBeforeStart(day.localDate, slotBefore.slotTime);
+    }
+
+    // Vacancy alerts exist only for group slots (personal ones are not open to others)
+    const wasAtCapacity =
+      slotBefore?.trainingType === GROUP_TYPE && slotBefore.bookedCount >= slotBefore.capacity;
 
     await this.database.db.transaction(async (tx) => {
       await tx
@@ -139,12 +146,18 @@ export class BookingService {
     return { ok: true };
   }
 
+  // Moves the member's group booking to the other group slot of the same day
   async switchSlot(memberId: string, newSlotId: string, reason: string, reasonAt: Date) {
-    const [current] = await this.database.db
-      .select()
-      .from(bookings)
-      .where(and(eq(bookings.memberId, memberId), eq(bookings.status, 'ACTIVE')))
+    const [target] = await this.database.db
+      .select({ trainingDayId: trainingSlots.trainingDayId, trainingType: trainingSlots.trainingType })
+      .from(trainingSlots)
+      .where(eq(trainingSlots.id, newSlotId))
       .limit(1);
+
+    if (!target) throw new NotFoundException('Slot not found');
+    if (target.trainingType !== GROUP_TYPE) throw new BadRequestException('Only group trainings can be switched');
+
+    const current = await this.findGroupBooking(this.database.db, memberId, target.trainingDayId);
 
     if (!current) throw new NotFoundException('No active booking to switch from');
     if (current.slotId === newSlotId) throw new BadRequestException('Already booked on this slot');
@@ -171,6 +184,8 @@ export class BookingService {
 
     try {
       await this.database.db.transaction(async (tx) => {
+        await this.lockMember(tx, memberId);
+
         const [slot1] = await tx
           .select()
           .from(trainingSlots)
@@ -192,10 +207,12 @@ export class BookingService {
         if (newSlot.status !== 'ACTIVE') throw new ConflictException('Target slot is cancelled');
         if (newSlot.bookedCount >= newSlot.capacity) throw new ConflictException('Target slot is full');
 
-        await tx
+        const [moved] = await tx
           .update(bookings)
           .set({ status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason, cancellationReasonAt: reasonAt })
-          .where(eq(bookings.id, current.id));
+          .where(and(eq(bookings.id, current.id), eq(bookings.status, 'ACTIVE')))
+          .returning({ id: bookings.id });
+        if (!moved) throw new ConflictException('Booking has changed, refresh and try again');
 
         await tx.insert(bookings).values({
           memberId,
@@ -232,6 +249,34 @@ export class BookingService {
     }
 
     return { ok: true };
+  }
+
+  // Serializes one member's group bookings (book / switch), so two parallel requests can't both pass the per-day check
+  private async lockMember(tx: Tx, memberId: string) {
+    await tx.select({ id: members.id }).from(members).where(eq(members.id, memberId)).for('update').limit(1);
+  }
+
+  // The member's active group booking on that day (personal bookings don't count)
+  private async findGroupBooking(db: Db | Tx, memberId: string, trainingDayId: string) {
+    const [row] = await db
+      .select({ id: bookings.id, slotId: bookings.slotId, trainingDayId: bookings.trainingDayId, memberId: bookings.memberId })
+      .from(bookings)
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
+      .where(
+        and(
+          eq(bookings.memberId, memberId),
+          eq(bookings.trainingDayId, trainingDayId),
+          eq(bookings.status, 'ACTIVE'),
+          eq(trainingSlots.trainingType, GROUP_TYPE),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  private async validateBeforeStart(localDate: string, slotTime: string) {
+    const now = await this.demoService.getNow();
+    if (now >= slotStartsAt(localDate, slotTime)) throw new BadRequestException('Training has already started');
   }
 
   private async validateBookingWindow(localDate: string) {

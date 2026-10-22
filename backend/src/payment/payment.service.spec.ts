@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { DateTime } from 'luxon';
 import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } from './liqpay.helper';
 import { PaymentService } from './payment.service';
 
@@ -98,12 +99,18 @@ function makeDb(
 
 beforeEach(() => mockLiqpayStatus.mockReset());
 
-function makeService(db: any) {
+// Checkout reads, after the slot: the member's slot_members row, then the training day.
+// Default clock: 15:00 on that day, before the 20:00 slot starts
+const ASSIGNED = [{ memberId: 'member-1' }];
+const DAY = [{ localDate: '2026-10-20', status: 'SCHEDULED' }];
+const kyiv = (hour: number) => DateTime.fromObject({ year: 2026, month: 10, day: 20, hour }, { zone: 'Europe/Kyiv' });
+
+function makeService(db: any, now: DateTime = kyiv(15)) {
   process.env.LIQPAY_PUBLIC_KEY = 'pub_key';
   process.env.LIQPAY_PRIVATE_KEY = 'priv_key';
   process.env.FRONTEND_URL = 'https://test.example.com';
   process.env.LIQPAY_SERVER_URL = 'https://api.example.com/payments/liqpay/callback';
-  return new PaymentService({ db } as any);
+  return new PaymentService({ db } as any, { getNow: jest.fn().mockResolvedValue(now) } as any);
 }
 
 describe('PaymentService — createCheckout', () => {
@@ -131,6 +138,32 @@ describe('PaymentService — createCheckout', () => {
     const { db } = makeDb([[{ id: 'slot-1', status: 'ACTIVE', trainingType: 'групові', bookedCount: 0, capacity: 8, trainingDayId: 'day-1' }]]);
     const svc = makeService(db);
     await expect(svc.createCheckout('slot-1', 'member-1')).rejects.toThrow('does not require payment');
+  });
+
+  const personal = { id: 'slot-1', status: 'ACTIVE', trainingType: 'спліт', slotTime: '20:00', bookedCount: 0, capacity: 2, trainingDayId: 'day-1' };
+
+  it('hides a personal slot from a member the coach did not assign (404)', async () => {
+    const { db } = makeDb([[personal], []]);
+    await expect(makeService(db).createCheckout('slot-1', 'member-2')).rejects.toThrow(NotFoundException);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('refuses payment once the training has started', async () => {
+    const { db } = makeDb([[personal], ASSIGNED, DAY]);
+    await expect(makeService(db, kyiv(20)).createCheckout('slot-1', 'member-1')).rejects.toThrow('already started');
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('books a personal slot even when the member has other bookings that day', async () => {
+    // no PENDING to resume, locked slot, no booking on this slot
+    const { db } = makeDb([[personal], ASSIGNED, DAY, [], [personal], []]);
+    await expect(makeService(db).createCheckout('slot-1', 'member-1')).resolves.toHaveProperty('data');
+    expect(db.insert).toHaveBeenCalled();
+  });
+
+  it('returns 409 when the member already booked this slot', async () => {
+    const { db } = makeDb([[personal], ASSIGNED, DAY, [], [personal], [{ id: 'booking-paid' }]]);
+    await expect(makeService(db).createCheckout('slot-1', 'member-1')).rejects.toThrow('already booked this training');
   });
 });
 
@@ -290,12 +323,12 @@ describe('PaymentService — expireStale', () => {
 });
 
 describe('PaymentService — resume PENDING checkout', () => {
-  const slot = { id: 'slot-1', status: 'ACTIVE', trainingType: 'індивідуальні', bookedCount: 1, capacity: 8, trainingDayId: 'day-1' };
+  const slot = { id: 'slot-1', status: 'ACTIVE', trainingType: 'індивідуальні', slotTime: '20:00', bookedCount: 0, capacity: 1, trainingDayId: 'day-1' };
   const pending = { id: 'pay-1', bookingId: 'booking-1', orderId: 'mg-old' };
 
   it('issues a new order for the same booking instead of 409', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
-    const { db, sets } = makeDb([[slot], [pending]]);
+    const { db, sets } = makeDb([[slot], ASSIGNED, DAY, [pending]]);
     const result = await makeService(db).createCheckout('slot-1', 'member-1');
 
     expect(result).toHaveProperty('data');
@@ -308,14 +341,14 @@ describe('PaymentService — resume PENDING checkout', () => {
 
   it('returns PAID without redirect when the previous attempt actually succeeded', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'success' });
-    const { db, sets } = makeDb([[slot], [pending]]);
+    const { db, sets } = makeDb([[slot], ASSIGNED, DAY, [pending]]);
     await expect(makeService(db).createCheckout('slot-1', 'member-1')).resolves.toEqual({ status: 'PAID' });
     expect(sets).toContainEqual(expect.objectContaining({ status: 'PAID' }));
   });
 
   it('starts a fresh booking when the previous attempt failed', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'failure' });
-    const { db, sets } = makeDb([[slot], [pending], [slot], []]);
+    const { db, sets } = makeDb([[slot], ASSIGNED, DAY, [pending], [slot], []]);
     const result = await makeService(db).createCheckout('slot-1', 'member-1');
 
     expect(result).toHaveProperty('data');
@@ -323,9 +356,9 @@ describe('PaymentService — resume PENDING checkout', () => {
     expect(db.insert).toHaveBeenCalled();
   });
 
-  it('still returns 409 when the PENDING booking is on another slot', async () => {
-    const { db } = makeDb([[slot], [], [slot], [{ id: 'booking-other' }]]);
-    await expect(makeService(db).createCheckout('slot-1', 'member-1')).rejects.toThrow('already have an active booking');
+  it('does not ask LiqPay when there is no PENDING booking on this slot', async () => {
+    const { db } = makeDb([[slot], ASSIGNED, DAY, [], [slot], []]);
+    await expect(makeService(db).createCheckout('slot-1', 'member-1')).resolves.toHaveProperty('data');
     expect(mockLiqpayStatus).not.toHaveBeenCalled();
   });
 });
@@ -379,8 +412,8 @@ describe('PaymentService — LiqPay expired_date', () => {
   it('passes expired_date equal to our expiry so LiqPay closes the order together with the booking', async () => {
     process.env.PAYMENT_EXPIRY_MINUTES = '15';
     mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
-    const slot = { id: 'slot-1', status: 'ACTIVE', trainingType: 'індивідуальні', bookedCount: 1, capacity: 8, trainingDayId: 'day-1' };
-    const { db } = makeDb([[slot], [{ id: 'pay-1', bookingId: 'booking-1', orderId: 'mg-old' }]]);
+    const slot = { id: 'slot-1', status: 'ACTIVE', trainingType: 'індивідуальні', slotTime: '20:00', bookedCount: 0, capacity: 1, trainingDayId: 'day-1' };
+    const { db } = makeDb([[slot], ASSIGNED, DAY, [{ id: 'pay-1', bookingId: 'booking-1', orderId: 'mg-old' }]]);
 
     const before = Date.now();
     const result = await makeService(db).createCheckout('slot-1', 'member-1');

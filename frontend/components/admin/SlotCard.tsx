@@ -27,15 +27,23 @@ function nextStatus(current: AttendanceStatus): AttendanceStatus {
 
 export function SlotCard({ slot, onMutate }: SlotCardProps) {
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const belowMin = slot.status === "ACTIVE" && slot.bookedCount < 3;
+  const isGroup = slot.trainingType === "групові";
+  // "мало учасників" is about group trainings; personal ones are for 1–3 assigned people
+  const belowMin = isGroup && slot.status === "ACTIVE" && slot.bookedCount < 3;
   const allPresent = slot.participants.length > 0 && slot.participants.every(p => p.attendanceStatus === "PRESENT");
 
   return (
     <div className={`rounded-xl border-2 p-5 ${slot.status === "CANCELLED" ? "bg-surface border-line opacity-60" : "bg-surface border-line"}`}>
       <div className="flex items-center justify-between mb-3">
-        <span className="font-geologica font-semibold text-title text-heading">
-          {slot.slotTime}
-        </span><div className="flex items-center space-x-3">
+        <div className="flex items-baseline space-x-3">
+          <span className="font-geologica font-semibold text-title text-heading">
+            {slot.slotTime}
+          </span>
+          {!isGroup && (
+            <span className="text-muted text-sm">{slot.trainingType === "спліт" ? "Спліт" : "Індивідуальне"}</span>
+          )}
+        </div>
+        <div className="flex items-center space-x-3">
           {belowMin && (
             <span className="text-xs text-muted bg-surface border border-line rounded-full px-2 py-0.5">
               мало учасників

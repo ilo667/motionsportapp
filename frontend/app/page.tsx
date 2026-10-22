@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, ScheduleNext } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { SlotCard } from "@/components/SlotCard";
+import { PersonalSlotCard } from "@/components/PersonalSlotCard";
 import DemoControls from "@/components/DemoControls";
 
 function formatLocalDate(localDate: string): string {
@@ -127,6 +128,8 @@ export default function SchedulePage() {
         raw.includes("Booking opens at 14:00") ? "Запис відкривається о 14:00" :
         raw.includes("Booking window has closed") ? "Час запису вже минув" :
         raw.includes("already have an active booking") ? "Ви вже записані на цей день" :
+        raw.includes("already booked this training") ? "Ви вже записані на це тренування" :
+        raw.includes("already started") ? "Тренування вже почалося" :
         raw.includes("Slot is cancelled") ? "Цей час скасовано тренером" :
         raw || "Помилка. Спробуйте ще раз.";
       setMutateError(msg);
@@ -231,6 +234,24 @@ export default function SchedulePage() {
               />
             ))}
           </div>
+
+          {!!schedule.personalSlots?.length && (
+            <>
+              <h2 className="font-geologica font-semibold text-heading uppercase mt-8 mb-3">
+                Персональні тренування
+              </h2>
+              <div className="flex flex-col space-y-3">
+                {schedule.personalSlots.map((slot) => (
+                  <PersonalSlotCard
+                    key={slot.id}
+                    slot={slot}
+                    onMutate={handleMutate}
+                    onRefresh={fetchSchedule}
+                  />
+                ))}
+              </div>
+            </>
+          )}
 
           {mutateError && (
             <p className="text-danger text-sm mt-4 text-center">{mutateError}</p>

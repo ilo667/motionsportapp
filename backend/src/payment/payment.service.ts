@@ -1,10 +1,12 @@
 import { Injectable, ConflictException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { and, eq, inArray, lt, ne, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { trainingSlots, bookings, payments } from '../database/schema';
+import { trainingSlots, trainingDays, bookings, payments, slotMembers } from '../database/schema';
+import { DemoService } from '../demo/demo.service';
+import { PERSONAL_TYPES, slotStartsAt } from '../schedule/training-types';
 import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } from './liqpay.helper';
 
-const PAYMENT_TYPES = ['індивідуальні', 'спліт'];
+const PAYMENT_TYPES = PERSONAL_TYPES;
 const SUCCESS_STATUSES = ['success', 'sandbox'];
 const FAILED_STATUSES = ['failure', 'error', 'reversed'];
 
@@ -24,7 +26,10 @@ function newOrderId(bookingId: string) {
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
 
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly demoService: DemoService,
+  ) {}
 
   private get publicKey() { return process.env.LIQPAY_PUBLIC_KEY ?? ''; }
   private get privateKey() { return process.env.LIQPAY_PRIVATE_KEY ?? ''; }
@@ -49,6 +54,24 @@ export class PaymentService {
       throw new BadRequestException('This slot does not require payment');
     }
 
+    // Personal slots are visible and payable only for the members the coach assigned
+    const [assigned] = await this.database.db
+      .select({ memberId: slotMembers.memberId })
+      .from(slotMembers)
+      .where(and(eq(slotMembers.slotId, slotId), eq(slotMembers.memberId, memberId)))
+      .limit(1);
+    if (!assigned) throw new NotFoundException('Slot not found');
+
+    const [day] = await this.database.db
+      .select({ localDate: trainingDays.localDate, status: trainingDays.status })
+      .from(trainingDays)
+      .where(eq(trainingDays.id, slot.trainingDayId))
+      .limit(1);
+    if (!day || day.status !== 'SCHEDULED') throw new ConflictException('Training day is not scheduled');
+    if ((await this.demoService.getNow()) >= slotStartsAt(day.localDate, slot.slotTime)) {
+      throw new BadRequestException('Training has already started');
+    }
+
     // "Оплатити" on an own PENDING booking continues that booking instead of creating a new one
     const resumed = await this.resumePendingCheckout(slotId, memberId);
     if (resumed === 'PAID') {
@@ -71,19 +94,14 @@ export class PaymentService {
         if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is no longer available');
         if (locked.bookedCount >= locked.capacity) throw new ConflictException('Slot is full');
 
+        // Personal bookings don't limit other bookings that day, only a second one on the same slot
         const [existing] = await tx
           .select({ id: bookings.id })
           .from(bookings)
-          .where(
-            and(
-              eq(bookings.memberId, memberId),
-              eq(bookings.trainingDayId, locked.trainingDayId),
-              eq(bookings.status, 'ACTIVE'),
-            ),
-          )
+          .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
           .limit(1);
 
-        if (existing) throw new ConflictException('You already have an active booking for this day');
+        if (existing) throw new ConflictException('You already booked this training');
 
         const [inserted] = await tx
           .insert(bookings)
@@ -107,7 +125,7 @@ export class PaymentService {
       });
     } catch (err: unknown) {
       if ((err as { code?: string })?.code === '23505') {
-        throw new ConflictException('You already have an active booking for this day');
+        throw new ConflictException('You already booked this training');
       }
       throw err;
     }

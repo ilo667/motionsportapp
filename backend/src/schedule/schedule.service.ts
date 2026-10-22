@@ -2,13 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { and, eq, gte, lte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { trainingDays, trainingSlots, bookings, vacancyAlerts, announcements } from '../database/schema';
+import { trainingDays, trainingSlots, bookings, vacancyAlerts, announcements, slotMembers } from '../database/schema';
 import { DemoService } from '../demo/demo.service';
 import { PaymentService } from '../payment/payment.service';
+import { GROUP_SLOT_TIMES, GROUP_TYPE, KY_ZONE, PERSONAL_TYPES, slotStartsAt } from './training-types';
 
-const KY_ZONE = 'Europe/Kyiv';
 const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
-const SLOT_TIMES = ['19:00', '20:00'];
+const SLOT_TIMES = GROUP_SLOT_TIMES;
+// A personal training stays on the member's page until it ends (payment and cancel only until it starts)
+const PERSONAL_SHOWN_FOR_MINUTES = 60;
+
+type DayRow = typeof trainingDays.$inferSelect;
 
 @Injectable()
 export class ScheduleService {
@@ -25,12 +29,17 @@ export class ScheduleService {
     const now = await this.demoService.getNow();
     const today = now.toISODate()!;
 
-    const upcoming = await this.database.db
-      .select()
-      .from(trainingDays)
-      .where(and(gte(trainingDays.localDate, today), eq(trainingDays.status, 'SCHEDULED')))
-      .orderBy(trainingDays.localDate)
-      .limit(10);
+    const personalSlots = memberId ? await this.getPersonalSlots(memberId, now) : [];
+
+    // "Наступне тренування" is the next group day; days with only personal trainings are skipped
+    const upcoming = await this.withGroupSlots(
+      await this.database.db
+        .select()
+        .from(trainingDays)
+        .where(and(gte(trainingDays.localDate, today), eq(trainingDays.status, 'SCHEDULED')))
+        .orderBy(trainingDays.localDate)
+        .limit(10),
+    );
 
     let targetDay = upcoming.find((day) => {
       const closeAt = DateTime.fromISO(`${day.localDate}T21:00:00`, { zone: KY_ZONE });
@@ -39,12 +48,14 @@ export class ScheduleService {
 
     if (!targetDay) {
       await this.materializeUpcoming(42);
-      const more = await this.database.db
-        .select()
-        .from(trainingDays)
-        .where(and(gte(trainingDays.localDate, today), eq(trainingDays.status, 'SCHEDULED')))
-        .orderBy(trainingDays.localDate)
-        .limit(3);
+      const more = await this.withGroupSlots(
+        await this.database.db
+          .select()
+          .from(trainingDays)
+          .where(and(gte(trainingDays.localDate, today), eq(trainingDays.status, 'SCHEDULED')))
+          .orderBy(trainingDays.localDate)
+          .limit(10),
+      );
       targetDay = more[0];
     }
 
@@ -57,7 +68,7 @@ export class ScheduleService {
     const slots = await this.database.db
       .select()
       .from(trainingSlots)
-      .where(eq(trainingSlots.trainingDayId, targetDay.id))
+      .where(and(eq(trainingSlots.trainingDayId, targetDay.id), eq(trainingSlots.trainingType, GROUP_TYPE)))
       .orderBy(trainingSlots.slotTime);
 
     let myBookingSlotId: string | null = null;
@@ -65,14 +76,14 @@ export class ScheduleService {
 
     let myPaymentStatus: string | null = null;
 
-    if (memberId) {
+    if (memberId && slots.length > 0) {
       const [mine] = await this.database.db
         .select({ slotId: bookings.slotId, paymentStatus: bookings.paymentStatus })
         .from(bookings)
         .where(
           and(
             eq(bookings.memberId, memberId),
-            eq(bookings.trainingDayId, targetDay.id),
+            inArray(bookings.slotId, slots.map((s) => s.id)),
             eq(bookings.status, 'ACTIVE'),
           ),
         )
@@ -121,10 +132,74 @@ export class ScheduleService {
         myPaymentStatus: s.id === myBookingSlotId ? myPaymentStatus : null,
         isMyVacancyAlert: myVacancyAlertSlotIds.has(s.id),
       })),
+      personalSlots,
       serverTime: now.toUTC().toISO(),
       announcement,
       isDemoMode: this.demoService.isDemoMode(),
     };
+  }
+
+  // Days that have group slots (any status: a cancelled group slot is still shown as "Скасовано")
+  private async withGroupSlots(days: DayRow[]) {
+    if (days.length === 0) return days;
+    const rows = await this.database.db
+      .selectDistinct({ dayId: trainingSlots.trainingDayId })
+      .from(trainingSlots)
+      .where(and(inArray(trainingSlots.trainingDayId, days.map((d) => d.id)), eq(trainingSlots.trainingType, GROUP_TYPE)));
+    const withGroup = new Set(rows.map((r) => r.dayId));
+    return days.filter((d) => withGroup.has(d.id));
+  }
+
+  // Upcoming personal trainings the coach assigned to this member, on any day
+  private async getPersonalSlots(memberId: string, now: DateTime) {
+    const rows = await this.database.db
+      .select({
+        id: trainingSlots.id,
+        localDate: trainingDays.localDate,
+        slotTime: trainingSlots.slotTime,
+        trainingType: trainingSlots.trainingType,
+        capacity: trainingSlots.capacity,
+        bookedCount: trainingSlots.bookedCount,
+      })
+      .from(trainingSlots)
+      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
+      .innerJoin(slotMembers, and(eq(slotMembers.slotId, trainingSlots.id), eq(slotMembers.memberId, memberId)))
+      .where(
+        and(
+          gte(trainingDays.localDate, now.toISODate()!),
+          eq(trainingDays.status, 'SCHEDULED'),
+          eq(trainingSlots.status, 'ACTIVE'),
+          inArray(trainingSlots.trainingType, PERSONAL_TYPES),
+        ),
+      )
+      .orderBy(trainingDays.localDate, trainingSlots.slotTime);
+
+    const visible = rows.filter(
+      (r) => now < slotStartsAt(r.localDate, r.slotTime).plus({ minutes: PERSONAL_SHOWN_FOR_MINUTES }),
+    );
+    if (visible.length === 0) return [];
+
+    const mine = await this.database.db
+      .select({ slotId: bookings.slotId, paymentStatus: bookings.paymentStatus })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.memberId, memberId),
+          eq(bookings.status, 'ACTIVE'),
+          inArray(bookings.slotId, visible.map((r) => r.id)),
+        ),
+      );
+
+    return visible.map((r) => {
+      const booking = mine.find((b) => b.slotId === r.id);
+      return {
+        ...r,
+        isMyBooking: !!booking,
+        myPaymentStatus: booking?.paymentStatus ?? null,
+        // Payment and cancellation are allowed until the training starts
+        started: now >= slotStartsAt(r.localDate, r.slotTime),
+      };
+    });
   }
 
   async materializeUpcoming(days: number) {

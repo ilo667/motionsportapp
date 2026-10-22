@@ -9,6 +9,7 @@ import {
   jsonb,
   uniqueIndex,
   serial,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -69,6 +70,21 @@ export const trainingSlots = pgTable(
   (table) => [uniqueIndex('training_slots_day_time_idx').on(table.trainingDayId, table.slotTime)],
 );
 
+// Who may see and book a personal slot (індивідуальні: 1 member, спліт: 1–3). Групові have no rows here
+export const slotMembers = pgTable(
+  'slot_members',
+  {
+    slotId: uuid('slot_id')
+      .notNull()
+      .references(() => trainingSlots.id),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.slotId, table.memberId] })],
+);
+
 export const bookings = pgTable(
   'bookings',
   {
@@ -90,8 +106,10 @@ export const bookings = pgTable(
     paymentStatus: text('payment_status'), // null = free | 'PENDING' | 'PAID'
   },
   (table) => [
-    uniqueIndex('bookings_member_day_active_idx')
-      .on(table.memberId, table.trainingDayId)
+    // One active booking per member per slot. "One group booking per day" is checked in BookingService
+    // (personal trainings don't count), under a lock on the member row
+    uniqueIndex('bookings_member_slot_active_idx')
+      .on(table.memberId, table.slotId)
       .where(sql`${table.status} = 'ACTIVE'`),
   ],
 );

@@ -2,7 +2,8 @@ import { Injectable, ForbiddenException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { eq, and } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { demoState, trainingDays, trainingSlots, bookings, members, attendance, payments } from '../database/schema';
+import { demoState, trainingDays, trainingSlots, bookings, members, attendance, payments, slotMembers } from '../database/schema';
+import { GROUP_TYPE } from '../schedule/training-types';
 
 const KY_ZONE = 'Europe/Kyiv';
 
@@ -11,7 +12,7 @@ export const DEMO_SCENARIOS = {
   booking_open: { label: 'Запис відкрито',   hour: 15, slot1Count: 7, slot2Count: 3, slot1Type: 'групові', slot2Type: 'групові' },
   one_full:     { label: 'Один слот повний', hour: 15, slot1Count: 8, slot2Count: 3, slot1Type: 'групові', slot2Type: 'групові' },
   after_21:     { label: 'Після 21:00',      hour: 22, slot1Count: 7, slot2Count: 3, slot1Type: 'групові', slot2Type: 'групові' },
-  payment_test: { label: 'Тест оплати',      hour: 15, slot1Count: 3, slot2Count: 1, slot1Type: 'групові', slot2Type: 'індивідуальні' },
+  payment_test: { label: 'Тест оплати',      hour: 15, slot1Count: 3, slot2Count: 0, slot1Type: 'групові', slot2Type: 'індивідуальні' },
 } as const;
 
 export type ScenarioName = keyof typeof DEMO_SCENARIOS;
@@ -119,7 +120,7 @@ export class DemoService {
         .values({ trainingDayId: day.id, slotTime, status: 'ACTIVE', trainingType, capacity: 8, bookedCount: 0 })
         .onConflictDoUpdate({
           target: [trainingSlots.trainingDayId, trainingSlots.slotTime],
-          set: { status: 'ACTIVE', trainingType, bookedCount: 0 },
+          set: { status: 'ACTIVE', trainingType, capacity: trainingType === GROUP_TYPE ? 8 : 1, bookedCount: 0 },
         });
     }
 
@@ -129,9 +130,10 @@ export class DemoService {
       .where(and(eq(trainingSlots.trainingDayId, day.id), eq(trainingSlots.status, 'ACTIVE')))
       .orderBy(trainingSlots.slotTime);
 
-    if (slots.length < 2) return;
-
-    const [slot1, slot2] = slots;
+    // The coach may have added personal trainings that day, so pick the 19:00 / 20:00 slots by time
+    const slot1 = slots.find((s) => s.slotTime === '19:00');
+    const slot2 = slots.find((s) => s.slotTime === '20:00');
+    if (!slot1 || !slot2) return;
 
     // Delete attendance first (FK constraint), then bookings
     const dayBookings = await this.database.db
@@ -167,6 +169,16 @@ export class DemoService {
     const existingMembers = await this.database.db
       .select({ id: members.id })
       .from(members);
+
+    // A personal 20:00 (payment test) is assigned to every real member, so whoever tests sees it
+    for (const slot of [slot1, slot2]) {
+      await this.database.db.delete(slotMembers).where(eq(slotMembers.slotId, slot.id));
+      if (slot.trainingType === GROUP_TYPE) continue;
+      const realMembers = existingMembers.filter((m) => !DEMO_MEMBER_IDS.includes(m.id));
+      if (realMembers.length > 0) {
+        await this.database.db.insert(slotMembers).values(realMembers.map((m) => ({ slotId: slot.id, memberId: m.id })));
+      }
+    }
 
     const demoMemberIds = existingMembers
       .map((m) => m.id)

@@ -38,7 +38,7 @@ export interface MeResponse {
 
 export interface SlotView {
   id: string;
-  slotTime: "19:00" | "20:00";
+  slotTime: string;
   status: "ACTIVE" | "CANCELLED";
   trainingType: TrainingType;
   capacity: number;
@@ -48,13 +48,27 @@ export interface SlotView {
   isMyVacancyAlert?: boolean;
 }
 
+// Individual / split the coach assigned to this member (any day, any time); paid, bookable until the start
+export interface PersonalSlotView {
+  id: string;
+  localDate: string;
+  slotTime: string;
+  trainingType: Exclude<TrainingType, "групові">;
+  capacity: number;
+  bookedCount: number;
+  isMyBooking: boolean;
+  myPaymentStatus: "PENDING" | "PAID" | null;
+  started: boolean;
+}
+
 export interface ScheduleNext {
   localDate: string;
   status: string;
   bookingWindowOpen: boolean;
   bookingOpenAt: string;
   bookingCloseAt: string;
-  slots: SlotView[];
+  slots: SlotView[]; // group slots of the next group day
+  personalSlots?: PersonalSlotView[];
   serverTime: string;
   announcement?: string | null;
   isDemoMode?: boolean;
@@ -97,8 +111,9 @@ export interface AdminParticipant {
 
 export interface AdminSlotView {
   id: string;
-  slotTime: "19:00" | "20:00";
+  slotTime: string;
   status: "ACTIVE" | "CANCELLED";
+  trainingType: TrainingType;
   capacity: number;
   bookedCount: number;
   participants: AdminParticipant[];
@@ -118,10 +133,11 @@ export interface AdminSchedule {
 export interface CalendarSlot {
   localDate: string;
   slotId: string;
-  slotTime: "19:00" | "20:00";
+  slotTime: string;
   trainingType: TrainingType;
   bookedCount: number;
   capacity: number;
+  members: { id: string; displayName: string }[]; // assigned members, personal slots only
 }
 
 /** @deprecated use CalendarSlot */
@@ -159,10 +175,10 @@ export const api = {
       body: JSON.stringify({ slotId }),
     }),
 
-  cancelBooking: (reason: string, reasonAt: Date) =>
+  cancelBooking: (slotId: string, reason: string, reasonAt: Date) =>
     request<{ ok: boolean }>("/bookings/current", {
       method: "DELETE",
-      body: JSON.stringify({ reason, reasonAt: reasonAt.toISOString() }),
+      body: JSON.stringify({ slotId, reason, reasonAt: reasonAt.toISOString() }),
     }),
 
   switchSlot: (newSlotId: string, reason: string, reasonAt: Date) =>
@@ -218,10 +234,21 @@ export const api = {
   getCalendar: (month: string) =>
     request<CalendarSlot[]>(`/admin/calendar?month=${month}`),
 
-  upsertCalendarSlot: (date: string, slotTime: string, trainingType: TrainingType) =>
+  upsertGroupSlot: (date: string, slotTime: string) =>
     request<{ ok: boolean }>(`/admin/training-days/${date}/slots/${encodeURIComponent(slotTime)}`, {
       method: "PUT",
-      body: JSON.stringify({ trainingType }),
+    }),
+
+  createPersonalSlot: (date: string, body: { slotTime: string; trainingType: TrainingType; memberIds: string[] }) =>
+    request<{ ok: boolean; slotId: string }>(`/admin/training-days/${date}/personal-slots`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  updateSlotMembers: (slotId: string, memberIds: string[]) =>
+    request<{ ok: boolean }>(`/admin/slots/${slotId}/members`, {
+      method: "PUT",
+      body: JSON.stringify({ memberIds }),
     }),
 
   markAllAttendance: (slotId: string) =>
