@@ -1,10 +1,10 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { api, AdminMember, Coach, MemberCancellation } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { CancellationList } from "@/components/admin/CancellationList";
+import { AdminMenu } from "@/components/admin/AdminMenu";
 
 const NOTE_MAX = 300;
 // Highlight clients who cancel often (count over the last 30 days)
@@ -244,11 +244,7 @@ export default function ClientsPage() {
     <PageLayout
       variant="top"
       loading={!members && !loadError}
-      action={
-        <Link href="/admin" className="text-muted text-sm hover:text-body transition-colors">
-          ← Назад
-        </Link>
-      }
+      action={<AdminMenu />}
     >
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">
         Клієнти

@@ -1,7 +1,6 @@
 "use client";
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import "@fullcalendar/react/skeleton.css";
 import "@fullcalendar/react/themes/classic/theme.css";
 import "@fullcalendar/react/themes/classic/palette.css";
@@ -16,6 +15,7 @@ import { api, AdminMember, CalendarSlot, Cancellation, TrainingType } from "@/li
 import { PageLayout } from "@/components/PageLayout";
 import { useIsClient } from "@/lib/clientStore";
 import { CancellationList } from "@/components/admin/CancellationList";
+import { AdminMenu } from "@/components/admin/AdminMenu";
 
 const TYPE_COLORS: Record<TrainingType, { bg: string; border: string; text: string }> = {
   групові:       { bg: "#14532d", border: "#93d23c", text: "#bbf7d0" },
@@ -250,11 +250,7 @@ export default function CalendarPage() {
   ];
 
   return (
-    <PageLayout variant="top" action={
-      <Link href="/admin" className="text-muted text-sm hover:text-body transition-colors">
-        ← Назад
-      </Link>
-    }>
+    <PageLayout variant="top" action={<AdminMenu />}>
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">
         Календар
       </h1>
