@@ -272,6 +272,8 @@ export default function CalendarPage() {
           --fc-classic-button-outline: var(--color-line);
           --fc-classic-button-foreground: var(--color-body);
         }
+        /* Events are clickable (edit / cancel); role="button" is the only stable hook on them in v7 */
+        .mg-calendar [role="button"] { cursor: pointer; }
       `}</style>
 
       <div className="mg-calendar rounded-xl border border-line p-3 overflow-hidden">
