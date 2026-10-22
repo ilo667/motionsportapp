@@ -78,7 +78,7 @@ export class AnnouncementsService {
 
     const [updated] = await this.database.db
       .update(announcements)
-      .set({ text: result.text, source: result.source, approvedAt: null, publishedAt: null, updatedAt: new Date() })
+      .set({ text: result.text, source: result.source, publishedAt: null, updatedAt: new Date() })
       .where(eq(announcements.id, ann.id))
       .returning();
 
@@ -101,7 +101,7 @@ export class AnnouncementsService {
     if (!ann) return null;
     const [updated] = await this.database.db
       .update(announcements)
-      .set({ text, source: 'manual', approvedAt: null, publishedAt: null, updatedAt: new Date() })
+      .set({ text, source: 'manual', publishedAt: null, updatedAt: new Date() })
       .where(eq(announcements.id, ann.id))
       .returning();
     return updated;
@@ -113,7 +113,7 @@ export class AnnouncementsService {
     const now = new Date();
     const [updated] = await this.database.db
       .update(announcements)
-      .set({ approvedAt: now, publishedAt: now, updatedAt: now })
+      .set({ publishedAt: now, updatedAt: now })
       .where(eq(announcements.id, ann.id))
       .returning();
     return updated;
@@ -124,7 +124,7 @@ export class AnnouncementsService {
     if (!ann) return null;
     const [updated] = await this.database.db
       .update(announcements)
-      .set({ approvedAt: null, publishedAt: null, updatedAt: new Date() })
+      .set({ publishedAt: null, updatedAt: new Date() })
       .where(eq(announcements.id, ann.id))
       .returning();
     return updated;
@@ -148,7 +148,7 @@ export class AnnouncementsService {
     const now = new Date();
     await this.database.db
       .update(announcements)
-      .set({ text: result.text, source: result.source, approvedAt: now, publishedAt: now, updatedAt: now })
+      .set({ text: result.text, source: result.source, publishedAt: now, updatedAt: now })
       .where(eq(announcements.id, ann.id));
 
     await this.database.db.insert(aiGenerations).values({

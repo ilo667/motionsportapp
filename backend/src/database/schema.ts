@@ -196,7 +196,6 @@ export const announcements = pgTable('announcements', {
   topic: text('topic'),
   text: text('text'),
   source: text('source'),
-  approvedAt: timestamp('approved_at', { withTimezone: true }),
   publishedAt: timestamp('published_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

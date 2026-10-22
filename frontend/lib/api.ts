@@ -112,7 +112,6 @@ export interface Announcement {
   topic: string | null;
   text: string | null;
   source: string | null;
-  approvedAt: string | null;
   publishedAt: string | null;
   updatedAt: string;
 }
