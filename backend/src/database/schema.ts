@@ -70,7 +70,8 @@ export const trainingSlots = pgTable(
       .notNull()
       .references((): AnyPgColumn => admins.id),
   },
-  (table) => [uniqueIndex('training_slots_day_time_idx').on(table.trainingDayId, table.slotTime)],
+  // Many halls: coaches work in parallel, so one training per time per coach
+  (table) => [uniqueIndex('training_slots_day_time_coach_idx').on(table.trainingDayId, table.slotTime, table.coachId)],
 );
 
 // Who may see and book an assigned slot (персональні: 1 member, спліт: 1–3). Групові have no rows here

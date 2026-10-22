@@ -163,16 +163,7 @@ export interface HistoryDay {
   slots: AdminSlotView[];
 }
 
-// Another coach's training: only the busy time is shown (one gym), no type, counts or names
-export interface BusyCalendarSlot {
-  isMine: false;
-  localDate: string;
-  slotId: string;
-  slotTime: string;
-}
-
 export interface CalendarSlot {
-  isMine: true;
   localDate: string;
   slotId: string;
   slotTime: string;
@@ -289,7 +280,7 @@ export const api = {
     }),
 
   getCalendar: (month: string) =>
-    request<(CalendarSlot | BusyCalendarSlot)[]>(`/admin/calendar?month=${month}`),
+    request<CalendarSlot[]>(`/admin/calendar?month=${month}`),
 
   upsertGroupSlot: (date: string, slotTime: string) =>
     request<{ ok: boolean }>(`/admin/training-days/${date}/slots/${encodeURIComponent(slotTime)}`, {

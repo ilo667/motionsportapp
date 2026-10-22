@@ -291,17 +291,6 @@ describe('Each coach sees and changes only own trainings', () => {
     expect(db.insert).not.toHaveBeenCalled();
   });
 
-  it("calendar shows another coach's slot only as a busy time, without type, counts or names", async () => {
-    const rows = [
-      { localDate: '2026-10-21', slotId: 'mine', slotTime: '19:00', trainingType: 'групові', bookedCount: 3, capacity: 8, coachId: COACH },
-      { localDate: '2026-10-21', slotId: 'theirs', slotTime: '10:30', trainingType: 'персональні', bookedCount: 1, capacity: 1, coachId: 'coach-2' },
-    ];
-    const { db } = makeDb([rows]);
-    const result = await makeService(db).getCalendar(COACH, '2026-10');
-    expect(result.find((s) => s.slotId === 'theirs')).toEqual({ localDate: '2026-10-21', slotId: 'theirs', slotTime: '10:30', isMine: false });
-    expect(result.find((s) => s.slotId === 'mine')).toEqual(expect.objectContaining({ isMine: true, bookedCount: 3 }));
-  });
-
   it("cannot put another coach's client on a training (404)", async () => {
     const { db } = makeDb([[]]); // visibleTo(coach) finds nobody
     await expect(

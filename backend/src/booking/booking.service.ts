@@ -13,6 +13,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { VacancyAlertsService } from '../notifications/vacancy-alerts.service';
 import { ClockService } from '../clock/clock.service';
 import { GROUP_TYPE, KY_ZONE, slotStartsAt } from '../schedule/training-types';
+import { getMemberCoachId } from '../schedule/default-coach';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -39,6 +40,8 @@ export class BookingService {
     if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
     // Assigned trainings are booked only through payment (PaymentService.createCheckout)
     if (slot.trainingType !== GROUP_TYPE) throw new BadRequestException('This slot requires payment');
+    // Members book only their own coach's group trainings
+    if (slot.coachId !== (await getMemberCoachId(this.database.db, memberId))) throw new NotFoundException('Slot not found');
 
     const [day] = await this.database.db
       .select()
@@ -167,6 +170,7 @@ export class BookingService {
         trainingDayId: trainingSlots.trainingDayId,
         trainingType: trainingSlots.trainingType,
         slotTime: trainingSlots.slotTime,
+        coachId: trainingSlots.coachId,
       })
       .from(trainingSlots)
       .where(eq(trainingSlots.id, newSlotId))
@@ -174,6 +178,7 @@ export class BookingService {
 
     if (!target) throw new NotFoundException('Slot not found');
     if (target.trainingType !== GROUP_TYPE) throw new BadRequestException('Only group trainings can be switched');
+    if (target.coachId !== (await getMemberCoachId(this.database.db, memberId))) throw new NotFoundException('Slot not found');
 
     const current = await this.findGroupBooking(this.database.db, memberId, target.trainingDayId);
 

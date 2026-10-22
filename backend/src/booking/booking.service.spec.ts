@@ -53,7 +53,11 @@ const validSlot = {
   trainingType: 'групові',
   capacity: 8,
   bookedCount: 3,
+  coachId: 'coach-1',
 };
+
+// getMemberCoachId(): the member's coach (members book only their coach's group slots)
+const MEMBER_COACH = [{ coachId: 'coach-1' }];
 
 // book()/switchSlot() lock the member row first (one read inside the transaction)
 const MEMBER = [{ id: 'member-1' }];
@@ -78,13 +82,13 @@ function makeService(db: any, now: DateTime) {
 
 describe('BookingService — booking window', () => {
   it('throws before 14:00', async () => {
-    const { db } = makeDb([[validSlot], [validDay]]);
+    const { db } = makeDb([[validSlot], MEMBER_COACH, [validDay]]);
     const service = makeService(db, kyivAt(13, 59));
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Booking opens at 14:00');
   });
 
   it('throws after 21:00', async () => {
-    const { db } = makeDb([[validSlot], [validDay]]);
+    const { db } = makeDb([[validSlot], MEMBER_COACH, [validDay]]);
     const service = makeService(db, kyivAt(21, 1));
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Booking window has closed');
   });
@@ -92,13 +96,13 @@ describe('BookingService — booking window', () => {
   it('does not throw at exactly 14:00', async () => {
     // Window is open — error must come from inside the transaction (slot already locked), not window validation
     const lockedSlot = { ...validSlot, bookedCount: 8, capacity: 8 };
-    const { db } = makeDb([[validSlot], [validDay], MEMBER, [lockedSlot]]);
+    const { db } = makeDb([[validSlot], MEMBER_COACH, [validDay], MEMBER, [lockedSlot]]);
     const service = makeService(db, kyivAt(14, 0));
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Slot is full');
   });
 
   it('throws at exactly 21:00', async () => {
-    const { db } = makeDb([[validSlot], [validDay]]);
+    const { db } = makeDb([[validSlot], MEMBER_COACH, [validDay]]);
     const service = makeService(db, kyivAt(21, 0));
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Booking window has closed');
   });
@@ -121,7 +125,7 @@ describe('BookingService — slot validation', () => {
 
   it('throws when slot is full (checked inside transaction)', async () => {
     const fullSlot = { ...validSlot, bookedCount: 8, capacity: 8 };
-    const { db } = makeDb([[validSlot], [validDay], MEMBER, [fullSlot]]);
+    const { db } = makeDb([[validSlot], MEMBER_COACH, [validDay], MEMBER, [fullSlot]]);
     const service = makeService(db, at15);
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Slot is full');
   });
@@ -135,7 +139,7 @@ describe('BookingService — slot validation', () => {
   it('throws when member already has a group booking for that day', async () => {
     const available = { ...validSlot, bookedCount: 5 };
     const existingBooking = { id: 'booking-existing' };
-    const { db } = makeDb([[validSlot], [validDay], MEMBER, [available], [existingBooking]]);
+    const { db } = makeDb([[validSlot], MEMBER_COACH, [validDay], MEMBER, [available], [existingBooking]]);
     const service = makeService(db, at15);
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('already have an active booking');
   });
@@ -174,7 +178,7 @@ describe('BookingService — cancel', () => {
 describe('BookingService — switch slot', () => {
   it('throws BadRequestException when switching to the same slot', async () => {
     const activeBooking = { id: 'booking-1', slotId: 'slot-1', trainingDayId: 'day-1', memberId: 'member-1', status: 'ACTIVE' };
-    const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'групові' }], [activeBooking]]);
+    const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'групові', coachId: 'coach-1' }], MEMBER_COACH, [activeBooking]]);
     const service = makeService(db, kyivAt(15));
     await expect(service.switchSlot('member-1', 'slot-1', 'reason')).rejects.toThrow('Already booked on this slot');
   });
@@ -186,7 +190,7 @@ describe('BookingService — switch slot', () => {
   });
 
   it('throws NotFoundException when the member has no group booking that day (assigned ones do not count)', async () => {
-    const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'групові' }], []]);
+    const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'групові', coachId: 'coach-1' }], MEMBER_COACH, []]);
     const service = makeService(db, kyivAt(15));
     await expect(service.switchSlot('member-1', 'slot-2', 'reason')).rejects.toThrow(NotFoundException);
   });
@@ -208,11 +212,11 @@ describe('BookingService — coach push with the reason', () => {
 
   it('records the target slot and sends the new time when a member moves 19:00 → 20:00', async () => {
     const current = { id: 'booking-1', slotId: 'slot-1', trainingDayId: 'day-1', memberId: 'member-1' };
-    const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '20:00' };
+    const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '20:00', coachId: 'coach-1' };
     const slot1 = { id: 'slot-1', status: 'ACTIVE', capacity: 8, bookedCount: 3 };
     const slot2 = { id: 'slot-2', status: 'ACTIVE', capacity: 8, bookedCount: 2 };
     const { db, sets } = makeDb(
-      [[target], [current], [validDay], [{ bookedCount: 3, capacity: 8, slotTime: '19:00' }], MEMBER, [slot1], [slot2], [{ displayName: 'Іра' }]],
+      [[target], MEMBER_COACH, [current], [validDay], [{ bookedCount: 3, capacity: 8, slotTime: '19:00' }], MEMBER, [slot1], [slot2], [{ displayName: 'Іра' }]],
       () => [{ id: 'booking-1' }], // the old booking's conditional UPDATE … RETURNING wins
     );
     const service = makeService(db, kyivAt(17));

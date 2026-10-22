@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { eq, and, isNull, inArray } from 'drizzle-orm';
+import { eq, and, or, isNull, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { pushSubscriptions, adminPushSubscriptions } from '../database/schema';
+import { pushSubscriptions, adminPushSubscriptions, members } from '../database/schema';
 
 @Injectable()
 export class PushSubscriptionsService {
@@ -34,6 +34,19 @@ export class PushSubscriptionsService {
       .select()
       .from(pushSubscriptions)
       .where(isNull(pushSubscriptions.disabledAt));
+  }
+
+  // Members whose coach is one of these (and members without a coach, when asked)
+  async findForCoaches(coachIds: string[], includeUnassigned: boolean) {
+    const ofCoaches = coachIds.length > 0 ? inArray(members.coachId, coachIds) : undefined;
+    const unassigned = includeUnassigned ? isNull(members.coachId) : undefined;
+    const who = ofCoaches && unassigned ? or(ofCoaches, unassigned) : (ofCoaches ?? unassigned);
+    if (!who) return [];
+    return this.database.db
+      .select({ endpoint: pushSubscriptions.endpoint, p256dh: pushSubscriptions.p256dh, auth: pushSubscriptions.auth })
+      .from(pushSubscriptions)
+      .innerJoin(members, eq(members.id, pushSubscriptions.memberId))
+      .where(and(isNull(pushSubscriptions.disabledAt), who));
   }
 
   async findActiveByMemberIds(memberIds: string[]) {

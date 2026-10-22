@@ -14,6 +14,7 @@ import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { trainingDays, trainingSlots, bookings, attendance, admins } from '../database/schema';
 import { GROUP_TYPE, KY_ZONE } from '../schedule/training-types';
+import { getDefaultCoachId } from '../schedule/default-coach';
 
 
 // Vercel Cron invokes paths with GET and sends `Authorization: Bearer $CRON_SECRET`.
@@ -46,8 +47,9 @@ export class InternalCronController {
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
     }
-    // A day with only assigned trainings has nothing to book for everyone
-    if (!(await this.hasActiveGroupSlots(day.id))) {
+    // Only clients of coaches who have group trainings today get the push
+    const coachIds = await this.groupCoachIds(day.id);
+    if (coachIds.length === 0) {
       return { ok: true, skipped: 'no group trainings today' };
     }
 
@@ -62,6 +64,9 @@ export class InternalCronController {
     const dedupeKey = `booking-open:${today}`;
     await this.notifications.enqueueAndProcess('BOOKING_OPEN', dedupeKey, {
       localDate: today,
+      coachIds,
+      // members without a coach see the first coach's group trainings
+      includeUnassigned: coachIds.includes((await getDefaultCoachId(this.database.db)) ?? ''),
     });
 
     return { ok: true, localDate: today };
@@ -83,7 +88,7 @@ export class InternalCronController {
       return { ok: true, skipped: 'no scheduled day today' };
     }
     // The announcement is shown with group slots only
-    if (!(await this.hasActiveGroupSlots(day.id))) {
+    if ((await this.groupCoachIds(day.id)).length === 0) {
       return { ok: true, skipped: 'no group trainings today' };
     }
 
@@ -158,9 +163,10 @@ export class InternalCronController {
     return this.paymentService.expireStale();
   }
 
-  private async hasActiveGroupSlots(dayId: string) {
-    const [slot] = await this.database.db
-      .select({ id: trainingSlots.id })
+  // Coaches with an active group training on that day
+  private async groupCoachIds(dayId: string) {
+    const rows = await this.database.db
+      .selectDistinct({ coachId: trainingSlots.coachId })
       .from(trainingSlots)
       .where(
         and(
@@ -168,9 +174,8 @@ export class InternalCronController {
           eq(trainingSlots.trainingType, GROUP_TYPE),
           eq(trainingSlots.status, 'ACTIVE'),
         ),
-      )
-      .limit(1);
-    return !!slot;
+      );
+    return rows.map((r) => r.coachId);
   }
 
   private verifyCronSecret(auth: string | undefined) {

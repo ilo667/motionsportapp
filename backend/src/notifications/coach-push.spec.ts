@@ -9,7 +9,8 @@ function makeNotifications() {
     findAllAdmin: jest.fn().mockResolvedValue([adminSub]),
     findAdminByAdminId: jest.fn().mockResolvedValue([adminSub]),
     disableAdminByEndpoint: jest.fn(),
-    findAll: jest.fn(),
+    findAll: jest.fn().mockResolvedValue([]),
+    findForCoaches: jest.fn().mockResolvedValue([]),
   };
   const svc = new NotificationService({} as any, push as any, subs as any, {} as any);
   return { svc, push, subs };
@@ -58,6 +59,15 @@ describe('Coach push — member cancelled / moved', () => {
     push.send.mockResolvedValue('expired');
     await (svc as any).sendMemberCancelled({ displayName: 'Оля', slotTime: '19:00', localDate: '2026-10-22', reason: 'x', switchedToTime: null });
     expect(subs.disableAdminByEndpoint).toHaveBeenCalledWith(adminSub.endpoint);
+  });
+});
+
+describe('Booking-open push', () => {
+  it("goes only to clients of coaches with group trainings today (and unassigned ones when asked)", async () => {
+    const { svc, subs } = makeNotifications();
+    await (svc as any).sendOpening({ localDate: '2026-10-26', coachIds: ['coach-1'], includeUnassigned: true });
+    expect(subs.findForCoaches).toHaveBeenCalledWith(['coach-1'], true);
+    expect(subs.findAll).not.toHaveBeenCalled();
   });
 });
 

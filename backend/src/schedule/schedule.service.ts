@@ -20,7 +20,7 @@ import {
   ASSIGNED_TYPES,
   slotStartsAt,
 } from './training-types';
-import { getDefaultCoachId } from './default-coach';
+import { getDefaultCoachId, getMemberCoachId } from './default-coach';
 
 // An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
 const ASSIGNED_SHOWN_FOR_MINUTES = 60;
@@ -53,7 +53,11 @@ export class ScheduleService {
       : [];
 
     // "Наступне тренування" is the next group day; days with only assigned trainings are skipped
+    // Group trainings of the member's coach only (the first coach for members without one and for visitors)
+    const coachId = await getMemberCoachId(this.database.db, memberId);
+
     const upcoming = await this.withGroupSlots(
+      coachId,
       await this.database.db
         .select()
         .from(trainingDays)
@@ -104,6 +108,7 @@ export class ScheduleService {
         and(
           eq(trainingSlots.trainingDayId, targetDay.id),
           eq(trainingSlots.trainingType, GROUP_TYPE),
+          eq(trainingSlots.coachId, coachId!),
         ),
       )
       .orderBy(trainingSlots.slotTime);
@@ -185,9 +190,9 @@ export class ScheduleService {
     };
   }
 
-  // Days that have group slots (any status: a cancelled group slot is still shown as "Скасовано")
-  private async withGroupSlots(days: DayRow[]) {
-    if (days.length === 0) return days;
+  // Days with group slots of this coach (any status: a cancelled group slot is still shown as "Скасовано")
+  private async withGroupSlots(coachId: string | null, days: DayRow[]) {
+    if (days.length === 0 || !coachId) return [];
     const rows = await this.database.db
       .selectDistinct({ dayId: trainingSlots.trainingDayId })
       .from(trainingSlots)
@@ -198,6 +203,7 @@ export class ScheduleService {
             days.map((d) => d.id),
           ),
           eq(trainingSlots.trainingType, GROUP_TYPE),
+          eq(trainingSlots.coachId, coachId),
         ),
       );
     const withGroup = new Set(rows.map((r) => r.dayId));

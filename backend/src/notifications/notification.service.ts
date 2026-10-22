@@ -68,7 +68,11 @@ export class NotificationService {
 
   private async sendOpening(payload: Record<string, unknown>) {
     const localDate = payload.localDate as string;
-    const subscriptions = await this.subs.findAll();
+    const coachIds = payload.coachIds as string[] | undefined;
+    // Older events have no coachIds: everyone, as before
+    const subscriptions = coachIds
+      ? await this.subs.findForCoaches(coachIds, payload.includeUnassigned === true)
+      : await this.subs.findAll();
     await this.sendToSubs(subscriptions, {
       title: 'Запис відкрито! 🏋️',
       body: `Записуйтесь на тренування ${this.fmtDate(localDate)}`,

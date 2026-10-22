@@ -46,6 +46,8 @@ const slots = [
   { id: 'slot-1', slotTime: '19:00', status: 'ACTIVE', capacity: 8, bookedCount: 5 },
   { id: 'slot-2', slotTime: '20:00', status: 'ACTIVE', capacity: 8, bookedCount: 3 },
 ];
+// getMemberCoachId(): a visitor / member without a coach → the first coach
+const COACH = [{ id: 'coach-1' }];
 // withGroupSlots(): ids of the listed days that have group slots
 const HAS_GROUP = [{ dayId: 'day-1' }];
 const publishedAnnouncement = { text: 'Записуйтесь сьогодні! 💪', publishedAt: new Date() };
@@ -62,32 +64,32 @@ function makeService(db: any, now: DateTime) {
 
 describe('ScheduleService — announcement visibility', () => {
   it('shows announcement when window is open and ann is published', async () => {
-    const { db } = makeDb([[trainingDay], HAS_GROUP, slots, [publishedAnnouncement]]);
+    const { db } = makeDb([COACH, [trainingDay], HAS_GROUP, slots, [publishedAnnouncement]]);
     const result = await makeService(db, kyivAt(15)).getNext();
     expect(result?.announcement).toBe(publishedAnnouncement.text);
   });
 
   it('hides announcement before 14:00 even if published', async () => {
-    const { db } = makeDb([[trainingDay], HAS_GROUP, slots, [publishedAnnouncement]]);
+    const { db } = makeDb([COACH, [trainingDay], HAS_GROUP, slots, [publishedAnnouncement]]);
     const result = await makeService(db, kyivAt(10)).getNext();
     expect(result?.announcement).toBeNull();
   });
 
   it('hides announcement after 21:00', async () => {
     // After 21:00 today's day is over and nothing later is in the calendar: no group day at all
-    const { db } = makeDb([[trainingDay], HAS_GROUP]);
+    const { db } = makeDb([COACH, [trainingDay], HAS_GROUP]);
     const result = await makeService(db, kyivAt(22)).getNext();
     expect(result?.announcement).toBeNull();
   });
 
   it('hides announcement when publishedAt is null (draft)', async () => {
-    const { db } = makeDb([[trainingDay], HAS_GROUP, slots, [unpublishedAnnouncement]]);
+    const { db } = makeDb([COACH, [trainingDay], HAS_GROUP, slots, [unpublishedAnnouncement]]);
     const result = await makeService(db, kyivAt(15)).getNext();
     expect(result?.announcement).toBeNull();
   });
 
   it('hides announcement when no announcement exists', async () => {
-    const { db } = makeDb([[trainingDay], HAS_GROUP, slots, []]);
+    const { db } = makeDb([COACH, [trainingDay], HAS_GROUP, slots, []]);
     const result = await makeService(db, kyivAt(15)).getNext();
     expect(result?.announcement).toBeNull();
   });
@@ -95,19 +97,19 @@ describe('ScheduleService — announcement visibility', () => {
 
 describe('ScheduleService — booking window flag', () => {
   it('bookingWindowOpen is false before 14:00', async () => {
-    const { db } = makeDb([[trainingDay], HAS_GROUP, slots, []]);
+    const { db } = makeDb([COACH, [trainingDay], HAS_GROUP, slots, []]);
     const result = await makeService(db, kyivAt(13)).getNext();
     expect(result?.bookingWindowOpen).toBe(false);
   });
 
   it('bookingWindowOpen is true between 14:00 and 21:00', async () => {
-    const { db } = makeDb([[trainingDay], HAS_GROUP, slots, []]);
+    const { db } = makeDb([COACH, [trainingDay], HAS_GROUP, slots, []]);
     const result = await makeService(db, kyivAt(17)).getNext();
     expect(result?.bookingWindowOpen).toBe(true);
   });
 
   it('bookingWindowOpen is false after 21:00', async () => {
-    const { db } = makeDb([[trainingDay], HAS_GROUP]);
+    const { db } = makeDb([COACH, [trainingDay], HAS_GROUP]);
     const result = await makeService(db, kyivAt(21)).getNext();
     expect(result?.bookingWindowOpen).toBe(false);
   });
@@ -116,7 +118,7 @@ describe('ScheduleService — assigned trainings', () => {
   it('skips a day that has only assigned trainings when picking the next group day', async () => {
     const assignedOnly = { id: 'day-p', localDate: TODAY, status: 'SCHEDULED' };
     const groupDay = { id: 'day-2', localDate: '2026-10-21', status: 'SCHEDULED' };
-    const { db } = makeDb([[assignedOnly, groupDay], [{ dayId: 'day-2' }], slots, []]);
+    const { db } = makeDb([COACH, [assignedOnly, groupDay], [{ dayId: 'day-2' }], slots, []]);
     const result = await makeService(db, kyivAt(15)).getNext();
     expect(result?.localDate).toBe('2026-10-21');
   });
@@ -129,6 +131,7 @@ describe('ScheduleService — assigned trainings', () => {
     const { db } = makeDb([
       assigned,
       [{ slotId: 'p-evening', paymentStatus: 'PAID' }],
+      [{ coachId: 'coach-1' }], // the member's coach
       [trainingDay], HAS_GROUP, slots, [], [], [],
     ]);
     const result = await makeService(db, kyivAt(15)).getNext('member-1');
@@ -141,7 +144,7 @@ describe('ScheduleService — assigned trainings', () => {
 
   it('marks an assigned training as started (no payment) during its hour', async () => {
     const assigned = [{ id: 'p1', localDate: TODAY, slotTime: '15:00', trainingType: 'персональні', capacity: 1, bookedCount: 0 }];
-    const { db } = makeDb([assigned, [], [trainingDay], HAS_GROUP, slots, [], [], []]);
+    const { db } = makeDb([assigned, [], [{ coachId: 'coach-1' }], [trainingDay], HAS_GROUP, slots, [], [], []]);
     const result = await makeService(db, kyivAt(15)).getNext('member-1');
     expect(result?.assignedSlots).toEqual([expect.objectContaining({ id: 'p1', isMyBooking: false, started: true })]);
   });

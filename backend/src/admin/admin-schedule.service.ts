@@ -194,7 +194,7 @@ export class AdminScheduleService {
     }));
   }
 
-  // Own slots in full. Other coaches' slots come only as busy times (one gym): no type, counts or names
+  // Only this coach's trainings (coaches work in parallel in different halls)
   async getCalendar(adminId: string, month: string) {
     const start = `${month}-01`;
     const [year, m] = month.split('-').map(Number);
@@ -211,7 +211,6 @@ export class AdminScheduleService {
         trainingType: trainingSlots.trainingType,
         bookedCount: trainingSlots.bookedCount,
         capacity: trainingSlots.capacity,
-        coachId: trainingSlots.coachId,
       })
       .from(trainingDays)
       .innerJoin(trainingSlots, eq(trainingSlots.trainingDayId, trainingDays.id))
@@ -220,14 +219,13 @@ export class AdminScheduleService {
           gte(trainingDays.localDate, start),
           lte(trainingDays.localDate, end),
           eq(trainingSlots.status, 'ACTIVE'),
+          eq(trainingSlots.coachId, adminId),
           eq(trainingDays.status, 'SCHEDULED'),
         ),
       )
       .orderBy(trainingDays.localDate, trainingSlots.slotTime);
 
-    const assignedIds = rows
-      .filter((r) => r.coachId === adminId && isAssignedType(r.trainingType))
-      .map((r) => r.slotId);
+    const assignedIds = rows.filter((r) => isAssignedType(r.trainingType)).map((r) => r.slotId);
     const assigned =
       assignedIds.length > 0
         ? await this.database.db
@@ -246,11 +244,7 @@ export class AdminScheduleService {
             .where(and(inArray(bookings.slotId, assignedIds), eq(bookings.status, 'ACTIVE')))
         : [];
 
-    return rows.map((r) =>
-      r.coachId !== adminId
-        ? { localDate: r.localDate, slotId: r.slotId, slotTime: r.slotTime, isMine: false as const }
-        : {
-      isMine: true as const,
+    return rows.map((r) => ({
       localDate: r.localDate,
       slotId: r.slotId,
       slotTime: r.slotTime,
@@ -266,7 +260,7 @@ export class AdminScheduleService {
           paymentStatus:
             booked.find((b) => b.slotId === r.slotId && b.memberId === id)?.paymentStatus ?? null,
         })),
-    });
+    }));
   }
 
   // Group slot at 19:00 / 20:00. Re-activates a cancelled slot at that time, but never takes over an active assigned one
@@ -287,13 +281,11 @@ export class AdminScheduleService {
           coachId: adminId,
         })
         .onConflictDoUpdate({
-          target: [trainingSlots.trainingDayId, trainingSlots.slotTime],
-          set: { trainingType: GROUP_TYPE, status: 'ACTIVE', capacity: 8, cancelledAt: null, coachId: adminId },
-          // a cancelled slot is free to take; an active one only if it is already this coach's group slot
-          setWhere: or(
-            eq(trainingSlots.status, 'CANCELLED'),
-            and(eq(trainingSlots.trainingType, GROUP_TYPE), eq(trainingSlots.coachId, adminId)),
-          ),
+          target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.coachId],
+          set: { trainingType: GROUP_TYPE, status: 'ACTIVE', capacity: 8, cancelledAt: null },
+          // this coach's slot at that time: a cancelled one is re-used, an active group one stays as is;
+          // their own active assigned training there is not taken over
+          setWhere: or(eq(trainingSlots.status, 'CANCELLED'), eq(trainingSlots.trainingType, GROUP_TYPE)),
         })
         .returning({ id: trainingSlots.id });
 
@@ -329,8 +321,8 @@ export class AdminScheduleService {
           coachId: adminId,
         })
         .onConflictDoUpdate({
-          target: [trainingSlots.trainingDayId, trainingSlots.slotTime],
-          set: { trainingType: dto.trainingType, status: 'ACTIVE', capacity, bookedCount: 0, cancelledAt: null, coachId: adminId },
+          target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.coachId],
+          set: { trainingType: dto.trainingType, status: 'ACTIVE', capacity, bookedCount: 0, cancelledAt: null },
           // Only a cancelled slot may be re-used (its bookings are all cancelled)
           setWhere: eq(trainingSlots.status, 'CANCELLED'),
         })
