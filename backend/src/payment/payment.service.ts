@@ -6,6 +6,9 @@ import { ClockService } from '../clock/clock.service';
 import { ASSIGNED_TYPES, slotStartsAt } from '../schedule/training-types';
 import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } from './liqpay.helper';
 
+// Price of a personal / split training, UAH. Hard-coded on purpose, same as PRICE_UAH in frontend/lib/liqpay.ts:
+// change both together (moving it to one place is a later decision)
+const PRICE_UAH = 700;
 const SUCCESS_STATUSES = ['success', 'sandbox'];
 const FAILED_STATUSES = ['failure', 'error', 'reversed'];
 // Stale PENDING payments handled per expireStale() run; the rest wait for the next schedule load
@@ -34,7 +37,6 @@ export class PaymentService {
 
   private get publicKey() { return process.env.LIQPAY_PUBLIC_KEY ?? ''; }
   private get privateKey() { return process.env.LIQPAY_PRIVATE_KEY ?? ''; }
-  private get amount() { return parseInt(process.env.LIQPAY_AMOUNT ?? '700', 10); }
   // Lower it (e.g. 2) to test expiry without waiting
   private get expiryMs() { return parseInt(process.env.PAYMENT_EXPIRY_MINUTES ?? '15', 10) * 60 * 1000; }
 
@@ -114,7 +116,7 @@ export class PaymentService {
         await tx.insert(payments).values({
           bookingId: inserted.id,
           orderId,
-          amount: this.amount,
+          amount: PRICE_UAH,
           currency: 'UAH',
           status: 'PENDING',
         });
@@ -177,7 +179,7 @@ export class PaymentService {
       await tx.insert(payments).values({
         bookingId: pending.bookingId,
         orderId,
-        amount: this.amount,
+        amount: PRICE_UAH,
         currency: 'UAH',
         status: 'PENDING',
       });
@@ -191,7 +193,7 @@ export class PaymentService {
       version: 3,
       public_key: this.publicKey,
       action: 'pay',
-      amount: this.amount,
+      amount: PRICE_UAH,
       currency: 'UAH',
       description: 'Персональне тренування Motion Gym',
       order_id: orderId,

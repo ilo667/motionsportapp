@@ -1,6 +1,7 @@
 import { api } from "./api";
 
 const LIQPAY_URL = "https://www.liqpay.ua/api/3/checkout";
+// Same hard-coded price as PRICE_UAH in backend/src/payment/payment.service.ts: change both together
 export const PRICE_UAH = 700;
 
 // Returns false when no redirect happened (booking turned out to be already paid)
