@@ -69,6 +69,21 @@ Auth endpoints:
   - Expiry: lazily on `GET /schedule/next` (`expireStale()`), PENDING older than `PAYMENT_EXPIRY_MINUTES` — reconciles with LiqPay status API first (lost callback → PAID, LiqPay unreachable → skip)
 - `HealthModule` — `GET /health`
 
+### LiqPay — rules (verified on sandbox 2026-10-22)
+
+The LiqPay docs are incomplete. These rules come from prod logs, so do not "fix" the code back to what the docs suggest:
+
+- **Only documented final statuses change state.** `success`/`sandbox` → PAID; `failure`/`error`/`reversed` → FAILED (booking cancelled, seat freed). Every other status, including undocumented ones, keeps the payment PENDING until expiry. Keep it this way.
+- **A declined card returns `try_again`, not `failure`.** The status API returns `result=ok status=try_again err_code=limit`. `try_again` is not in the docs. LiqPay sends **no callback** for it, and the status stays `try_again`. The order remains open for a retry on the same LiqPay page.
+- **"Скасувати оплату" on LiqPay** → the status API returns `result=error err_code=payment_not_found`, and no callback is sent. Only apply a status-API response when `result === 'ok'`.
+- **Decline → retry with a good card on the same page** produces a single `success` callback for the same `order_id`.
+- **Callbacks are sent only for final statuses**, so never rely on them alone: `/payment/return` and `expireStale()` both reconcile through the status API (`liqpayStatus` in `liqpay.helper.ts`).
+- **Test mode is defined by the keys alone** (`sandbox_…` prefix). Never send `sandbox: 1`: it forces every card to succeed and breaks the test cards for declines (`4000000000000002`).
+- **`LIQPAY_SERVER_URL`** must be `https://<backend>/payments/liqpay/callback` **without `/api`**. With `/api` LiqPay gets a 404 and payments hang in PENDING. **`FRONTEND_URL`** is required, otherwise LiqPay shows no "back to site" button (`result_url` ends up relative).
+- **`server_url` is embedded in each order.** After changing the env var, old orders keep retrying the old URL; this is harmless.
+- **Testing:** set `PAYMENT_EXPIRY_MINUTES=2` on Vercel for expiry scenarios, then remove it. Vercel Hobby keeps runtime logs only ~30 min (`vercel logs` without `--since`), so check them right after the scenario. The LiqPay cabinet → payment → "Лог виклику API" keeps callback history.
+- **Logs:** every payment decision is logged (`Checkout:`, `LiqPay callback:`, `LiqPay status API:`, `Status check:`, `Expire:`). LiqPay payloads are logged as a safe field subset plus `keys=[…]`; never log names, phones or card masks.
+
 ### Database
 
 Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts`, SQL migrations in `backend/sql/`. Run `npm run db:setup` to apply schema + seed.
