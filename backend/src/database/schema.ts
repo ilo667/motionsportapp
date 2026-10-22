@@ -70,7 +70,7 @@ export const trainingSlots = pgTable(
   (table) => [uniqueIndex('training_slots_day_time_idx').on(table.trainingDayId, table.slotTime)],
 );
 
-// Who may see and book a personal slot (індивідуальні: 1 member, спліт: 1–3). Групові have no rows here
+// Who may see and book a personal slot (персональні: 1 member, спліт: 1–3). Групові have no rows here
 export const slotMembers = pgTable(
   'slot_members',
   {

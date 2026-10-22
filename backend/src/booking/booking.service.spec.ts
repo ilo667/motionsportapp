@@ -123,7 +123,7 @@ describe('BookingService — slot validation', () => {
   });
 
   it('refuses a personal slot (booked only through payment)', async () => {
-    const { db } = makeDb([[{ ...validSlot, trainingType: 'індивідуальні' }]]);
+    const { db } = makeDb([[{ ...validSlot, trainingType: 'персональні' }]]);
     const service = makeService(db, at15);
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('requires payment');
   });
@@ -139,7 +139,7 @@ describe('BookingService — slot validation', () => {
 
 describe('BookingService — cancel', () => {
   const booking = { id: 'booking-1', slotId: 'slot-p', trainingDayId: 'day-1', memberId: 'member-1', status: 'ACTIVE' };
-  const personalSlot = { bookedCount: 1, capacity: 1, slotTime: '21:30', trainingType: 'індивідуальні' };
+  const personalSlot = { bookedCount: 1, capacity: 1, slotTime: '21:30', trainingType: 'персональні' };
 
   it('throws NotFoundException when there is no active booking on that slot', async () => {
     const { db } = makeDb([[]]);

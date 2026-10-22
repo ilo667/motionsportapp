@@ -16,7 +16,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export type TrainingType = "групові" | "індивідуальні" | "спліт";
+export type TrainingType = "групові" | "персональні" | "спліт";
 
 export interface AdminMember {
   id: string;

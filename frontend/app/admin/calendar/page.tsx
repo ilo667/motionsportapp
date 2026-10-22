@@ -17,27 +17,27 @@ import { PageLayout } from "@/components/PageLayout";
 
 const TYPE_COLORS: Record<TrainingType, { bg: string; border: string; text: string }> = {
   групові:       { bg: "#14532d", border: "#93d23c", text: "#bbf7d0" },
-  індивідуальні: { bg: "#3b2f00", border: "#eab308", text: "#fef08a" },
+  персональні: { bg: "#3b2f00", border: "#eab308", text: "#fef08a" },
   спліт:         { bg: "#7c2d12", border: "#fb923c", text: "#fed7aa" },
 };
 
 const TYPE_LABELS: Record<TrainingType, string> = {
   групові: "Групові",
-  індивідуальні: "Персональні",
+  персональні: "Персональні",
   спліт: "Спліт",
 };
 
 // Short labels for calendar events — full names don't fit a day column
 const TYPE_SHORT: Record<TrainingType, string> = {
   групові: "Груп.",
-  індивідуальні: "Перс.",
+  персональні: "Перс.",
   спліт: "Спліт",
 };
 
-const TYPES: TrainingType[] = ["групові", "індивідуальні", "спліт"];
+const TYPES: TrainingType[] = ["групові", "персональні", "спліт"];
 const GROUP_TIMES = ["19:00", "20:00"];
-// Member pickers per type: індивідуальні exactly 1, спліт 1 required + 2 optional
-const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, індивідуальні: 1, спліт: 3 };
+// Member pickers per type: персональні exactly 1, спліт 1 required + 2 optional
+const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, персональні: 1, спліт: 3 };
 const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
 const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 

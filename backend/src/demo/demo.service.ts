@@ -12,7 +12,7 @@ export const DEMO_SCENARIOS = {
   booking_open: { label: 'Запис відкрито',   hour: 15, slot1Count: 7, slot2Count: 3, slot1Type: 'групові', slot2Type: 'групові' },
   one_full:     { label: 'Один слот повний', hour: 15, slot1Count: 8, slot2Count: 3, slot1Type: 'групові', slot2Type: 'групові' },
   after_21:     { label: 'Після 21:00',      hour: 22, slot1Count: 7, slot2Count: 3, slot1Type: 'групові', slot2Type: 'групові' },
-  payment_test: { label: 'Тест оплати',      hour: 15, slot1Count: 3, slot2Count: 0, slot1Type: 'групові', slot2Type: 'індивідуальні' },
+  payment_test: { label: 'Тест оплати',      hour: 15, slot1Count: 3, slot2Count: 0, slot1Type: 'групові', slot2Type: 'персональні' },
 } as const;
 
 export type ScenarioName = keyof typeof DEMO_SCENARIOS;

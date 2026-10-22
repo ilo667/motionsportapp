@@ -87,7 +87,7 @@ describe('Personal slots — createPersonalSlot', () => {
   it('allows exactly one member for an individual training', async () => {
     const { db } = makeDb([[{ id: M1 }, { id: M2 }]]);
     await expect(
-      makeService(db).createPersonalSlot('2026-10-21', { slotTime: '10:30', trainingType: 'індивідуальні', memberIds: [M1, M2] }),
+      makeService(db).createPersonalSlot('2026-10-21', { slotTime: '10:30', trainingType: 'персональні', memberIds: [M1, M2] }),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -101,7 +101,7 @@ describe('Personal slots — createPersonalSlot', () => {
   it('refuses a time that has already passed', async () => {
     const { db } = makeDb([[{ id: M1 }]]);
     await expect(
-      makeService(db).createPersonalSlot('2026-10-20', { slotTime: '11:45', trainingType: 'індивідуальні', memberIds: [M1] }),
+      makeService(db).createPersonalSlot('2026-10-20', { slotTime: '11:45', trainingType: 'персональні', memberIds: [M1] }),
     ).rejects.toThrow('in the past');
     expect(db.insert).not.toHaveBeenCalled();
   });
@@ -111,7 +111,7 @@ describe('Personal slots — createPersonalSlot', () => {
     let call = 0;
     const { db } = makeDb([[{ id: M1 }]], () => (call++ === 0 ? [{ id: 'day-1' }] : []));
     await expect(
-      makeService(db).createPersonalSlot('2026-10-21', { slotTime: '19:00', trainingType: 'індивідуальні', memberIds: [M1] }),
+      makeService(db).createPersonalSlot('2026-10-21', { slotTime: '19:00', trainingType: 'персональні', memberIds: [M1] }),
     ).rejects.toThrow(ConflictException);
   });
 });

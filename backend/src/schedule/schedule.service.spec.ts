@@ -126,7 +126,7 @@ describe('ScheduleService — personal trainings', () => {
 
   it("lists the member's assigned personal trainings until they end, with booking state", async () => {
     const assigned = [
-      { id: 'p-morning', localDate: TODAY, slotTime: '12:00', trainingType: 'індивідуальні', capacity: 1, bookedCount: 0 },
+      { id: 'p-morning', localDate: TODAY, slotTime: '12:00', trainingType: 'персональні', capacity: 1, bookedCount: 0 },
       { id: 'p-evening', localDate: TODAY, slotTime: '18:00', trainingType: 'спліт', capacity: 2, bookedCount: 1 },
     ];
     const { db } = makeDb([
@@ -143,7 +143,7 @@ describe('ScheduleService — personal trainings', () => {
   });
 
   it('marks a personal training as started (no payment) during its hour', async () => {
-    const assigned = [{ id: 'p1', localDate: TODAY, slotTime: '15:00', trainingType: 'індивідуальні', capacity: 1, bookedCount: 0 }];
+    const assigned = [{ id: 'p1', localDate: TODAY, slotTime: '15:00', trainingType: 'персональні', capacity: 1, bookedCount: 0 }];
     const { db } = makeDb([assigned, [], [trainingDay], HAS_GROUP, slots, [], [], []]);
     const result = await makeService(db, kyivAt(15)).getNext('member-1');
     expect(result?.personalSlots).toEqual([expect.objectContaining({ id: 'p1', isMyBooking: false, started: true })]);

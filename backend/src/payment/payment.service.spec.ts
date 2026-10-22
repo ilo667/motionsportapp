@@ -129,7 +129,7 @@ describe('PaymentService — createCheckout', () => {
   });
 
   it('throws ConflictException when slot is CANCELLED', async () => {
-    const { db } = makeDb([[{ id: 'slot-1', status: 'CANCELLED', trainingType: 'індивідуальні', bookedCount: 0, capacity: 8, trainingDayId: 'day-1' }]]);
+    const { db } = makeDb([[{ id: 'slot-1', status: 'CANCELLED', trainingType: 'персональні', bookedCount: 0, capacity: 8, trainingDayId: 'day-1' }]]);
     const svc = makeService(db);
     await expect(svc.createCheckout('slot-1', 'member-1')).rejects.toThrow(ConflictException);
   });
@@ -323,7 +323,7 @@ describe('PaymentService — expireStale', () => {
 });
 
 describe('PaymentService — resume PENDING checkout', () => {
-  const slot = { id: 'slot-1', status: 'ACTIVE', trainingType: 'індивідуальні', slotTime: '20:00', bookedCount: 0, capacity: 1, trainingDayId: 'day-1' };
+  const slot = { id: 'slot-1', status: 'ACTIVE', trainingType: 'персональні', slotTime: '20:00', bookedCount: 0, capacity: 1, trainingDayId: 'day-1' };
   const pending = { id: 'pay-1', bookingId: 'booking-1', orderId: 'mg-old' };
 
   it('issues a new order for the same booking instead of 409', async () => {
@@ -412,7 +412,7 @@ describe('PaymentService — LiqPay expired_date', () => {
   it('passes expired_date equal to our expiry so LiqPay closes the order together with the booking', async () => {
     process.env.PAYMENT_EXPIRY_MINUTES = '15';
     mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
-    const slot = { id: 'slot-1', status: 'ACTIVE', trainingType: 'індивідуальні', slotTime: '20:00', bookedCount: 0, capacity: 1, trainingDayId: 'day-1' };
+    const slot = { id: 'slot-1', status: 'ACTIVE', trainingType: 'персональні', slotTime: '20:00', bookedCount: 0, capacity: 1, trainingDayId: 'day-1' };
     const { db } = makeDb([[slot], ASSIGNED, DAY, [{ id: 'pay-1', bookingId: 'booking-1', orderId: 'mg-old' }]]);
 
     const before = Date.now();

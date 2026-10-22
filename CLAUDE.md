@@ -65,7 +65,7 @@ Auth endpoints:
   - `/internal/cron/*` routes must be **`@Get`** — Vercel Cron invokes with GET (`vercel-cron/1.0`); a POST route answers 404 and the job silently never runs. Protected by `CRON_SECRET` (`Authorization: Bearer …`, sent by Vercel automatically); missing secret in production → 403. Trigger manually: `vercel crons run /internal/cron/<job>`. Hobby plan: once per day, any minute within the scheduled hour
 - `AiModule` — AI announcement generation
 - `DemoModule` — demo mode time override (`DEMO_MODE=true` env only). Scenario "Тест оплати" makes 20:00 an individual slot assigned to every real (non-demo) member
-- `PaymentModule` — LiqPay payment for індивідуальні/спліт slots:
+- `PaymentModule` — LiqPay payment for персональні/спліт slots:
   - `POST /payments/checkout` — creates booking (PENDING payment status) + returns LiqPay `{data, signature}` for form POST; if member already has a PENDING booking on that slot — reuses it with a new order_id (old payment → `REPLACED`), or returns `{status: 'PAID'}` if LiqPay says the previous attempt succeeded
   - `POST /payments/liqpay/callback` — public server-to-server callback; verifies SHA1 signature; activates/cancels booking
   - `GET /payments/status?order=` — member's own order; while PENDING asks LiqPay status API directly (used by `/payment/return`)
@@ -74,11 +74,11 @@ Auth endpoints:
 
 ### Training types — rules
 
-UI label for `індивідуальні` is **«Персональні» / «Персональне»** (short «Перс.»); the DB value stays `індивідуальні`. «Персональні тренування» on the member page is the section for both individual and split.
+Types (DB value = UI word): `групові`, `персональні` (one person, formerly `індивідуальні`; renamed in DB by `scripts/migrate-personal-slots.js`), `спліт`. In code, a "personal slot" (`PERSONAL_TYPES`, `personalSlots`, `PersonalSlotCard`) means `персональні` **or** `спліт`; the member page section «Персональні тренування» shows both.
 
 Constants and helpers live in `backend/src/schedule/training-types.ts`.
 - **Групові**: 19:00 and 20:00, capacity 8, free, visible to everyone, booking window 14:00–21:00 of that day. **One group booking per member per day** (switch between 19:00 and 20:00), checked in `BookingService` under a `SELECT … FOR UPDATE` on the member row.
-- **Індивідуальні / спліт** (personal): any time in 15-minute steps, on any day. The coach assigns members in `slot_members` (індивідуальні exactly 1, спліт 1–3); `capacity` is fixed: індивідуальні 1, спліт 3. Only assigned members see the slot (`GET /schedule/next` → `personalSlots`) and can pay (`createCheckout` returns 404 for anyone else). Paid via LiqPay; payment and cancellation allowed until the slot starts; shown until one hour after the start. No vacancy alerts.
+- **Персональні / спліт** (personal): any time in 15-minute steps, on any day. The coach assigns members in `slot_members` (персональні exactly 1, спліт 1–3); `capacity` is fixed: персональні 1, спліт 3. Only assigned members see the slot (`GET /schedule/next` → `personalSlots`) and can pay (`createCheckout` returns 404 for anyone else). Paid via LiqPay; payment and cancellation allowed until the slot starts; shown until one hour after the start. No vacancy alerts.
 - Personal bookings **don't count** toward the one-per-day rule: a member can have a group booking plus several personal ones on the same day. DB index: `bookings_member_slot_active_idx` UNIQUE (member_id, slot_id) WHERE ACTIVE (the old per-day index is dropped by `scripts/migrate-personal-slots.js`).
 - `training_slots` stays UNIQUE (day, slot_time): two trainings can't share a time. A **cancelled** slot at that time is reused (`ON CONFLICT … DO UPDATE … WHERE status = 'CANCELLED'`); the group upsert never takes over an active personal slot.
 - The coach can't remove a member who already booked a personal slot (409).
@@ -126,7 +126,7 @@ Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts`, 
   - there are no stable `fc-*` class names (theme classes are hashed), so style only via `--fc-classic-*` palette variables (override in `.mg-calendar [data-color-scheme]`, dark mode via `colorScheme="dark"`, `palette.css` must stay imported);
   - no calendar-level `buttonText`: view button labels come from the `uk` locale.
   Default view `timeGridWeek` (17:00–22:00, widened to fit earlier/later personal trainings) with a `dayGridMonth` toggle. Data is fetched per month for **every** month the visible range touches.
-  Clicking a day adds one training (групові = both 19:00 and 20:00; індивідуальні / спліт = time + members); click again to add another. Clicking an event: cancel it, or change the members of a personal one. Group events show `booked/capacity`; personal events show members instead of a count (`Спліт · Катя ✓, Оля`, ✓ = paid) and the modal lists each member's payment state
+  Clicking a day adds one training (групові = both 19:00 and 20:00; персональні / спліт = time + members); click again to add another. Clicking an event: cancel it, or change the members of a personal one. Group events show `booked/capacity`; personal events show members instead of a count (`Спліт · Катя ✓, Оля`, ✓ = paid) and the modal lists each member's payment state
 - Auth state: `mg_authed` in `localStorage` — set on login, cleared on logout/401. Home page skips API call when flag is absent (avoids 401 in console for unauthenticated users)
 
 ## Vercel deployment
