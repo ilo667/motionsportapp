@@ -43,20 +43,21 @@ Frontend (`/api/*`) → Next.js rewrite → `BACKEND_URL` (dev: `localhost:3001`
 
 ### Auth
 
-JWT in an `httpOnly` cookie (`token`). `JwtAuthGuard` reads it on protected routes. `ValidationPipe(whitelist: true)` is global. Guards: `SessionGuard` (any auth), `AdminGuard` (admin only), `MemberGuard` (member only — used on payment checkout).
+Opaque session token (no JWT) in an `httpOnly`, `sameSite: strict` cookie named **`session`** (`secure` in production, 30 days). The DB stores only its SHA-256 in `sessions` (`principal_type` member | admin, `principal_id`, `expires_at`, `revoked_at`); logout revokes it. `SessionGuard` hashes the cookie, finds a live session and sets `req.user` (`SessionUser`: member or admin). Then `AdminGuard` (admin only) or `MemberGuard` (member only, e.g. payment checkout). `ValidationPipe(whitelist: true)` is global.
 
 Auth endpoints:
 - `POST /auth/member/register` — displayName + PIN → memberCode + recoveryCode
 - `POST /auth/member/login` — memberCode + PIN
 - `POST /auth/member/forgot` — memberCode + recoveryCode + newPin → new recoveryCode
 - `POST /auth/admin/login` — username + password
+- `POST /auth/admin/setup` — creates the first coach account; 409 once any admin exists (normally use `npm run seed:admin`)
 - `POST /auth/logout`
 - `GET /auth/me`
 
 ### Backend modules
 
 - `DatabaseModule` — global Drizzle ORM provider, reads `DATABASE_URL`
-- `AuthModule` — member + admin auth, bcrypt passwords, JWT signing, PIN recovery
+- `AuthModule` — member + admin auth, bcrypt PIN/password/recovery hashes, DB sessions, PIN recovery
 - `ScheduleModule` — `GET /schedule/next` — next training day with slots
 - `BookingModule` — book / cancel / switch slot (group slots; cancel takes `slotId`, since a member can hold several bookings a day)
 - `AdminModule` — admin schedule management, slot cancellation, attendance, clients list (`GET /admin/members`, `PATCH /admin/members/:id/note`)
@@ -161,6 +162,8 @@ Two separate Vercel projects pointing at this repo:
 - **backend project** — root: `backend/`, entry: `api/index.ts`, rewrites all to `/api`
 
 Required env vars:
-- Backend: `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `CRON_SECRET` (random ≥16 chars, required for crons in production)
+- Backend: `DATABASE_URL`, `FRONTEND_URL`, `CRON_SECRET` (random ≥16 chars, required for crons in production)
+- Backend (push): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
+- Backend (AI announcements): `GEMINI_API_KEY` (without it a fallback text is used)
 - Backend (payments): `LIQPAY_PUBLIC_KEY`, `LIQPAY_PRIVATE_KEY`, `LIQPAY_SERVER_URL`, `PAYMENT_EXPIRY_MINUTES` (default `15`; set e.g. `2` to test expiry)
 - Frontend: `BACKEND_URL`
