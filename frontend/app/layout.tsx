@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Rubik, Inter } from "next/font/google";
 import { SwRegister } from "../components/SwRegister";
+import { OfflineBanner } from "../components/OfflineBanner";
 import "./globals.css";
 
 const rubik = Rubik({
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#93d23c" />
       </head>
       <body className="text-base sm:text-sm min-h-full flex flex-col">
+        <OfflineBanner />
         <main className="flex-1 flex flex-col px-5">
           <div className="w-full max-w-xl mx-auto flex-1 flex flex-col">
             {children}

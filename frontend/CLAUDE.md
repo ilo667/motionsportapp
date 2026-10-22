@@ -6,7 +6,7 @@ Next.js 16 App Router PWA. Backend API runs on port 3001 (proxied via `/api` rew
 
 Key files:
 - `app/` — pages: `/` (schedule + unauthenticated landing), `/login`, `/register`, `/forgot`, `/admin`, `/admin/login`, `/admin/calendar`, `/admin/clients`, `/payment/return`, `/demo`
-- `components/` — `Header`, `MotionGymLogo`, `PageLayout`, `LoginForm` (member/admin login), `PaymentResult` (`/payment/return` status), `SwRegister`, `SlotCard` (group slot), `AssignedSlotCard` (personal / split, LiqPay), `GymLoader`, `DemoControls`, `admin/SlotCard`
+- `components/` — `Header`, `MotionGymLogo`, `PageLayout`, `LoginForm` (member/admin login), `PaymentResult` (`/payment/return` status), `SwRegister`, `OfflineBanner` (sticky "Немає інтернету" strip after 5 s offline, in `app/layout.tsx`), `SlotCard` (group slot), `AssignedSlotCard` (personal / split, LiqPay), `GymLoader`, `DemoControls`, `admin/SlotCard`
 - `lib/api.ts` — typed fetch wrapper for all backend calls
 - `lib/liqpay.ts` — `redirectToLiqPay(slotId)` (checkout form POST), `PRICE_UAH`
 
