@@ -17,19 +17,50 @@ function formatLocalDate(localDate: string): string {
   }).format(date);
 }
 
+const POLL_OPEN_MS = 5_000; // booking window open: seats change fast
+const POLL_IDLE_MAX_MS = 5 * 60_000; // outside the window: safety refresh (missed timers, trainer changes)
+const POLL_ERROR_MS = 30_000;
+
+// Outside the booking window nothing changes except at bookingOpenAt / bookingCloseAt,
+// so wake up exactly then (in server time, so a wrong phone clock doesn't matter) or after the safety interval
+function nextPollDelay(data: ScheduleNext | undefined): number {
+  if (!data) return POLL_ERROR_MS;
+  if (data.bookingWindowOpen) return POLL_OPEN_MS;
+
+  const serverNow = Date.parse(data.serverTime);
+  const openAt = Date.parse(data.bookingOpenAt);
+  const closeAt = Date.parse(data.bookingCloseAt);
+  // Window should be open by now but server still says closed (clock skew) — retry soon
+  if (serverNow >= openAt && serverNow < closeAt) return POLL_OPEN_MS;
+
+  const nextEdge = [openAt, closeAt].filter((t) => t > serverNow).sort((a, b) => a - b)[0];
+  const untilEdge = nextEdge ? nextEdge - serverNow + 1_000 : POLL_IDLE_MAX_MS;
+  return Math.min(Math.max(untilEdge, 1_000), POLL_IDLE_MAX_MS);
+}
+
 export default function SchedulePage() {
   const router = useRouter();
   const [schedule, setSchedule] = useState<ScheduleNext | null>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [mutateError, setMutateError] = useState("");
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingRef = useRef(false);
+  const fetchRef = useRef<(() => Promise<void>) | null>(null);
 
   const authedRef = useRef(false);
 
+  const stopPolling = useCallback(() => {
+    pollingRef.current = false;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }, []);
+
+  // Every refresh (poll, mutation, demo controls) reschedules the next one from fresh data
   const fetchSchedule = useCallback(async () => {
+    let data: ScheduleNext | undefined;
     try {
-      const data = await api.getScheduleNext();
+      data = await api.getScheduleNext();
       setSchedule(data);
     } catch (err: unknown) {
       if ((err as { status?: number }).status === 401 && !authedRef.current) {
@@ -39,11 +70,19 @@ export default function SchedulePage() {
         throw err;
       }
     }
+    if (pollingRef.current) {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => { fetchRef.current?.().catch(() => {}); }, nextPollDelay(data));
+    }
   }, []);
 
+  useEffect(() => {
+    fetchRef.current = fetchSchedule;
+  }, [fetchSchedule]);
+
   const startPolling = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(fetchSchedule, 5_000);
+    pollingRef.current = true;
+    fetchSchedule().catch(() => {});
   }, [fetchSchedule]);
 
   useEffect(() => {
@@ -57,29 +96,24 @@ export default function SchedulePage() {
       return;
     }
 
+    pollingRef.current = true;
     fetchSchedule().then(() => {
       authedRef.current = true;
       setAuthed(true);
       setLoading(false);
-      startPolling();
-    }).catch(() => {});
+    }).catch(() => stopPolling());
 
     const onVisibility = () => {
-      if (document.hidden) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      } else {
-        fetchSchedule();
-        startPolling();
-      }
+      if (document.hidden) stopPolling();
+      else startPolling();
     };
 
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      stopPolling();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [fetchSchedule, startPolling]);
+  }, [fetchSchedule, startPolling, stopPolling]);
 
   const handleMutate = async (fn: () => Promise<unknown>) => {
     setMutateError("");
