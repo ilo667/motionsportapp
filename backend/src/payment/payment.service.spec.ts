@@ -60,7 +60,12 @@ describe('liqpay helper', () => {
 // ── PaymentService ─────────────────────────────────────────────────────────
 
 // `sets` records every update().set(...) payload so tests can assert resulting statuses
-function makeDb(results: unknown[][] = []) {
+// `writeResult(setPayload)` decides what an UPDATE … RETURNING returns (default: one affected row),
+// so tests can simulate a compare-and-set that lost the race (returns [])
+function makeDb(
+  results: unknown[][] = [],
+  writeResult: (set?: Record<string, unknown>) => unknown[] = () => [{ id: 'new-booking-id', slotId: 'slot-1' }],
+) {
   let idx = 0;
   const next = () => results[idx++] ?? [];
   const sets: Record<string, unknown>[] = [];
@@ -73,13 +78,12 @@ function makeDb(results: unknown[][] = []) {
     return chain;
   }
 
-  // Writes resolve to one affected row, so `.returning()` destructuring works
-  function writeLink(): any {
-    const chain: any = { then: (r: (v: unknown) => void) => r([{ id: 'new-booking-id' }]) };
+  function writeLink(payload?: Record<string, unknown>): any {
+    const chain: any = { then: (r: (v: unknown) => void) => r(writeResult(payload)) };
     for (const m of ['where', 'values', 'onConflictDoNothing', 'returning']) {
-      chain[m] = jest.fn().mockImplementation(() => writeLink());
+      chain[m] = jest.fn().mockImplementation(() => writeLink(payload));
     }
-    chain.set = jest.fn().mockImplementation((v: Record<string, unknown>) => { sets.push(v); return writeLink(); });
+    chain.set = jest.fn().mockImplementation((v: Record<string, unknown>) => { sets.push(v); return writeLink(v); });
     return chain;
   }
 
@@ -185,7 +189,6 @@ describe('PaymentService — handleCallback failure', () => {
   it('cancels booking and marks payment FAILED on failure status', async () => {
     const { db, sets } = makeDb([
       [{ id: 'pay-1', bookingId: 'booking-1', status: 'PENDING' }],
-      [{ slotId: 'slot-1' }],
     ]);
     const svc = makeService(db);
 
@@ -221,7 +224,7 @@ describe('PaymentService — getStatus', () => {
 
   it('cancels booking when LiqPay reports failure', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'failure', err_code: 'limit' });
-    const { db, sets } = makeDb([[pending], [{ slotId: 'slot-1' }]]);
+    const { db, sets } = makeDb([[pending]]);
     await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'FAILED' });
     expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED' }));
   });
@@ -279,7 +282,7 @@ describe('PaymentService — expireStale', () => {
 
   it('expires and frees the slot when payment was not completed', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
-    const { db, sets } = makeDb([[stale], [{ slotId: 'slot-1' }]]);
+    const { db, sets } = makeDb([[stale]]);
     await expect(makeService(db).expireStale()).resolves.toEqual({ expired: 1 });
     expect(sets).toContainEqual(expect.objectContaining({ status: 'EXPIRED' }));
     expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED' }));
@@ -312,7 +315,7 @@ describe('PaymentService — resume PENDING checkout', () => {
 
   it('starts a fresh booking when the previous attempt failed', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'failure' });
-    const { db, sets } = makeDb([[slot], [pending], [{ slotId: 'slot-1' }], [slot], []]);
+    const { db, sets } = makeDb([[slot], [pending], [slot], []]);
     const result = await makeService(db).createCheckout('slot-1', 'member-1');
 
     expect(result).toHaveProperty('data');
@@ -387,5 +390,59 @@ describe('PaymentService — LiqPay expired_date', () => {
     const expiredMs = new Date(expired.replace(' ', 'T') + 'Z').getTime();
     expect(expiredMs).toBeGreaterThanOrEqual(before + 15 * 60 * 1000 - 1000);
     expect(expiredMs).toBeLessThanOrEqual(Date.now() + 15 * 60 * 1000);
+  });
+});
+
+describe('PaymentService — concurrent transitions (compare-and-set)', () => {
+  const stale = { id: 'pay-1', bookingId: 'booking-1', orderId: 'mg-1' };
+  const decrements = (sets: Record<string, unknown>[]) => sets.filter((v) => 'bookedCount' in v).length;
+
+  it('expiring releases the seat exactly once', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
+    const { db, sets } = makeDb([[stale]]);
+    await expect(makeService(db).expireStale()).resolves.toEqual({ expired: 1 });
+    expect(decrements(sets)).toBe(1);
+  });
+
+  it('two simultaneous expireStale runs cancel the booking and free the seat only once', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
+    // Postgres semantics: only the first UPDATE payments … WHERE status = 'PENDING' gets the row
+    let paymentClaimed = false;
+    const shared = makeDb([[stale], [stale]], (set) => {
+      if (set?.status === 'EXPIRED') {
+        if (paymentClaimed) return [];
+        paymentClaimed = true;
+      }
+      return [{ id: 'row', slotId: 'slot-1' }];
+    });
+    const svc = makeService(shared.db);
+
+    const [a, b] = await Promise.all([svc.expireStale(), svc.expireStale()]);
+
+    expect(a.expired + b.expired).toBe(1);
+    expect(decrements(shared.sets)).toBe(1);
+    expect(shared.sets.filter((v) => v.status === 'CANCELLED')).toHaveLength(1);
+  });
+
+  it('a failure callback after the payment was already expired changes nothing', async () => {
+    const { db, sets } = makeDb(
+      [[{ id: 'pay-1', bookingId: 'booking-1', status: 'PENDING' }], [{ status: 'EXPIRED' }]],
+      (set) => (set?.status === 'FAILED' ? [] : [{ id: 'row', slotId: 'slot-1' }]),
+    );
+    const data = liqpayEncode({ order_id: 'mg-1', status: 'failure' });
+    await expect(makeService(db).handleCallback(data, liqpaySign('priv_key', data))).resolves.toEqual({ ok: true });
+    expect(sets.filter((v) => v.status === 'CANCELLED')).toHaveLength(0);
+    expect(decrements(sets)).toBe(0);
+  });
+
+  it('status check reports the real status when another request already marked it PAID', async () => {
+    mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'success' });
+    const pending = { id: 'pay-1', bookingId: 'booking-1', status: 'PENDING', createdAt: new Date('2026-10-21T19:00:00Z') };
+    const { db, sets } = makeDb(
+      [[pending], [{ status: 'PAID' }]],
+      (set) => (set?.status === 'PAID' ? [] : [{ id: 'row' }]),
+    );
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PAID' });
+    expect(sets.filter((v) => v.paymentStatus === 'PAID')).toHaveLength(0); // booking untouched by the loser
   });
 });

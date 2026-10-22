@@ -1,5 +1,5 @@
 import { Injectable, ConflictException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { and, eq, lt, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, lt, ne, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { trainingSlots, bookings, payments } from '../database/schema';
 import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } from './liqpay.helper';
@@ -289,9 +289,12 @@ export class PaymentService {
         continue;
       }
 
-      this.logger.log(`Expire: order=${p.orderId} → EXPIRED, booking=${p.bookingId} cancelled`);
-      await this.cancelPayment(p, 'EXPIRED');
-      expired++;
+      if (await this.cancelPayment(p, 'EXPIRED')) {
+        this.logger.log(`Expire: order=${p.orderId} → EXPIRED, booking=${p.bookingId} cancelled`);
+        expired++;
+      } else {
+        this.logger.log(`Expire: order=${p.orderId} skipped — already handled by another request`);
+      }
     }
 
     return { expired };
@@ -299,6 +302,8 @@ export class PaymentService {
 
   // Single place that maps a LiqPay status onto our payment + booking.
   // Non-final statuses (processing, *_verify, …) leave the payment PENDING.
+  // Every transition is compare-and-set (UPDATE … WHERE status = expected RETURNING): concurrent requests
+  // (callback retries, several clients triggering expireStale at once) can't apply the same transition twice.
   private async applyLiqpayStatus(
     payment: { id: string; bookingId: string },
     liqpay: Record<string, unknown>,
@@ -307,11 +312,14 @@ export class PaymentService {
 
     if (SUCCESS_STATUSES.includes(status)) {
       const liqpayPaymentId = liqpay.payment_id ? String(liqpay.payment_id) : null;
-      await this.database.db.transaction(async (tx) => {
-        await tx
+      const claimed = await this.database.db.transaction(async (tx) => {
+        // REPLACED is allowed: the member may pay an old LiqPay tab (caller checks the booking still awaits payment)
+        const [won] = await tx
           .update(payments)
           .set({ status: 'PAID', liqpayPaymentId, rawCallback: liqpay, updatedAt: new Date() })
-          .where(eq(payments.id, payment.id));
+          .where(and(eq(payments.id, payment.id), inArray(payments.status, ['PENDING', 'REPLACED'])))
+          .returning({ id: payments.id });
+        if (!won) return false;
         await tx
           .update(bookings)
           .set({ paymentStatus: 'PAID' })
@@ -321,16 +329,26 @@ export class PaymentService {
           .update(payments)
           .set({ status: 'REPLACED', updatedAt: new Date() })
           .where(and(eq(payments.bookingId, payment.bookingId), eq(payments.status, 'PENDING'), ne(payments.id, payment.id)));
+        return true;
       });
-      return 'PAID';
+      return claimed ? 'PAID' : this.currentStatus(payment.id);
     }
 
     if (FAILED_STATUSES.includes(status)) {
-      await this.cancelPayment(payment, 'FAILED', liqpay);
-      return 'FAILED';
+      return (await this.cancelPayment(payment, 'FAILED', liqpay)) ? 'FAILED' : this.currentStatus(payment.id);
     }
 
     return 'PENDING';
+  }
+
+  // Someone else already moved the payment on — report what it is now
+  private async currentStatus(paymentId: string): Promise<PaymentStatus> {
+    const [row] = await this.database.db
+      .select({ status: payments.status })
+      .from(payments)
+      .where(eq(payments.id, paymentId))
+      .limit(1);
+    return (row?.status ?? 'PENDING') as PaymentStatus;
   }
 
   private async isAwaitingPayment(bookingId: string) {
@@ -342,32 +360,33 @@ export class PaymentService {
     return booking?.status === 'ACTIVE' && booking.paymentStatus === 'PENDING';
   }
 
+  // Returns false when the payment was no longer PENDING (another request got there first) — then nothing changes.
+  // The seat is released only if this call actually cancelled the booking, so bookedCount can't drop twice.
   private async cancelPayment(
     payment: { id: string; bookingId: string },
     status: 'FAILED' | 'EXPIRED',
     rawCallback?: Record<string, unknown>,
-  ) {
-    const [booking] = await this.database.db
-      .select({ slotId: bookings.slotId })
-      .from(bookings)
-      .where(eq(bookings.id, payment.bookingId))
-      .limit(1);
-
-    await this.database.db.transaction(async (tx) => {
-      await tx
+  ): Promise<boolean> {
+    return this.database.db.transaction(async (tx) => {
+      const [won] = await tx
         .update(payments)
         .set({ status, ...(rawCallback && { rawCallback }), updatedAt: new Date() })
-        .where(eq(payments.id, payment.id));
-      await tx
+        .where(and(eq(payments.id, payment.id), eq(payments.status, 'PENDING')))
+        .returning({ id: payments.id });
+      if (!won) return false;
+
+      const [cancelled] = await tx
         .update(bookings)
         .set({ status: 'CANCELLED', cancelledAt: new Date() })
-        .where(and(eq(bookings.id, payment.bookingId), eq(bookings.status, 'ACTIVE')));
-      if (booking?.slotId) {
+        .where(and(eq(bookings.id, payment.bookingId), eq(bookings.status, 'ACTIVE')))
+        .returning({ slotId: bookings.slotId });
+      if (cancelled?.slotId) {
         await tx
           .update(trainingSlots)
           .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - 1, 0)` })
-          .where(eq(trainingSlots.id, booking.slotId));
+          .where(eq(trainingSlots.id, cancelled.slotId));
       }
+      return true;
     });
   }
 
