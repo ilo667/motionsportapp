@@ -168,19 +168,27 @@ export default function HistoryPage() {
         <div className="flex flex-col space-y-3">
           {days.map((day) => {
             const expanded = open.has(day.localDate);
+            const dayTitle = (
+              <span className="flex flex-col">
+                <span className="text-heading text-sm font-semibold capitalize">{formatDay(day.localDate)}</span>
+                <span className={`text-xs ${day.status === "CANCELLED" ? "text-danger" : "text-muted"}`}>{daySummary(day)}</span>
+              </span>
+            );
             return (
               <div key={day.localDate} className="border border-line rounded-2xl overflow-hidden">
-                <button
-                  onClick={() => toggle(day.localDate)}
-                  aria-expanded={expanded}
-                  className="w-full text-left bg-surface px-4 py-3 flex items-start justify-between space-x-3 hover:bg-surface/70 transition-colors"
-                >
-                  <span className="flex flex-col">
-                    <span className="text-heading text-sm font-semibold capitalize">{formatDay(day.localDate)}</span>
-                    <span className={`text-xs ${day.status === "CANCELLED" ? "text-danger" : "text-muted"}`}>{daySummary(day)}</span>
-                  </span>
-                  <span className={`text-muted transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true">▾</span>
-                </button>
+                {day.status === "CANCELLED" ? (
+                  // Nothing to expand on a cancelled day: a plain row, no arrow
+                  <div className="bg-surface px-4 py-3">{dayTitle}</div>
+                ) : (
+                  <button
+                    onClick={() => toggle(day.localDate)}
+                    aria-expanded={expanded}
+                    className="w-full text-left bg-surface px-4 py-3 flex items-start justify-between space-x-3 hover:bg-surface/70 transition-colors"
+                  >
+                    {dayTitle}
+                    <span className={`text-muted transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true">▾</span>
+                  </button>
+                )}
                 {expanded && day.status !== "CANCELLED" && (
                   <div className="border-t border-line p-3 flex flex-col space-y-3">
                     {day.slots.map((slot) => (
