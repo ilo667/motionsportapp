@@ -10,7 +10,7 @@ import {
   announcements,
   slotMembers,
 } from '../database/schema';
-import { DemoService } from '../demo/demo.service';
+import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import {
   GROUP_SLOT_TIMES,
@@ -37,7 +37,7 @@ export class ScheduleService {
 
   constructor(
     private readonly database: DatabaseService,
-    private readonly demoService: DemoService,
+    private readonly clock: ClockService,
     private readonly paymentService: PaymentService,
   ) {}
 
@@ -45,7 +45,7 @@ export class ScheduleService {
     await this.paymentService.expireStale();
     await this.ensureDefaultGroupSlots();
 
-    const now = await this.demoService.getNow();
+    const now = this.clock.now();
     const today = now.toISODate()!;
 
     const assignedSlots = memberId
@@ -86,7 +86,6 @@ export class ScheduleService {
         assignedSlots,
         serverTime: now.toUTC().toISO(),
         announcement: null,
-        isDemoMode: this.demoService.isDemoMode(),
       };
     }
 
@@ -183,7 +182,6 @@ export class ScheduleService {
       assignedSlots,
       serverTime: now.toUTC().toISO(),
       announcement,
-      isDemoMode: this.demoService.isDemoMode(),
     };
   }
 
@@ -278,7 +276,7 @@ export class ScheduleService {
   // a time already taken (by any training, even a cancelled one) is left alone, and days the coach
   // cancelled are skipped, so the coach's changes are never undone
   async ensureDefaultGroupSlots() {
-    const now = await this.demoService.getNow();
+    const now = this.clock.now();
     // Runs on every schedule load (polled every 5 s in the booking window): once per day per instance is enough,
     // the horizon only moves at midnight
     const today = now.toISODate()!;

@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, AdminSchedule, Announcement, AnnouncementExample } from "@/lib/api";
 import { SlotCard as AdminSlotCard } from "@/components/admin/SlotCard";
-import DemoControls from "@/components/DemoControls";
 import { PageLayout } from "@/components/PageLayout";
 import { PushSubscribeButton } from "@/components/PushSubscribeButton";
 import { AdminMenu } from "@/components/admin/AdminMenu";
@@ -344,7 +343,6 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
-      {schedule.isDemoMode && <DemoControls onRefresh={fetchSchedule} />}
     </PageLayout>
   );
 }

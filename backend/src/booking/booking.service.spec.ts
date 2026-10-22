@@ -65,13 +65,13 @@ const validDay = {
 };
 
 function makeService(db: any, now: DateTime) {
-  const mockDemoService = { getNow: jest.fn().mockResolvedValue(now), isDemoMode: jest.fn().mockReturnValue(false) };
+  const mockClock = { now: () => now };
   const mockNotifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
   const mockVacancyAlerts = { unsubscribe: jest.fn().mockResolvedValue(undefined) };
   return new BookingService(
     { db } as any,
     mockNotifications as any,
-    mockDemoService as any,
+    mockClock as any,
     mockVacancyAlerts as any,
   );
 }

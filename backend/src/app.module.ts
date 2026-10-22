@@ -8,10 +8,10 @@ import { BookingModule } from './booking/booking.module';
 import { AdminScheduleModule } from './admin/admin-schedule.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AiModule } from './ai/ai.module';
-import { DemoModule } from './demo/demo.module';
+import { ClockModule } from './clock/clock.module';
 import { PaymentModule } from './payment/payment.module';
 
 @Module({
-  imports: [DatabaseModule, HealthModule, AuthModule, ScheduleModule, BookingModule, AdminScheduleModule, NotificationsModule, AiModule, DemoModule, PaymentModule],
+  imports: [DatabaseModule, ClockModule, HealthModule, AuthModule, ScheduleModule, BookingModule, AdminScheduleModule, NotificationsModule, AiModule, PaymentModule],
 })
 export class AppModule {}

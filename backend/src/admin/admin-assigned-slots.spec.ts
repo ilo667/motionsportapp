@@ -45,7 +45,7 @@ const COACH = 'coach-1';
 const now = DateTime.fromObject({ year: 2026, month: 10, day: 20, hour: 12 }, { zone: 'Europe/Kyiv' });
 
 function makeService(db: any) {
-  return new AdminScheduleService({ db } as any, {} as any, { getNow: jest.fn().mockResolvedValue(now) } as any);
+  return new AdminScheduleService({ db } as any, {} as any, { now: () => now } as any);
 }
 
 async function errorsOf(cls: any, body: object) {

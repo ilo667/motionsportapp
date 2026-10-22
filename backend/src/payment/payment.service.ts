@@ -2,7 +2,7 @@ import { Injectable, ConflictException, NotFoundException, BadRequestException, 
 import { and, eq, inArray, lt, ne, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { trainingSlots, trainingDays, bookings, payments, slotMembers } from '../database/schema';
-import { DemoService } from '../demo/demo.service';
+import { ClockService } from '../clock/clock.service';
 import { ASSIGNED_TYPES, slotStartsAt } from '../schedule/training-types';
 import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } from './liqpay.helper';
 
@@ -30,7 +30,7 @@ export class PaymentService {
 
   constructor(
     private readonly database: DatabaseService,
-    private readonly demoService: DemoService,
+    private readonly clock: ClockService,
   ) {}
 
   private get publicKey() { return process.env.LIQPAY_PUBLIC_KEY ?? ''; }
@@ -70,7 +70,7 @@ export class PaymentService {
       .where(eq(trainingDays.id, slot.trainingDayId))
       .limit(1);
     if (!day || day.status !== 'SCHEDULED') throw new ConflictException('Training day is not scheduled');
-    if ((await this.demoService.getNow()) >= slotStartsAt(day.localDate, slot.slotTime)) {
+    if (this.clock.now() >= slotStartsAt(day.localDate, slot.slotTime)) {
       throw new BadRequestException('Training has already started');
     }
 

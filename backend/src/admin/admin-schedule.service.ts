@@ -10,7 +10,7 @@ import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import type { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 import type { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { NotificationService } from '../notifications/notification.service';
-import { DemoService } from '../demo/demo.service';
+import { ClockService } from '../clock/clock.service';
 import {
   GROUP_SLOT_TIMES,
   GROUP_TYPE,
@@ -55,12 +55,12 @@ export class AdminScheduleService {
   constructor(
     private readonly database: DatabaseService,
     private readonly notifications: NotificationService,
-    private readonly demoService: DemoService,
+    private readonly clock: ClockService,
   ) {}
 
   // The coach's next training day with their own slots
   async getSchedule(adminId: string) {
-    const now = await this.demoService.getNow();
+    const now = this.clock.now();
     const today = now.toISODate()!;
 
     const upcoming = await this.database.db
@@ -95,7 +95,6 @@ export class AdminScheduleService {
       bookingOpenAt: openAt.toUTC().toISO(),
       bookingCloseAt: closeAt.toUTC().toISO(),
       serverTime: now.toUTC().toISO(),
-      isDemoMode: this.demoService.isDemoMode(),
       slots: await this.buildSlotViews(slots),
     };
   }
@@ -103,7 +102,7 @@ export class AdminScheduleService {
   // Past training days, newest first, for the coach's history (attendance stays editable there).
   // Cursor pagination: pass the last returned localDate as `before` to get older days
   async getHistory(adminId: string, before?: string) {
-    const today = (await this.demoService.getNow()).toISODate()!;
+    const today = this.clock.now().toISODate()!;
     const cursor = before && before < today ? before : today;
 
     const days = await this.database.db
@@ -315,7 +314,7 @@ export class AdminScheduleService {
 
     const startsAt = slotStartsAt(date, dto.slotTime);
     if (!startsAt.isValid) throw new BadRequestException('Invalid date');
-    const now = await this.demoService.getNow();
+    const now = this.clock.now();
     if (startsAt <= now) throw new BadRequestException('Training time is in the past');
 
     const capacity = ASSIGNED_MEMBER_LIMITS[dto.trainingType].max;

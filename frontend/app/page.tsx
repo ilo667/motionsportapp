@@ -6,7 +6,6 @@ import { api, ScheduleNext } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { SlotCard } from "@/components/SlotCard";
 import { AssignedSlotCard } from "@/components/AssignedSlotCard";
-import DemoControls from "@/components/DemoControls";
 import { noopSubscribe } from "@/lib/clientStore";
 
 function formatLocalDate(localDate: string): string {
@@ -69,7 +68,7 @@ export default function SchedulePage() {
     timerRef.current = null;
   }, []);
 
-  // Every refresh (poll, mutation, demo controls) reschedules the next one from fresh data
+  // Every refresh (poll, mutation) reschedules the next one from fresh data
   const fetchSchedule = useCallback(async () => {
     let data: ScheduleNext | undefined;
     try {
@@ -267,7 +266,6 @@ export default function SchedulePage() {
           {mutateError && (
             <p className="text-danger text-sm mt-4 text-center">{mutateError}</p>
           )}
-          {schedule.isDemoMode && <DemoControls onRefresh={fetchSchedule} />}
         </>
       )}
     </PageLayout>

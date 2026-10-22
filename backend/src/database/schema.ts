@@ -8,7 +8,6 @@ import {
   date,
   jsonb,
   uniqueIndex,
-  serial,
   primaryKey,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
@@ -232,10 +231,4 @@ export const payments = pgTable('payments', {
   rawCallback: jsonb('raw_callback'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const demoState = pgTable('demo_state', {
-  id: serial('id').primaryKey(),
-  clockOverrideAt: timestamp('clock_override_at', { withTimezone: true }),
-  scenarioName: text('scenario_name'),
 });

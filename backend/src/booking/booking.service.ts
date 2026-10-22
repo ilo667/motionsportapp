@@ -11,7 +11,7 @@ import { DatabaseService } from '../database/database.service';
 import { bookings, trainingSlots, trainingDays, members } from '../database/schema';
 import { NotificationService } from '../notifications/notification.service';
 import { VacancyAlertsService } from '../notifications/vacancy-alerts.service';
-import { DemoService } from '../demo/demo.service';
+import { ClockService } from '../clock/clock.service';
 import { GROUP_TYPE, KY_ZONE, slotStartsAt } from '../schedule/training-types';
 
 type Db = DatabaseService['db'];
@@ -24,7 +24,7 @@ export class BookingService {
   constructor(
     private readonly database: DatabaseService,
     private readonly notifications: NotificationService,
-    private readonly demoService: DemoService,
+    private readonly clock: ClockService,
     private readonly vacancyAlerts: VacancyAlertsService,
   ) {}
 
@@ -338,12 +338,12 @@ export class BookingService {
   }
 
   private async validateBeforeStart(localDate: string, slotTime: string) {
-    const now = await this.demoService.getNow();
+    const now = this.clock.now();
     if (now >= slotStartsAt(localDate, slotTime)) throw new BadRequestException('Training has already started');
   }
 
   private async validateBookingWindow(localDate: string) {
-    const now = await this.demoService.getNow();
+    const now = this.clock.now();
     const openAt = DateTime.fromISO(`${localDate}T14:00:00`, { zone: KY_ZONE });
     const closeAt = DateTime.fromISO(`${localDate}T21:00:00`, { zone: KY_ZONE });
     if (now < openAt) throw new BadRequestException('Booking opens at 14:00');
@@ -351,7 +351,7 @@ export class BookingService {
   }
 
   private async validateBeforeClose(localDate: string) {
-    const now = await this.demoService.getNow();
+    const now = this.clock.now();
     const closeAt = DateTime.fromISO(`${localDate}T21:00:00`, { zone: KY_ZONE });
     if (now >= closeAt) throw new BadRequestException('Booking window has closed');
   }

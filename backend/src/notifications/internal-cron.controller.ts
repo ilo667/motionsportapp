@@ -10,7 +10,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { NotificationService } from './notification.service';
 import { AnnouncementsService } from '../ai/announcements.service';
-import { DemoService } from '../demo/demo.service';
+import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { trainingDays, trainingSlots, bookings, attendance, admins } from '../database/schema';
 import { GROUP_TYPE } from '../schedule/training-types';
@@ -25,7 +25,7 @@ export class InternalCronController {
     private readonly database: DatabaseService,
     private readonly notifications: NotificationService,
     private readonly announcementsService: AnnouncementsService,
-    private readonly demoService: DemoService,
+    private readonly clock: ClockService,
     private readonly paymentService: PaymentService,
   ) {}
 
@@ -34,7 +34,7 @@ export class InternalCronController {
     this.verifyCronSecret(auth);
 
 
-    const now = await this.demoService.getNow();
+    const now = this.clock.now();
     const today = now.toISODate()!;
 
     // Find today's scheduled training day
@@ -78,7 +78,7 @@ export class InternalCronController {
   @Get('cron/generate-announcement')
   async generateAnnouncement(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);
-    const nowAnn = await this.demoService.getNow();
+    const nowAnn = this.clock.now();
     const todayAnn = nowAnn.toISODate()!;
 
     const [day] = await this.database.db
@@ -103,7 +103,7 @@ export class InternalCronController {
   async autoConfirmAttendance(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);
 
-    const now = await this.demoService.getNow();
+    const now = this.clock.now();
     const today = now.toISODate()!;
 
     const [day] = await this.database.db
