@@ -105,7 +105,6 @@ export const bookings = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancellationReason: text('cancellation_reason'),
-    cancellationReasonAt: timestamp('cancellation_reason_at', { withTimezone: true }),
     paymentStatus: text('payment_status'), // null = free | 'PENDING' | 'PAID'
     // Set when the member moved this booking to another slot (19:00 → 20:00); null + reason = plain cancel
     switchedToSlotId: uuid('switched_to_slot_id').references(() => trainingSlots.id),

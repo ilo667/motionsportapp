@@ -22,13 +22,13 @@ export class BookingController {
   @HttpCode(HttpStatus.OK)
   async cancelCurrent(@CurrentUser() user: SessionUser, @Body() dto: CancelBookingDto) {
     if (user.type !== 'member') throw new Error('Members only');
-    return this.bookingService.cancel(user.id, dto.slotId, dto.reason, new Date(dto.reasonAt));
+    return this.bookingService.cancel(user.id, dto.slotId, dto.reason);
   }
 
   @Patch('current')
   @HttpCode(HttpStatus.OK)
   async switchSlot(@CurrentUser() user: SessionUser, @Body() dto: SwitchBookingDto) {
     if (user.type !== 'member') throw new Error('Members only');
-    return this.bookingService.switchSlot(user.id, dto.newSlotId, dto.reason, new Date(dto.reasonAt));
+    return this.bookingService.switchSlot(user.id, dto.newSlotId, dto.reason);
   }
 }

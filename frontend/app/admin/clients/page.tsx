@@ -215,6 +215,9 @@ export default function ClientsPage() {
                 <NoteCell member={m} onSaved={(note) => updateNote(m.id, note)} />
               </td>
               <td className="py-3 text-right">
+                {m.recentCancellations === 0 ? (
+                  <span className="tabular-nums text-muted">0</span>
+                ) : (
                 <button
                   onClick={() => setOpenHistory(openHistory === m.id ? null : m.id)}
                   aria-expanded={openHistory === m.id}
@@ -223,6 +226,7 @@ export default function ClientsPage() {
                 >
                   {m.recentCancellations} {openHistory === m.id ? "▴" : "▾"}
                 </button>
+                )}
               </td>
             </tr>
             {openHistory === m.id && (

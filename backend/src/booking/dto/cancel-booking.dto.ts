@@ -1,4 +1,4 @@
-import { IsString, MinLength, IsDateString, IsUUID } from 'class-validator';
+import { IsString, MinLength, IsUUID } from 'class-validator';
 
 export class CancelBookingDto {
   @IsUUID('all')
@@ -7,7 +7,4 @@ export class CancelBookingDto {
   @IsString()
   @MinLength(1)
   reason: string;
-
-  @IsDateString()
-  reasonAt: string;
 }

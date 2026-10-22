@@ -120,12 +120,12 @@ export function SlotCard({
         action={modal.action}
         switchTime={modal.action === "switch" ? modal.targetSlot.slotTime : undefined}
         onDismiss={() => setModal(null)}
-        onConfirm={async (reason, reasonAt) => {
+        onConfirm={async (reason) => {
           setModal(null);
           if (modal.action === "cancel") {
-            await onMutate(() => api.cancelBooking(slot.id, reason, reasonAt));
+            await onMutate(() => api.cancelBooking(slot.id, reason));
           } else {
-            await onMutate(() => api.switchSlot(modal.targetSlot.id, reason, reasonAt));
+            await onMutate(() => api.switchSlot(modal.targetSlot.id, reason));
             onRefresh();
           }
         }}

@@ -101,9 +101,9 @@ export function AssignedSlotCard({ slot, onMutate, onRefresh }: AssignedSlotCard
         <CancellationReasonModal
           action="cancel"
           onDismiss={() => setCancelOpen(false)}
-          onConfirm={async (reason, reasonAt) => {
+          onConfirm={async (reason) => {
             setCancelOpen(false);
-            await onMutate(() => api.cancelBooking(slot.id, reason, reasonAt));
+            await onMutate(() => api.cancelBooking(slot.id, reason));
           }}
         />
       )}

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 interface Props {
   action: "cancel" | "switch";
   switchTime?: string;
-  onConfirm: (reason: string, reasonAt: Date) => void;
+  onConfirm: (reason: string) => void;
   onDismiss: () => void;
 }
 
@@ -33,7 +33,7 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
 
   const handleSubmit = () => {
     if (!canSubmit) return;
-    onConfirm(reason.trim(), new Date());
+    onConfirm(reason.trim());
   };
 
   return (

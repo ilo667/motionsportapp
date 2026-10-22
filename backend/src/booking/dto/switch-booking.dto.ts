@@ -1,4 +1,4 @@
-import { IsUUID, IsString, MinLength, IsDateString } from 'class-validator';
+import { IsUUID, IsString, MinLength } from 'class-validator';
 
 export class SwitchBookingDto {
   @IsUUID()
@@ -7,7 +7,4 @@ export class SwitchBookingDto {
   @IsString()
   @MinLength(1)
   reason: string;
-
-  @IsDateString()
-  reasonAt: string;
 }

@@ -146,26 +146,26 @@ describe('BookingService — cancel', () => {
   it('throws NotFoundException when there is no active booking on that slot', async () => {
     const { db } = makeDb([[]]);
     const service = makeService(db, kyivAt(15));
-    await expect(service.cancel('member-1', 'slot-1', 'reason', new Date())).rejects.toThrow(NotFoundException);
+    await expect(service.cancel('member-1', 'slot-1', 'reason')).rejects.toThrow(NotFoundException);
   });
 
   it('cancels an assigned booking after 21:00 while the training has not started', async () => {
     const { db } = makeDb([[booking], [validDay], [assignedSlot]]);
     const service = makeService(db, kyivAt(21, 10));
-    await expect(service.cancel('member-1', 'slot-p', 'reason', new Date())).resolves.toEqual({ ok: true });
+    await expect(service.cancel('member-1', 'slot-p', 'reason')).resolves.toEqual({ ok: true });
   });
 
   it('refuses to cancel an assigned booking once the training has started', async () => {
     const { db } = makeDb([[booking], [validDay], [assignedSlot]]);
     const service = makeService(db, kyivAt(21, 30));
-    await expect(service.cancel('member-1', 'slot-p', 'reason', new Date())).rejects.toThrow('already started');
+    await expect(service.cancel('member-1', 'slot-p', 'reason')).rejects.toThrow('already started');
   });
 
   it('keeps the 21:00 limit for group bookings', async () => {
     const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '20:00', trainingType: 'групові' };
     const { db } = makeDb([[{ ...booking, slotId: 'slot-1' }], [validDay], [groupSlot]]);
     const service = makeService(db, kyivAt(21, 0));
-    await expect(service.cancel('member-1', 'slot-1', 'reason', new Date())).rejects.toThrow('Booking window has closed');
+    await expect(service.cancel('member-1', 'slot-1', 'reason')).rejects.toThrow('Booking window has closed');
   });
 });
 
@@ -174,19 +174,19 @@ describe('BookingService — switch slot', () => {
     const activeBooking = { id: 'booking-1', slotId: 'slot-1', trainingDayId: 'day-1', memberId: 'member-1', status: 'ACTIVE' };
     const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'групові' }], [activeBooking]]);
     const service = makeService(db, kyivAt(15));
-    await expect(service.switchSlot('member-1', 'slot-1', 'reason', new Date())).rejects.toThrow('Already booked on this slot');
+    await expect(service.switchSlot('member-1', 'slot-1', 'reason')).rejects.toThrow('Already booked on this slot');
   });
 
   it('refuses to switch onto an assigned slot', async () => {
     const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'спліт' }]]);
     const service = makeService(db, kyivAt(15));
-    await expect(service.switchSlot('member-1', 'slot-p', 'reason', new Date())).rejects.toThrow('Only group trainings');
+    await expect(service.switchSlot('member-1', 'slot-p', 'reason')).rejects.toThrow('Only group trainings');
   });
 
   it('throws NotFoundException when the member has no group booking that day (assigned ones do not count)', async () => {
     const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'групові' }], []]);
     const service = makeService(db, kyivAt(15));
-    await expect(service.switchSlot('member-1', 'slot-2', 'reason', new Date())).rejects.toThrow(NotFoundException);
+    await expect(service.switchSlot('member-1', 'slot-2', 'reason')).rejects.toThrow(NotFoundException);
   });
 });
 describe('BookingService — coach push with the reason', () => {
@@ -195,7 +195,7 @@ describe('BookingService — coach push with the reason', () => {
     const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '19:00', trainingType: 'групові' };
     const { db } = makeDb([[booking], [validDay], [groupSlot], [{ displayName: 'Оля', coachId: 'coach-1' }]]);
     const service = makeService(db, kyivAt(17));
-    await service.cancel('member-1', 'slot-1', 'Захворіла', new Date());
+    await service.cancel('member-1', 'slot-1', 'Захворіла');
 
     expect((service as any).notifications.enqueueAndProcess).toHaveBeenCalledWith(
       'MEMBER_CANCELLED',
@@ -215,7 +215,7 @@ describe('BookingService — coach push with the reason', () => {
     );
     const service = makeService(db, kyivAt(17));
 
-    await service.switchSlot('member-1', 'slot-2', 'Не встигаю', new Date());
+    await service.switchSlot('member-1', 'slot-2', 'Не встигаю');
 
     expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED', switchedToSlotId: 'slot-2', cancellationReason: 'Не встигаю' }));
     expect((service as any).notifications.enqueueAndProcess).toHaveBeenCalledWith(

@@ -89,7 +89,7 @@ export class BookingService {
   }
 
   // A member can hold a group booking and several assigned ones, so the slot says which one to cancel
-  async cancel(memberId: string, slotId: string, reason: string, reasonAt: Date) {
+  async cancel(memberId: string, slotId: string, reason: string) {
     const [booking] = await this.database.db
       .select()
       .from(bookings)
@@ -127,7 +127,7 @@ export class BookingService {
     await this.database.db.transaction(async (tx) => {
       await tx
         .update(bookings)
-        .set({ status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason, cancellationReasonAt: reasonAt })
+        .set({ status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason })
         .where(and(eq(bookings.id, booking.id), eq(bookings.status, 'ACTIVE')));
 
       await tx
@@ -154,7 +154,7 @@ export class BookingService {
   }
 
   // Moves the member's group booking to the other group slot of the same day
-  async switchSlot(memberId: string, newSlotId: string, reason: string, reasonAt: Date) {
+  async switchSlot(memberId: string, newSlotId: string, reason: string) {
     const [target] = await this.database.db
       .select({
         trainingDayId: trainingSlots.trainingDayId,
@@ -224,7 +224,6 @@ export class BookingService {
             status: 'CANCELLED',
             cancelledAt: new Date(),
             cancellationReason: reason,
-            cancellationReasonAt: reasonAt,
             switchedToSlotId: newSlotId,
           })
           .where(and(eq(bookings.id, current.id), eq(bookings.status, 'ACTIVE')))
