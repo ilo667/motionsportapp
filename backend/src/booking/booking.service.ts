@@ -70,7 +70,6 @@ export class BookingService {
 
         await tx.insert(bookings).values({
           memberId,
-          trainingDayId: locked.trainingDayId,
           slotId,
           status: 'ACTIVE',
         });
@@ -103,10 +102,12 @@ export class BookingService {
 
     if (!booking) throw new NotFoundException('No active booking found');
 
+    // The day comes through the slot (bookings don't store it)
     const [day] = await this.database.db
-      .select()
+      .select({ id: trainingDays.id, localDate: trainingDays.localDate, status: trainingDays.status })
       .from(trainingDays)
-      .where(eq(trainingDays.id, booking.trainingDayId))
+      .innerJoin(trainingSlots, eq(trainingSlots.trainingDayId, trainingDays.id))
+      .where(eq(trainingSlots.id, booking.slotId))
       .limit(1);
 
     const [slotBefore] = await this.database.db
@@ -243,7 +244,6 @@ export class BookingService {
 
         await tx.insert(bookings).values({
           memberId,
-          trainingDayId: current.trainingDayId,
           slotId: newSlotId,
           status: 'ACTIVE',
         });
@@ -322,13 +322,13 @@ export class BookingService {
   // The member's active group booking on that day (assigned bookings don't count)
   private async findGroupBooking(db: Db | Tx, memberId: string, trainingDayId: string) {
     const [row] = await db
-      .select({ id: bookings.id, slotId: bookings.slotId, trainingDayId: bookings.trainingDayId, memberId: bookings.memberId })
+      .select({ id: bookings.id, slotId: bookings.slotId, trainingDayId: trainingSlots.trainingDayId, memberId: bookings.memberId })
       .from(bookings)
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
       .where(
         and(
           eq(bookings.memberId, memberId),
-          eq(bookings.trainingDayId, trainingDayId),
+          eq(trainingSlots.trainingDayId, trainingDayId),
           eq(bookings.status, 'ACTIVE'),
           eq(trainingSlots.trainingType, GROUP_TYPE),
         ),

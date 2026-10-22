@@ -689,7 +689,7 @@ export class AdminScheduleService {
       .from(bookings)
       .innerJoin(members, eq(members.id, bookings.memberId))
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
-      .innerJoin(trainingDays, eq(trainingDays.id, bookings.trainingDayId))
+      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
       .leftJoin(target, eq(target.id, bookings.switchedToSlotId))
       .where(and(eq(bookings.status, 'CANCELLED'), isNotNull(bookings.cancellationReason), filter))
       .orderBy(desc(bookings.cancelledAt));

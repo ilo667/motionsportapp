@@ -108,7 +108,7 @@ export class PaymentService {
 
         const [inserted] = await tx
           .insert(bookings)
-          .values({ memberId, trainingDayId: locked.trainingDayId, slotId, status: 'ACTIVE', paymentStatus: 'PENDING' })
+          .values({ memberId, slotId, status: 'ACTIVE', paymentStatus: 'PENDING' })
           .returning({ id: bookings.id });
 
         orderId = newOrderId(inserted.id);

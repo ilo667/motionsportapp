@@ -95,9 +95,6 @@ export const bookings = pgTable(
     memberId: uuid('member_id')
       .notNull()
       .references(() => members.id),
-    trainingDayId: uuid('training_day_id')
-      .notNull()
-      .references(() => trainingDays.id),
     slotId: uuid('slot_id')
       .notNull()
       .references(() => trainingSlots.id),

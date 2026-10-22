@@ -125,10 +125,11 @@ export class InternalCronController {
     const unmarkedBookings = await this.database.db
       .select({ id: bookings.id })
       .from(bookings)
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
       .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
       .where(
         and(
-          eq(bookings.trainingDayId, day.id),
+          eq(trainingSlots.trainingDayId, day.id),
           eq(bookings.status, 'ACTIVE'),
           isNull(attendance.bookingId),
         ),
