@@ -1,10 +1,10 @@
 import {
   Controller,
-  Post,
+  Get,
   Headers,
   ForbiddenException,
-  HttpCode,
 } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { DateTime } from 'luxon';
 import { and, eq, isNull } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
@@ -16,6 +16,8 @@ import { trainingDays, trainingSlots, bookings, attendance, admins } from '../da
 
 const KY_ZONE = 'Europe/Kyiv';
 
+// Vercel Cron invokes paths with GET and sends `Authorization: Bearer $CRON_SECRET`.
+// Manual run: curl -H "Authorization: Bearer $CRON_SECRET" https://<backend>/internal/cron/<job>
 @Controller('internal')
 export class InternalCronController {
   constructor(
@@ -26,8 +28,7 @@ export class InternalCronController {
     private readonly paymentService: PaymentService,
   ) {}
 
-  @Post('cron/booking-open')
-  @HttpCode(200)
+  @Get('cron/booking-open')
   async bookingOpen(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);
 
@@ -62,16 +63,14 @@ export class InternalCronController {
     return { ok: true, localDate: today };
   }
 
-  @Post('cron/process-outbox')
-  @HttpCode(200)
+  @Get('cron/process-outbox')
   async processOutbox(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);
     await this.notifications.processAllPending();
     return { ok: true };
   }
 
-  @Post('cron/generate-announcement')
-  @HttpCode(200)
+  @Get('cron/generate-announcement')
   async generateAnnouncement(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);
     const nowAnn = await this.demoService.getNow();
@@ -91,8 +90,7 @@ export class InternalCronController {
     return { ok: true, localDate: todayAnn };
   }
 
-  @Post('cron/auto-confirm-attendance')
-  @HttpCode(200)
+  @Get('cron/auto-confirm-attendance')
   async autoConfirmAttendance(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);
 
@@ -152,17 +150,23 @@ export class InternalCronController {
     return { ok: true, marked: unmarkedBookings.length, slots: slots.length };
   }
 
-  @Post('cron/expire-payments')
-  @HttpCode(200)
+  @Get('cron/expire-payments')
   async expirePayments(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);
     return this.paymentService.expireStale();
   }
 
-  private verifyCronSecret(auth: string) {
+  private verifyCronSecret(auth: string | undefined) {
     const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret) return; // not configured — allow (portfolio/dev)
-    const expected = `Bearer ${cronSecret}`;
-    if (auth !== expected) throw new ForbiddenException();
+    if (!cronSecret) {
+      // Locally there is no Vercel Cron, allow manual runs; in production a missing secret means misconfiguration
+      if (process.env.NODE_ENV === 'production') throw new ForbiddenException('CRON_SECRET is not configured');
+      return;
+    }
+    const expected = Buffer.from(`Bearer ${cronSecret}`);
+    const actual = Buffer.from(auth ?? '');
+    if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+      throw new ForbiddenException();
+    }
   }
 }

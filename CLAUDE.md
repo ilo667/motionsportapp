@@ -60,6 +60,7 @@ Auth endpoints:
 - `BookingModule` — book / cancel / switch slot
 - `AdminModule` — admin schedule management, slot cancellation, attendance
 - `NotificationsModule` — push subscriptions, vacancy alerts, internal cron
+  - `/internal/cron/*` routes must be **`@Get`** — Vercel Cron invokes with GET (`vercel-cron/1.0`); a POST route answers 404 and the job silently never runs. Protected by `CRON_SECRET` (`Authorization: Bearer …`, sent by Vercel automatically); missing secret in production → 403. Trigger manually: `vercel crons run /internal/cron/<job>`. Hobby plan: once per day, any minute within the scheduled hour
 - `AiModule` — AI announcement generation
 - `DemoModule` — demo mode time override (`DEMO_MODE=true` env only)
 - `PaymentModule` — LiqPay payment for індивідуальні/спліт slots:
@@ -108,6 +109,6 @@ Two separate Vercel projects pointing at this repo:
 - **backend project** — root: `backend/`, entry: `api/index.ts`, rewrites all to `/api`
 
 Required env vars:
-- Backend: `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`
+- Backend: `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `CRON_SECRET` (random ≥16 chars, required for crons in production)
 - Backend (payments): `LIQPAY_PUBLIC_KEY`, `LIQPAY_PRIVATE_KEY`, `LIQPAY_SERVER_URL`, `LIQPAY_AMOUNT` (default `700`), `PAYMENT_EXPIRY_MINUTES` (default `15`; set e.g. `2` to test expiry)
 - Frontend: `BACKEND_URL`
