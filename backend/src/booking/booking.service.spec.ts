@@ -130,6 +130,12 @@ describe('BookingService — slot validation', () => {
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Slot is full');
   });
 
+  it("answers 404 for another coach's group slot", async () => {
+    const { db } = makeDb([[{ ...validSlot, coachId: 'coach-2' }], MEMBER_COACH]);
+    const service = makeService(db, at15);
+    await expect(service.book('member-1', 'slot-1')).rejects.toThrow(NotFoundException);
+  });
+
   it('refuses an assigned slot (booked only through payment)', async () => {
     const { db } = makeDb([[{ ...validSlot, trainingType: 'персональні' }]]);
     const service = makeService(db, at15);
@@ -187,6 +193,12 @@ describe('BookingService — switch slot', () => {
     const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'спліт' }]]);
     const service = makeService(db, kyivAt(15));
     await expect(service.switchSlot('member-1', 'slot-p', 'reason')).rejects.toThrow('Only group trainings');
+  });
+
+  it("answers 404 when switching onto another coach's group slot", async () => {
+    const { db } = makeDb([[{ trainingDayId: 'day-1', trainingType: 'групові', coachId: 'coach-2' }], MEMBER_COACH]);
+    const service = makeService(db, kyivAt(15));
+    await expect(service.switchSlot('member-1', 'slot-2', 'reason')).rejects.toThrow(NotFoundException);
   });
 
   it('throws NotFoundException when the member has no group booking that day (assigned ones do not count)', async () => {
