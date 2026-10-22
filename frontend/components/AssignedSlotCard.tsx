@@ -72,18 +72,16 @@ export function AssignedSlotCard({ slot, onMutate, onRefresh }: AssignedSlotCard
           </div>
         </div>
 
+        {/* Paid: the green border says it; cancelling is possible until the start */}
         {slot.isMyBooking && slot.myPaymentStatus === "PAID" ? (
-          <div className="flex flex-col space-y-2">
-            <p className="text-xs text-teal text-center">✓ Оплачено</p>
-            {!slot.started && (
-              <button
-                onClick={() => setCancelOpen(true)}
-                className="btn-danger w-full py-3 rounded-lg text-sm transition-colors"
-              >
-                Скасувати
-              </button>
-            )}
-          </div>
+          !slot.started && (
+            <button
+              onClick={() => setCancelOpen(true)}
+              className="btn-danger w-full py-3 rounded-lg text-sm transition-colors"
+            >
+              Скасувати
+            </button>
+          )
         ) : slot.started ? (
           <p className="text-muted text-sm">Тренування вже почалося</p>
         ) : slot.isMyBooking ? (
