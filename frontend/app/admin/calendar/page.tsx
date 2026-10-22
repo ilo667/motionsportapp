@@ -63,6 +63,11 @@ function hourOf(slotTime: string) {
   return parseInt(slotTime.slice(0, 2), 10);
 }
 
+// Clicking today or a future day opens "Додати тренування"; past days do nothing, so no pointer there
+function clickableDayClass(info: { isPast: boolean }) {
+  return info.isPast ? "" : "mg-clickable";
+}
+
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -273,7 +278,7 @@ export default function CalendarPage() {
           --fc-classic-button-foreground: var(--color-body);
         }
         /* Events are clickable (edit / cancel); role="button" is the only stable hook on them in v7 */
-        .mg-calendar [role="button"] { cursor: pointer; }
+        .mg-calendar [role="button"], .mg-calendar .mg-clickable { cursor: pointer; }
       `}</style>
 
       <div className="mg-calendar rounded-xl border border-line p-3 overflow-hidden">
@@ -287,6 +292,8 @@ export default function CalendarPage() {
           datesSet={handleDatesSet}
           eventClick={handleEventClick}
           dateClick={handleDateClick}
+          dayCellClass={clickableDayClass}
+          dayLaneClass={clickableDayClass}
           headerToolbar={{ left: "prev,next", center: "title", right: "timeGridWeek,dayGridMonth" }}
           firstDay={1}
           slotMinTime={`${pad(minHour)}:00:00`}
