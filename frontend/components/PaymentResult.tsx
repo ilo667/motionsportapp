@@ -13,6 +13,7 @@ type ResultState = PaymentStatus | "UNKNOWN" | "REJECTED";
 
 const REJECT_REASONS: Record<string, string> = {
   limit: "Перевищено ліміт картки.",
+  "9859": "Недостатньо коштів на картці.",
 };
 
 const CONTENT: Record<Exclude<ResultState, "PENDING" | "REJECTED">, { icon: string; iconClass: string; title: string; text: string }> = {

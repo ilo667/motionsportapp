@@ -75,7 +75,7 @@ Auth endpoints:
 The LiqPay docs are incomplete. These rules come from prod logs, so do not "fix" the code back to what the docs suggest:
 
 - **Only documented final statuses change state.** `success`/`sandbox` → PAID; `failure`/`error`/`reversed` → FAILED (booking cancelled, seat freed). Every other status, including undocumented ones, keeps the payment PENDING until expiry. Keep it this way.
-- **A declined card returns `try_again`, not `failure`.** The status API returns `result=ok status=try_again err_code=limit`. `try_again` is not in the docs. LiqPay sends **no callback** for it, and the status stays `try_again`. The order remains open for a retry on the same LiqPay page.
+- **A declined card returns `try_again`, not `failure`.** The status API returns `result=ok status=try_again` with `err_code=limit` (card 4000000000000002) or `err_code=9859` "Insufficient funds" (card 4000000000009995). Human-readable reasons live in `REJECT_REASONS` in `frontend/components/PaymentResult.tsx`. `try_again` is not in the docs. LiqPay sends **no callback** for it, and the status stays `try_again`. The order remains open for a retry on the same LiqPay page.
 - **"Скасувати оплату" on LiqPay** → the status API returns `result=error err_code=payment_not_found`, and no callback is sent. Only apply a status-API response when `result === 'ok'`.
 - **Decline → retry with a good card on the same page** produces a single `success` callback for the same `order_id`.
 - **Callbacks are sent only for final statuses**, so never rely on them alone: `/payment/return` and `expireStale()` both reconcile through the status API (`liqpayStatus` in `liqpay.helper.ts`).
