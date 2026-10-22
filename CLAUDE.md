@@ -74,6 +74,8 @@ Auth endpoints:
 
 ### Training types — rules
 
+UI label for `індивідуальні` is **«Персональні» / «Персональне»** (short «Перс.»); the DB value stays `індивідуальні`. «Персональні тренування» on the member page is the section for both individual and split.
+
 Constants and helpers live in `backend/src/schedule/training-types.ts`.
 - **Групові**: 19:00 and 20:00, capacity 8, free, visible to everyone, booking window 14:00–21:00 of that day. **One group booking per member per day** (switch between 19:00 and 20:00), checked in `BookingService` under a `SELECT … FOR UPDATE` on the member row.
 - **Індивідуальні / спліт** (personal): any time in 15-minute steps, on any day. The coach assigns members in `slot_members` (індивідуальні exactly 1, спліт 1–3); `capacity` is fixed: індивідуальні 1, спліт 3. Only assigned members see the slot (`GET /schedule/next` → `personalSlots`) and can pay (`createCheckout` returns 404 for anyone else). Paid via LiqPay; payment and cancellation allowed until the slot starts; shown until one hour after the start. No vacancy alerts.

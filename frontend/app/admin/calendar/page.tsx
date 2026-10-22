@@ -23,14 +23,14 @@ const TYPE_COLORS: Record<TrainingType, { bg: string; border: string; text: stri
 
 const TYPE_LABELS: Record<TrainingType, string> = {
   групові: "Групові",
-  індивідуальні: "Індивідуальні",
+  індивідуальні: "Персональні",
   спліт: "Спліт",
 };
 
 // Short labels for calendar events — full names don't fit a day column
 const TYPE_SHORT: Record<TrainingType, string> = {
   групові: "Груп.",
-  індивідуальні: "Інд.",
+  індивідуальні: "Перс.",
   спліт: "Спліт",
 };
 

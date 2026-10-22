@@ -5,7 +5,7 @@ import { redirectToLiqPay, PRICE_UAH } from "@/lib/liqpay";
 import { CancellationReasonModal } from "./CancellationReasonModal";
 
 const TYPE_LABELS: Record<PersonalSlotView["trainingType"], string> = {
-  індивідуальні: "Індивідуальне",
+  індивідуальні: "Персональне",
   спліт: "Спліт",
 };
 

@@ -40,7 +40,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
             {slot.slotTime}
           </span>
           {!isGroup && (
-            <span className="text-muted text-sm">{slot.trainingType === "спліт" ? "Спліт" : "Індивідуальне"}</span>
+            <span className="text-muted text-sm">{slot.trainingType === "спліт" ? "Спліт" : "Персональне"}</span>
           )}
         </div>
         <div className="flex items-center space-x-3">

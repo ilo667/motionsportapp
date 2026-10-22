@@ -192,7 +192,7 @@ export class PaymentService {
       action: 'pay',
       amount: this.amount,
       currency: 'UAH',
-      description: 'Індивідуальне тренування Motion Gym',
+      description: 'Персональне тренування Motion Gym',
       order_id: orderId,
       server_url: process.env.LIQPAY_SERVER_URL ?? '',
       result_url: `${process.env.FRONTEND_URL ?? ''}/payment/return?order=${orderId}`,
