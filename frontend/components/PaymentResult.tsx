@@ -99,7 +99,7 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
           icon: "✕",
           iconClass: "text-danger",
           title: "Оплата не пройшла",
-          text: `${REJECT_REASONS[errCode ?? ""] ?? "Банк відхилив платіж."} Спробуйте ще раз або іншою карткою — місце за вами ${holdUntil(expiresAt)}.`,
+          text: `${REJECT_REASONS[errCode ?? ""] ?? "Банк відхилив платіж."} Спробуйте ще раз або іншою карткою. Місце за вами ${holdUntil(expiresAt)}.`,
         }
       : state === "PENDING"
         ? {
