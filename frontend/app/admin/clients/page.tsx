@@ -1,14 +1,27 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, AdminMember, Trainer, MemberCancellation } from "@/lib/api";
+import { api, AdminMember, Trainer, MemberCancellation, CashRequest } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { AdminMenu } from "@/components/admin/AdminMenu";
+import { CashRequests } from "@/components/admin/CashRequests";
+import { MemberPurchases } from "@/components/admin/MemberPurchases";
 
 const NOTE_MAX = 300;
 // Highlight clients who cancel often (count over the last 30 days)
 const FREQUENT_CANCELLATIONS = 3;
+
+const TYPE_SHORT: Record<AdminMember["packagesLeft"][number]["trainingType"], string> = {
+  персональні: "Перс.",
+  спліт: "Спліт",
+};
+
+// «карта до 15.12 · Перс. 5 · Спліт 2» under the client's name
+function purchaseSummary(m: AdminMember) {
+  const card = m.clubCardUntil ? `карта до ${m.clubCardUntil.slice(8, 10)}.${m.clubCardUntil.slice(5, 7)}` : "без карти";
+  return [card, ...m.packagesLeft.map((p) => `${TYPE_SHORT[p.trainingType]} ${p.left}`)].join(" · ");
+}
 
 function trainingLabel(c: MemberCancellation) {
   const day = new Date(c.localDate + "T12:00:00").toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
@@ -164,13 +177,22 @@ export default function ClientsPage() {
   const [myId, setMyId] = useState("");
   const [loadError, setLoadError] = useState(false);
   const [openHistory, setOpenHistory] = useState<string | null>(null);
+  const [openPurchases, setOpenPurchases] = useState<string | null>(null);
+  const [cash, setCash] = useState<CashRequest[]>([]);
+
+  // After a cash decision or a manual card: the request list and the summaries change
+  const reloadPurchases = () => {
+    api.getPendingCash().then(setCash).catch(() => {});
+    api.getMembers().then(setMembers).catch(() => {});
+  };
 
   useEffect(() => {
-    Promise.all([api.getMembers(), api.getTrainers(), api.me()])
-      .then(([memberList, trainerList, me]) => {
+    Promise.all([api.getMembers(), api.getTrainers(), api.me(), api.getPendingCash()])
+      .then(([memberList, trainerList, me, cashList]) => {
         setMembers(memberList);
         setTrainers(trainerList);
         setMyId(me.id);
+        setCash(cashList);
       })
       .catch((err: unknown) => {
         const status = (err as { status?: number }).status;
@@ -205,10 +227,17 @@ export default function ClientsPage() {
       <tbody>
         {rows.map((m) => (
           <Fragment key={m.id}>
-            <tr className={`align-top ${openHistory === m.id ? "" : "border-b border-line"}`}>
+            <tr className={`align-top ${openHistory === m.id || openPurchases === m.id ? "" : "border-b border-line"}`}>
               <td className="py-3 pr-3">
                 <div className="text-heading">{m.displayName}</div>
                 <div className="text-muted text-xs">{m.memberCode}</div>
+                <button
+                  onClick={() => setOpenPurchases(openPurchases === m.id ? null : m.id)}
+                  aria-expanded={openPurchases === m.id}
+                  className="text-xs text-body hover:text-heading transition-colors mt-1 text-left"
+                >
+                  {purchaseSummary(m)} {openPurchases === m.id ? "▴" : "▾"}
+                </button>
                 <TrainerPicker member={m} trainers={trainers} myId={myId} onAssigned={(trainerId) => updateTrainer(m.id, trainerId)} />
               </td>
               <td className="py-3 pr-3">
@@ -229,6 +258,15 @@ export default function ClientsPage() {
                 )}
               </td>
             </tr>
+            {openPurchases === m.id && (
+              <tr className="border-b border-line">
+                <td colSpan={3} className="pb-4">
+                  <div className="bg-surface border border-line rounded-xl p-3">
+                    <MemberPurchases memberId={m.id} onChanged={reloadPurchases} />
+                  </div>
+                </td>
+              </tr>
+            )}
             {openHistory === m.id && (
               <tr className="border-b border-line">
                 <td colSpan={3} className="pb-4">
@@ -258,6 +296,8 @@ export default function ClientsPage() {
 
       {members && (
         <div className="flex flex-col space-y-8">
+          <CashRequests requests={cash} onDecided={reloadPurchases} />
+
           {unassigned.length > 0 && (
             <section>
               <h2 className="font-geologica font-semibold text-heading uppercase mb-1">Без тренера</h2>

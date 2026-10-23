@@ -43,6 +43,8 @@ export interface AdminMember {
   trainerId: string | null; // null = not assigned (shown to every trainer under «Без тренера»)
   createdAt: string;
   recentCancellations: number; // member's own cancellations in the last 30 days (moves not counted)
+  clubCardUntil: string | null; // valid club card's last day (YYYY-MM-DD), null = none
+  packagesLeft: { trainingType: AssignedType; left: number }[]; // only types with trainings left
 }
 
 export interface Trainer {
@@ -121,6 +123,18 @@ export interface Purchase {
   totalUah: number;
   createdAt: string;
   lines: PurchaseLine[];
+}
+
+export interface CashRequest extends Purchase {
+  memberId: string;
+  displayName: string;
+}
+
+export interface MemberPurchases {
+  card: ClubCard | null;
+  cards: { label: string; validFrom: string; validUntil: string; source: "purchase" | "manual" }[];
+  packages: TrainingPackage[];
+  purchases: (Purchase & { decidedBy: string | null })[];
 }
 
 export interface MyPurchases {
@@ -353,6 +367,23 @@ export const api = {
     }),
 
   getPurchases: () => request<MyPurchases>("/purchases"),
+
+  // Trainer: cash requests of own clients, a client's cards / packages / purchases
+  getPendingCash: () => request<CashRequest[]>("/admin/purchases/pending"),
+
+  confirmCash: (purchaseId: string) =>
+    request<{ ok: boolean }>(`/admin/purchases/${purchaseId}/confirm`, { method: "POST" }),
+
+  rejectCash: (purchaseId: string) =>
+    request<{ ok: boolean }>(`/admin/purchases/${purchaseId}/reject`, { method: "POST" }),
+
+  getMemberPurchases: (memberId: string) => request<MemberPurchases>(`/admin/members/${memberId}/purchases`),
+
+  addClubCard: (memberId: string, priceItemId: string) =>
+    request<{ ok: boolean }>(`/admin/members/${memberId}/club-card`, {
+      method: "POST",
+      body: JSON.stringify({ priceItemId }),
+    }),
 
   createPurchase: (priceItemIds: string[], method: PurchaseMethod) =>
     request<{ purchaseId: string; checkout?: LiqPayCheckout | { status: "PAID" } }>("/purchases", {
