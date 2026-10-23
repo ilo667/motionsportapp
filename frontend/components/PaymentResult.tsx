@@ -27,25 +27,25 @@ const CONTENT: Record<Exclude<ResultState, "PENDING" | "REJECTED">, { icon: stri
     icon: "✕",
     iconClass: "text-danger",
     title: "Оплата не пройшла",
-    text: "Кошти не списано. Можете оформити покупку ще раз у «Мої покупки».",
+    text: "Кошти не списано. Можете оформити покупку ще раз на сторінці «Мій абонемент».",
   },
   EXPIRED: {
     icon: "✕",
     iconClass: "text-danger",
     title: "Час оплати минув",
-    text: "Покупку скасовано. Можете оформити її ще раз у «Мої покупки».",
+    text: "Покупку скасовано. Можете оформити її ще раз на сторінці «Мій абонемент».",
   },
   REPLACED: {
     icon: "?",
     iconClass: "text-muted",
     title: "Оплату перезапущено",
-    text: "Ви почали нову спробу оплати. Статус видно у «Мої покупки».",
+    text: "Ви почали нову спробу оплати. Статус видно на сторінці «Мій абонемент».",
   },
   UNKNOWN: {
     icon: "?",
     iconClass: "text-muted",
     title: "Не вдалося перевірити оплату",
-    text: "Статус видно у «Мої покупки».",
+    text: "Статус видно на сторінці «Мій абонемент».",
   },
 };
 
@@ -117,7 +117,7 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
               ...CONTENT.PAID,
               text: booked
                 ? "Оплачено, ви записані на тренування."
-                : "Оплачено, але записатися не вдалося (місць немає або запис закрито). Абонемент збережено у «Мої покупки».",
+                : "Оплачено, але записатися не вдалося (місць немає або запис закрито). Абонемент збережено.",
             }
           : CONTENT[state];
 
@@ -131,7 +131,7 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
           href={booked ? "/" : "/purchases"}
           className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center"
         >
-          {state === "REJECTED" ? "Спробувати ще раз" : booked ? "До розкладу" : "До моїх покупок"}
+          {state === "REJECTED" ? "Спробувати ще раз" : booked ? "До розкладу" : "До мого абонемента"}
         </Link>
       </div>
     </PageLayout>

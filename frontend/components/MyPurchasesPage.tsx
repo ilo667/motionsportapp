@@ -217,7 +217,7 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
   return (
     <PageLayout variant="top" loading={!data && !loadError} action={action}>
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">
-        Мої покупки
+        Мій абонемент
       </h1>
 
       {loadError && <p className="text-danger text-base">Не вдалося завантажити покупки.</p>}

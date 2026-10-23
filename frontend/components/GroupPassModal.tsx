@@ -50,7 +50,7 @@ export function GroupPassModal({
       const raw = err instanceof Error ? err.message : "";
       setError(
         raw.includes("unpaid purchase")
-          ? "У вас уже є покупка, що очікує оплати. Оплатіть або скасуйте її в «Мої покупки»."
+          ? "У вас уже є покупка, що очікує оплати. Оплатіть або скасуйте її на сторінці «Мій абонемент»."
           : raw.includes("Slot is full")
             ? "Місць вже немає, хтось встиг раніше"
             : raw.includes("Booking window has closed")
@@ -139,7 +139,7 @@ export function GroupPassModal({
             {error && (
               <p className="text-danger text-sm mt-3">
                 {error}{" "}
-                {error.includes("Мої покупки") && (
+                {error.includes("Мій абонемент") && (
                   <Link href="/purchases" className="underline">
                     Відкрити
                   </Link>

@@ -174,7 +174,7 @@ export default function SchedulePage() {
   const scheduleAction = (
     <div className="flex items-center space-x-4">
       <Link href="/purchases" className="text-sm text-accent hover:underline">
-        Мої покупки
+        Мій абонемент
       </Link>
       <button onClick={handleLogout} className="text-muted text-sm hover:text-body transition-colors">
         Вийти

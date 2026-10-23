@@ -94,7 +94,7 @@ export function PurchaseFlow({
       const message = err instanceof Error ? err.message : "";
       setError(
         message.includes("unpaid purchase")
-          ? "У вас уже є покупка, що очікує оплати. Оплатіть або скасуйте її в «Мої покупки»."
+          ? "У вас уже є покупка, що очікує оплати. Оплатіть або скасуйте її на сторінці «Мій абонемент»."
           : "Не вдалося оформити покупку. Спробуйте ще раз.",
       );
       setBusy(false);
@@ -124,7 +124,7 @@ export function PurchaseFlow({
           }}
           className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors"
         >
-          До моїх покупок
+          До мого абонемента
         </button>
       </div>
     );
