@@ -25,7 +25,7 @@ export function CashRequests({ requests, onDecided }: { requests: CashRequest[];
 
   return (
     <section>
-      <h2 className="font-geologica font-semibold text-heading uppercase mb-3">Очікують оплати готівкою</h2>
+      <h2 className="font-geologica font-semibold text-heading uppercase mb-3">Підтвердьте оплату</h2>
       <div className="flex flex-col space-y-3">
         {requests.map((r) => (
           <div key={r.id} className="rounded-xl border-2 border-line bg-surface p-4">
