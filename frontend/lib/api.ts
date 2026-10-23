@@ -43,8 +43,9 @@ export interface AdminMember {
   trainerId: string | null; // null = not assigned (shown to every trainer under «Без тренера»)
   createdAt: string;
   recentCancellations: number; // member's own cancellations in the last 30 days (moves not counted)
-  clubCardUntil: string | null; // valid club card's last day (YYYY-MM-DD), null = none
-  packagesLeft: { trainingType: AssignedType; left: number }[]; // only types with trainings left
+  // The card the client has: active until `until`, or waiting for «Активувати» until `until` (then it burns)
+  clubCard: { state: "waiting" | "active"; until: string } | null;
+  packagesLeft: { trainingType: TrainingType; left: number }[]; // usable packages only, types with trainings left
 }
 
 export interface Trainer {
@@ -75,7 +76,9 @@ export interface PriceChange {
   changedAt: string;
 }
 
-// ── Purchases: club cards and trainer packages ──────────────────────────────
+// ── Purchases: club cards, trainer packages and group passes ────────────────
+// Nothing starts on payment: a card waits for the trainer's «Активувати з сьогодні», a package / group pass for its
+// first mark. Not activated within a month of the purchase, it burns
 
 export type PurchaseMethod = "LIQPAY" | "CASH";
 export type AssignedType = Exclude<TrainingType, "групові">;
@@ -90,23 +93,34 @@ export interface CatalogItem {
   title: string;
   optionLabel: string | null;
   amountUah: number;
-  durationMonths: number | null; // club card: months from payment (0 = that day only)
-  trainingType: AssignedType | null; // trainer service
+  durationMonths: number | null; // months from activation (0 = that day only)
+  trainingType: TrainingType | null; // trainer service or group pass
   trainingCount: number | null;
 }
 
+export type CardState = "waiting" | "active" | "expired" | "burned";
+export type PassState = CardState | "used";
+
+// The card a member has now (waiting or active); dates are YYYY-MM-DD
 export interface ClubCard {
   id: string;
   label: string;
-  validUntil: string;
+  state: "waiting" | "active";
+  validUntil: string | null; // set once active
+  activateBy: string; // last day to activate a waiting card
 }
 
 export interface TrainingPackage {
   id: string;
-  trainingType: AssignedType;
+  trainingType: TrainingType;
   title: string;
   total: number;
   left: number;
+  state: PassState;
+  purchasedOn: string;
+  activateBy: string;
+  activatedOn: string | null;
+  validUntil: string | null;
   createdAt: string;
 }
 
@@ -132,13 +146,21 @@ export interface CashRequest extends Purchase {
 
 export interface MemberPurchases {
   card: ClubCard | null;
-  cards: { label: string; validFrom: string; validUntil: string; source: "purchase" | "manual" }[];
+  cards: {
+    id: string;
+    label: string;
+    state: CardState;
+    validFrom: string | null;
+    validUntil: string | null;
+    activateBy: string;
+    source: "purchase" | "manual";
+  }[];
   packages: TrainingPackage[];
   purchases: (Purchase & { decidedBy: string | null })[];
 }
 
 export interface MyPurchases {
-  catalog: { clubCards: CatalogItem[]; services: CatalogItem[] };
+  catalog: { clubCards: CatalogItem[]; services: CatalogItem[]; groupPasses: CatalogItem[] };
   card: ClubCard | null;
   packages: TrainingPackage[];
   pending: Purchase | null;
@@ -177,7 +199,6 @@ export interface SlotView {
   capacity: number;
   bookedCount: number;
   isMyBooking: boolean;
-  myPaymentStatus?: "PENDING" | "PAID" | null;
   isMyVacancyAlert?: boolean;
 }
 
@@ -204,6 +225,7 @@ export interface ScheduleNext {
   bookingCloseAt: string | null;
   slots: SlotView[]; // group slots of the next group day
   assignedSlots?: AssignedSlotView[];
+  groupPassLeft: number; // group trainings the member's pass holds for that day; 0 → «Записатися» offers to buy
   serverTime: string;
   announcement?: string | null;
 }
@@ -381,23 +403,27 @@ export const api = {
 
   getMemberPurchases: (memberId: string) => request<MemberPurchases>(`/admin/members/${memberId}/purchases`),
 
-  addClubCard: (memberId: string, priceItemId: string) =>
+  addClubCard: (memberId: string, priceItemId: string, activate: boolean) =>
     request<{ ok: boolean }>(`/admin/members/${memberId}/club-card`, {
       method: "POST",
-      body: JSON.stringify({ priceItemId }),
+      body: JSON.stringify({ priceItemId, activate }),
     }),
 
-  createPurchase: (priceItemIds: string[], method: PurchaseMethod) =>
+  activateClubCard: (memberId: string, cardId: string) =>
+    request<{ ok: boolean }>(`/admin/members/${memberId}/club-cards/${cardId}/activate`, { method: "POST" }),
+
+  // slotId: a group pass bought from «Записатися» (cash: booked at once; LiqPay: booked once paid)
+  createPurchase: (priceItemIds: string[], method: PurchaseMethod, slotId?: string) =>
     request<{ purchaseId: string; checkout?: LiqPayCheckout | { status: "PAID" } }>("/purchases", {
       method: "POST",
-      body: JSON.stringify({ priceItemIds, method }),
+      body: JSON.stringify({ priceItemIds, method, slotId }),
     }),
 
   cancelPurchase: (purchaseId: string) =>
     request<{ ok: boolean }>(`/purchases/${purchaseId}/cancel`, { method: "POST" }),
 
   getPaymentStatus: (orderId: string) =>
-    request<{ status: PaymentStatus; errCode?: string; expiresAt?: string }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
+    request<{ status: PaymentStatus; errCode?: string; expiresAt?: string; booked?: boolean }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
 
   getMembers: () =>
     request<AdminMember[]>("/admin/members").then((list) =>

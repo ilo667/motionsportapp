@@ -7,7 +7,10 @@ export const formatUah = (v: number) => `${v.toLocaleString("uk-UA")} ₴`;
 export const lineName = (l: Pick<PurchaseLine, "title" | "optionLabel">) =>
   l.optionLabel ? `${l.title} · ${l.optionLabel}` : l.title;
 
-type Step = "service" | "club" | "checkout" | "sent";
+type Step = "service" | "club" | "group" | "checkout" | "sent";
+
+// What is being bought: a trainer service (with a club card if none), a club card alone, or a group pass
+export type PurchaseMode = "service" | "card" | "group";
 
 const SERVICE_GROUPS: { type: AssignedType; title: string }[] = [
   { type: "персональні", title: "Персональне" },
@@ -42,28 +45,34 @@ function Option({ item, selected, onSelect }: { item: CatalogItem; selected: boo
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase mt-5 mb-2";
 
-// Service → club card (only without a valid one) → summary with LiqPay or cash → «Запит надіслано»
+// Service → club card (only without a valid one) → summary with LiqPay or cash → «Запит надіслано».
+// mode "card" starts at the club card, mode "group" at the group passes
 export function PurchaseFlow({
   data,
+  mode = "service",
   startType,
   onClose,
   onCashSent,
 }: {
   data: MyPurchases;
+  mode?: PurchaseMode;
   startType?: AssignedType;
   onClose: () => void;
   onCashSent: () => void;
 }) {
-  const [step, setStep] = useState<Step>("service");
+  const first: Step = mode === "card" ? "club" : mode === "group" ? "group" : "service";
+  const [step, setStep] = useState<Step>(first);
   const [serviceId, setServiceId] = useState<string | null>(null);
   const [clubId, setClubId] = useState<string | null>(null);
+  const [passId, setPassId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const needsCard = !data.card;
   const service = data.catalog.services.find((s) => s.id === serviceId);
   const club = data.catalog.clubCards.find((c) => c.id === clubId);
-  const lines = [club, service].filter((x): x is CatalogItem => !!x);
+  const pass = data.catalog.groupPasses.find((p) => p.id === passId);
+  const lines = [club, service, pass].filter((x): x is CatalogItem => !!x);
   const total = lines.reduce((sum, l) => sum + l.amountUah, 0);
   const groups = SERVICE_GROUPS.filter((g) => !startType || g.type === startType);
 
@@ -124,7 +133,7 @@ export function PurchaseFlow({
   if (step === "checkout") {
     return (
       <div>
-        {back(needsCard ? "club" : "service")}
+        {back(mode === "group" ? "group" : mode === "card" || needsCard ? "club" : "service")}
         <h1 className="font-geologica font-semibold text-title text-heading uppercase mb-1">Оплата</h1>
         <p className="text-muted text-xs mb-4">Перевірте, що купуєте</p>
         <div className="rounded-xl border border-line bg-surface px-4 py-2 mb-4">
@@ -167,14 +176,50 @@ export function PurchaseFlow({
     );
   }
 
+  if (step === "group") {
+    return (
+      <div>
+        {back("close")}
+        <h1 className="font-geologica font-semibold text-title text-heading uppercase mb-1">Групові тренування</h1>
+        <p className="text-muted text-xs mb-4">
+          Діє місяць від першого тренування. Якщо не почати протягом місяця від покупки, згорає.
+        </p>
+        <div className="flex flex-col space-y-2">
+          {data.catalog.groupPasses.map((p) => (
+            <Option key={p.id} item={{ ...p, optionLabel: lineName(p) }} selected={p.id === passId} onSelect={() => setPassId(p.id)} />
+          ))}
+        </div>
+        <button
+          onClick={() => setStep("checkout")}
+          disabled={!passId}
+          className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors disabled:opacity-40 mt-5"
+        >
+          Далі
+        </button>
+      </div>
+    );
+  }
+
   if (step === "club") {
     return (
       <div>
-        {back("service")}
-        <h1 className="font-geologica font-semibold text-title text-heading uppercase mb-3">Спершу клубна карта</h1>
-        <p className="rounded-xl border border-line bg-background px-4 py-3 text-sm text-body mb-2">
-          У вас немає діючої клубної карти. Вона потрібна, щоб займатись у залі, і купується окремо від тренувань.
-        </p>
+        {back(mode === "card" ? "close" : "service")}
+        {mode === "card" ? (
+          <>
+            <h1 className="font-geologica font-semibold text-title text-heading uppercase mb-3">Клубна карта</h1>
+            <p className="rounded-xl border border-line bg-background px-4 py-3 text-sm text-body mb-2">
+              Карту активує тренер у залі, з того дня рахується строк. Якщо не активувати протягом місяця від
+              покупки, вона згорає.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="font-geologica font-semibold text-title text-heading uppercase mb-3">Спершу клубна карта</h1>
+            <p className="rounded-xl border border-line bg-background px-4 py-3 text-sm text-body mb-2">
+              У вас немає діючої клубної карти. Вона потрібна, щоб займатись у залі, і купується окремо від тренувань.
+            </p>
+          </>
+        )}
         {groupByTitle(data.catalog.clubCards).map((g) => (
           <section key={g.title}>
             <h2 className={sectionTitle}>{g.title}</h2>

@@ -3,11 +3,13 @@ import { useState } from "react";
 import { api, SlotView } from "@/lib/api";
 import { ensurePushSubscribed } from "@/lib/pushUtils";
 import { CancellationReasonModal } from "./CancellationReasonModal";
+import { GroupPassModal } from "./GroupPassModal";
 
-// Group slot (19:00 / 20:00, free). Assigned paid trainings: AssignedSlotCard
+// Group slot (19:00 / 20:00, paid: a group pass, else «Записатись» offers to buy one). Assigned: AssignedSlotCard
 interface SlotCardProps {
   slot: SlotView;
   allSlots: SlotView[];
+  groupPassLeft: number;
   bookingWindowOpen: boolean;
   afterWindow: boolean;
   onMutate: (fn: () => Promise<unknown>) => void;
@@ -17,6 +19,7 @@ interface SlotCardProps {
 export function SlotCard({
   slot,
   allSlots,
+  groupPassLeft,
   bookingWindowOpen,
   afterWindow,
   onMutate,
@@ -27,6 +30,7 @@ export function SlotCard({
     | { action: "switch"; targetSlot: SlotView }
     | null
   >(null);
+  const [buying, setBuying] = useState(false);
 
   const otherSlot = allSlots.find(
     (s) => s.id !== slot.id && s.status === "ACTIVE"
@@ -82,7 +86,7 @@ export function SlotCard({
         <p className="text-muted text-sm">Ви вже записані на інший час</p>
       ) : !isFull ? (
         <button
-          onClick={() => onMutate(() => api.book(slot.id))}
+          onClick={() => (groupPassLeft > 0 ? onMutate(() => api.book(slot.id)) : setBuying(true))}
           className="btn-primary w-full py-3 rounded-lg text-sm transition-colors"
         >
           Записатись
@@ -116,6 +120,15 @@ export function SlotCard({
         </div>
       )}
     </div>
+
+    {buying && (
+      <GroupPassModal
+        slotId={slot.id}
+        slotTime={slot.slotTime}
+        onDismiss={() => setBuying(false)}
+        onBooked={onRefresh}
+      />
+    )}
 
     {modal && (
       <CancellationReasonModal

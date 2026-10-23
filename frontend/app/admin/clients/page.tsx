@@ -13,13 +13,20 @@ const NOTE_MAX = 300;
 const FREQUENT_CANCELLATIONS = 3;
 
 const TYPE_SHORT: Record<AdminMember["packagesLeft"][number]["trainingType"], string> = {
+  групові: "Груп.",
   персональні: "Перс.",
   спліт: "Спліт",
 };
 
+const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+
 // «карта до 15.12 · Перс. 5 · Спліт 2» under the client's name
 function purchaseSummary(m: AdminMember) {
-  const card = m.clubCardUntil ? `карта до ${m.clubCardUntil.slice(8, 10)}.${m.clubCardUntil.slice(5, 7)}` : "без карти";
+  const card = !m.clubCard
+    ? "без карти"
+    : m.clubCard.state === "active"
+      ? `карта до ${ddmm(m.clubCard.until)}`
+      : "карта чекає активації";
   return [card, ...m.packagesLeft.map((p) => `${TYPE_SHORT[p.trainingType]} ${p.left}`)].join(" · ");
 }
 

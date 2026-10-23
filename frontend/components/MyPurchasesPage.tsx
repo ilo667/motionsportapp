@@ -5,19 +5,20 @@ import { useRouter } from "next/navigation";
 import { api, AssignedType, MyPurchases } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
 import { PageLayout } from "./PageLayout";
-import { PurchaseFlow, formatUah, lineName } from "./PurchaseFlow";
+import { PurchaseFlow, PurchaseMode, formatUah, lineName } from "./PurchaseFlow";
 
 const formatDate = (isoDate: string) => {
   const [, m, d] = isoDate.split("-");
   return `${d}.${m}`;
 };
 
-// «Мої покупки»: club card, packages, the purchase that awaits payment, and the way into the purchase flow
+// «Мої покупки»: club card, packages and group passes, the purchase that awaits payment, and the ways into the
+// purchase flow (trainer service, club card alone, group pass)
 export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
   const router = useRouter();
   const [data, setData] = useState<MyPurchases | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [buying, setBuying] = useState(!!startType);
+  const [buying, setBuying] = useState<PurchaseMode | null>(startType ? "service" : null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -81,8 +82,9 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
       <PageLayout variant="top" action={action}>
         <PurchaseFlow
           data={data}
+          mode={buying}
           startType={startType}
-          onClose={() => setBuying(false)}
+          onClose={() => setBuying(null)}
           onCashSent={() => load()}
         />
       </PageLayout>
@@ -95,7 +97,7 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-1">
         Мої покупки
       </h1>
-      <p className="text-muted text-xs mb-6">Клубна карта й тренування з тренером</p>
+      <p className="text-muted text-xs mb-6">Клубна карта, тренування з тренером і групові</p>
 
       {loadError && <p className="text-danger text-sm">Не вдалося завантажити покупки.</p>}
 
@@ -105,7 +107,10 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
             <span className="text-heading font-medium">Клубна карта</span>
             {data.card ? (
               <span className="text-accent text-sm text-right">
-                {data.card.label} · діє до {formatDate(data.card.validUntil)}
+                {data.card.label} ·{" "}
+                {data.card.state === "active"
+                  ? `діє до ${formatDate(data.card.validUntil!)}`
+                  : `чекає активації тренером до ${formatDate(data.card.activateBy)}`}
               </span>
             ) : (
               <span className="text-danger text-sm">немає</span>
@@ -113,15 +118,22 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
           </div>
 
           {data.packages
-            .filter((p) => p.left > 0)
+            .filter((p) => p.state === "waiting" || p.state === "active")
             .map((p) => (
               <div key={p.id} className="rounded-xl border border-line bg-surface p-4">
                 <div className="flex items-center justify-between space-x-3">
-                  <span className="text-heading font-medium">{p.title}</span>
+                  <span className="text-heading font-medium">
+                    {p.trainingType === "групові" ? `Групові · ${p.title}` : p.title}
+                  </span>
                   <span className="text-accent text-sm tabular-nums">
                     залишилось {p.left} з {p.total}
                   </span>
                 </div>
+                <p className="text-muted text-xs mt-1">
+                  {p.state === "active"
+                    ? `діє до ${formatDate(p.validUntil!)}`
+                    : `почнеться з першого тренування; не почати до ${formatDate(p.activateBy)} — згорить`}
+                </p>
                 <div className="h-1.5 rounded-full bg-line overflow-hidden mt-2">
                   <div className="h-full bg-teal" style={{ width: `${(p.left / p.total) * 100}%` }} />
                 </div>
@@ -166,12 +178,26 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
           {error && <p className="text-danger text-sm">{error}</p>}
 
           {!pending && (
-            <button
-              onClick={() => setBuying(true)}
-              className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors mt-3"
-            >
-              Купити тренування з тренером
-            </button>
+            <div className="flex flex-col space-y-2 mt-3">
+              <button
+                onClick={() => setBuying("service")}
+                className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors"
+              >
+                Купити тренування з тренером
+              </button>
+              <button
+                onClick={() => setBuying("group")}
+                className="btn-ghost w-full py-4 rounded-lg border text-sm transition-colors"
+              >
+                Купити групові
+              </button>
+              <button
+                onClick={() => setBuying("card")}
+                className="btn-ghost w-full py-4 rounded-lg border text-sm transition-colors"
+              >
+                Купити клубну карту
+              </button>
+            </div>
           )}
         </div>
       )}

@@ -21,7 +21,7 @@ const CONTENT: Record<Exclude<ResultState, "PENDING" | "REJECTED">, { icon: stri
     icon: "✓",
     iconClass: "text-accent",
     title: "Платіж прийнято",
-    text: "Клубна карта й тренування вже у «Мої покупки».",
+    text: "Покупка вже у «Мої покупки». Строк почнеться з першого тренування (клубну карту активує тренер).",
   },
   FAILED: {
     icon: "✕",
@@ -59,6 +59,8 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
   const [state, setState] = useState<ResultState | null>(orderId ? null : "UNKNOWN");
   const [errCode, setErrCode] = useState<string>();
   const [expiresAt, setExpiresAt] = useState<string>();
+  // A group pass bought from «Записатись»: whether the training got booked once paid
+  const [booked, setBooked] = useState<boolean>();
 
   useEffect(() => {
     if (!orderId) return;
@@ -67,9 +69,10 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
 
     const check = async (attempt: number) => {
       try {
-        const { status, errCode, expiresAt } = await api.getPaymentStatus(orderId);
+        const { status, errCode, expiresAt, booked } = await api.getPaymentStatus(orderId);
         if (cancelled) return;
         setExpiresAt(expiresAt);
+        setBooked(booked);
         if (status === "PENDING" && errCode) {
           setErrCode(errCode);
           setState("REJECTED");
@@ -109,7 +112,14 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
             title: "Оплату не завершено",
             text: `Покупка чекає оплати ${holdUntil(expiresAt)}, далі скасується автоматично.`,
           }
-        : CONTENT[state];
+        : state === "PAID" && booked !== undefined
+          ? {
+              ...CONTENT.PAID,
+              text: booked
+                ? "Оплачено, ви записані на тренування."
+                : "Оплачено, але записатися не вдалося (місць немає або запис закрито). Абонемент збережено у «Мої покупки».",
+            }
+          : CONTENT[state];
 
   return (
     <PageLayout className="items-center text-center">
@@ -118,10 +128,10 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
       <p className="text-muted text-sm">{text}</p>
       <div className="flex flex-col w-full max-w-xs mx-auto mt-10">
         <Link
-          href="/purchases"
+          href={booked ? "/" : "/purchases"}
           className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center"
         >
-          {state === "REJECTED" ? "Спробувати ще раз" : "До моїх покупок"}
+          {state === "REJECTED" ? "Спробувати ще раз" : booked ? "До розкладу" : "До моїх покупок"}
         </Link>
       </div>
     </PageLayout>

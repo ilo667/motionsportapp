@@ -138,6 +138,7 @@ export default function SchedulePage() {
         raw.includes("already booked this training") ? "Ви вже записані на це тренування" :
         raw.includes("already started") ? "Тренування вже почалося" :
         raw.includes("Slot is cancelled") ? "Цей час скасовано тренером" :
+        raw.includes("Group pass required") ? "Потрібен абонемент на групові: натисніть «Записатись» ще раз" :
         raw || "Помилка. Спробуйте ще раз.";
       setMutateError(msg);
     }
@@ -242,6 +243,7 @@ export default function SchedulePage() {
                 key={slot.id}
                 slot={slot}
                 allSlots={schedule.slots}
+                groupPassLeft={schedule.groupPassLeft ?? 0}
                 bookingWindowOpen={schedule.bookingWindowOpen}
                 afterWindow={afterWindow}
                 onMutate={handleMutate}
