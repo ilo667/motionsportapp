@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/admin/clients", label: "Клієнти" },
   { href: "/admin/calendar", label: "Календар" },
   { href: "/admin/history", label: "Історія" },
+  { href: "/admin/prices", label: "Ціни" },
 ];
 
 // Coach navigation in the header: the same burger on phone and desktop

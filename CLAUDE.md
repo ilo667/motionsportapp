@@ -32,6 +32,7 @@ npm run test       # Jest, matches *.spec.ts in src/
 npm run test:cov
 npm run db:push    # apply src/database/schema.ts to the DB (drizzle-kit push)
 npm run seed:admin # create a coach account (ADMIN_USERNAME / ADMIN_PASSWORD)
+npm run seed:prices # add missing price list rows (src/prices/price-list.ts); never overwrites amounts
 npm run lint       # check only, does not change files
 npm run format     # prettier (printWidth 120); the local pre-commit hook rejects unformatted backend files
 ```
@@ -77,6 +78,11 @@ Auth endpoints:
   - `POST /payments/liqpay/callback` — public server-to-server callback; verifies SHA1 signature; activates/cancels booking
   - `GET /payments/status?order=` — member's own order; while PENDING asks LiqPay status API directly (used by `/payment/return`)
   - Expiry: lazily on `GET /schedule/next` (`expireStale()`), PENDING older than `PAYMENT_EXPIRY_MINUTES` — reconciles with LiqPay status API first (lost callback → PAID, LiqPay unreachable → skip). Up to 10 per run, checked in parallel, so a slow LiqPay delays the schedule by one timeout at most. This is the fallback: LiqPay's `expired_date` callback normally cancels the booking first
+- `PricesModule` — the gym's price list, **one for all coaches** (`GET /admin/prices`, `PATCH /admin/prices/:id` `{amountUah, expectedAmountUah}`), page `/admin/prices` («Ціни» in the menu):
+  - `price_items`: one row per option (`section` club_card | assigned | group, `title`, `option_label`, `code`); rows come from `npm run seed:prices`, a coach changes **amounts only** (no adding / removing). `assigned` = «Послуги тренера» (персональні + спліт), same sense as `ASSIGNED_TYPES`
+  - every change goes to `price_changes` (who, when, old → new), append-only, shown under the list. The page warns that the price changes for every coach before saving
+  - the update is compare-and-set on `expectedAmountUah`; if another coach changed it meanwhile → 409 with the current `amountUah` and `updatedBy`
+  - **payments don't read it yet**: LiqPay still charges `PRICE_UAH` (700) for персональні / спліт, group trainings stay free. Members don't see the price list yet
 - `HealthModule` — `GET /health`
 
 ### Coaches — rules
@@ -129,12 +135,14 @@ The LiqPay docs are incomplete. These rules come from prod logs, so do not "fix"
 - **`server_url` is embedded in each order.** After changing the env var, old orders keep retrying the old URL; this is harmless.
 - **Testing:** set `PAYMENT_EXPIRY_MINUTES=2` on Vercel for expiry scenarios, then remove it. Vercel Hobby keeps runtime logs only ~30 min (`vercel logs` without `--since`), so check them right after the scenario. The LiqPay cabinet → payment → "Лог виклику API" keeps callback history.
 - **Money arrived for a cancelled booking** (callback `success` for an EXPIRED/FAILED/REPLACED payment whose booking no longer awaits payment): status is not changed, the payload is saved to `payments.raw_callback`, and an error "needs manual handling" is logged. Find such cases with `SELECT * FROM payments WHERE status <> 'PAID' AND raw_callback->>'status' IN ('success','sandbox')`, then refund via the LiqPay cabinet by `payment_id`.
-- **Price is 700 UAH, hard-coded twice**: `PRICE_UAH` in `backend/src/payment/payment.service.ts` (what LiqPay charges) and in `frontend/lib/liqpay.ts` (the button). Change both together; serving it from the API is postponed.
+- **Price is 700 UAH, hard-coded twice**: `PRICE_UAH` in `backend/src/payment/payment.service.ts` (what LiqPay charges) and in `frontend/lib/liqpay.ts` (the button). Change both together; serving it from the API is postponed. The «Ціни» price list (`price_items`, see `PricesModule`) is not connected to payments yet.
 - **Logs:** every payment decision is logged (`Checkout:`, `LiqPay callback:`, `LiqPay status API:`, `Status check:`, `Expire:`). LiqPay payloads are logged as a safe field subset plus `keys=[…]`; never log names, phones or card masks.
 
 ### Database
 
 Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts` is the source of truth; `npm run db:push` (drizzle-kit) applies it to the DB. One-off migration scripts are deleted once run (all data is test data during development).
+
+`db:push` needs a real terminal for its questions. **Never answer "truncate"** to a question about adding a unique constraint: it means a constraint name in the DB differs from the schema. Look the name up in `pg_constraint` and pin it in the schema (`.unique('payments_order_id_key')`), as done for `payments` and `admin_push_subscriptions`.
 
 ### Frontend conventions
 

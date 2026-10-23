@@ -8,6 +8,7 @@
   "scripts": {
     "build": "rm -rf dist && nest build",
     "seed:admin": "ts-node -r tsconfig-paths/register scripts/seed-admin.ts",
+    "seed:prices": "ts-node -r tsconfig-paths/register scripts/seed-prices.ts",
     "db:push": "drizzle-kit push",
     "format": "prettier --write \"src/**/*.ts\" \"api/**/*.ts\"",
     "start": "nest start",

@@ -38,6 +38,29 @@ export interface Coach {
   username: string;
 }
 
+// Price list shared by all coaches (admin only for now; payments don't use it yet)
+export type PriceSection = "club_card" | "assigned" | "group";
+
+export interface PriceItem {
+  id: string;
+  section: PriceSection;
+  title: string;
+  optionLabel: string | null; // "3 місяці", "6 тренувань"; null for a single-option item
+  amountUah: number;
+  updatedBy: string | null; // coach username; null = never changed since the seed
+  updatedAt: string | null;
+}
+
+export interface PriceChange {
+  id: string;
+  title: string;
+  optionLabel: string | null;
+  oldAmountUah: number;
+  newAmountUah: number;
+  changedBy: string;
+  changedAt: string;
+}
+
 // A booking the member cancelled or moved themselves, with the reason they wrote
 export interface Cancellation {
   bookingId: string;
@@ -277,6 +300,15 @@ export const api = {
     request<{ id: string; trainerNote: string | null }>(`/admin/members/${memberId}/note`, {
       method: "PATCH",
       body: JSON.stringify({ note }),
+    }),
+
+  getPrices: () => request<{ items: PriceItem[]; changes: PriceChange[] }>("/admin/prices"),
+
+  // 409 when another coach changed it meanwhile: error.body has the current amountUah and updatedBy
+  updatePrice: (id: string, amountUah: number, expectedAmountUah: number) =>
+    request<{ id: string; amountUah: number }>(`/admin/prices/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ amountUah, expectedAmountUah }),
     }),
 
   getCalendar: (month: string) =>

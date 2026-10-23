@@ -145,7 +145,8 @@ export const adminPushSubscriptions = pgTable('admin_push_subscriptions', {
   adminId: uuid('admin_id')
     .notNull()
     .references(() => admins.id),
-  endpoint: text('endpoint').notNull().unique(),
+  // Constraint name as it already exists in the DB (created by a one-off SQL script)
+  endpoint: text('endpoint').notNull().unique('admin_push_subscriptions_endpoint_key'),
   p256dh: text('p256dh').notNull(),
   auth: text('auth').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -218,7 +219,8 @@ export const payments = pgTable('payments', {
   bookingId: uuid('booking_id')
     .notNull()
     .references(() => bookings.id),
-  orderId: text('order_id').notNull().unique(),
+  // Constraint name as it already exists in the DB (created by a one-off SQL script)
+  orderId: text('order_id').notNull().unique('payments_order_id_key'),
   amount: integer('amount').notNull(),
   currency: text('currency').notNull().default('UAH'),
   status: text('status').notNull().default('PENDING'), // PENDING | PAID | FAILED | EXPIRED
@@ -226,4 +228,35 @@ export const payments = pgTable('payments', {
   rawCallback: jsonb('raw_callback'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Gym price list, one row per option ("Повний день · 3 місяці"). Shared by all coaches; a coach changes
+// amounts only, rows come from `npm run seed:prices`. Shown in the admin only: payments don't read it yet
+// (LiqPay still charges PRICE_UAH in payment.service.ts)
+export const priceItems = pgTable('price_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  // Stable key of the option (seed upserts by it; later payments will reference it)
+  code: text('code').notNull().unique(),
+  section: text('section').notNull(), // club_card | assigned | group
+  title: text('title').notNull(),
+  optionLabel: text('option_label'), // "3 місяці", "6 тренувань"; null for a single-option item
+  amountUah: integer('amount_uah').notNull(),
+  sortOrder: integer('sort_order').notNull(),
+  // Who changed the amount last; null = still the seeded value
+  updatedBy: uuid('updated_by').references(() => admins.id),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Every price change, append-only: who, when, from what to what
+export const priceChanges = pgTable('price_changes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  priceItemId: uuid('price_item_id')
+    .notNull()
+    .references(() => priceItems.id),
+  oldAmountUah: integer('old_amount_uah').notNull(),
+  newAmountUah: integer('new_amount_uah').notNull(),
+  changedBy: uuid('changed_by')
+    .notNull()
+    .references(() => admins.id),
+  changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
 });
