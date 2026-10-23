@@ -41,7 +41,7 @@ const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focu
 // A member of an assigned training: cancelled, paid (trainings left in a package of that type) or not paid
 function memberLabel(m: { booked: boolean; spent: boolean; packageLeft: number }) {
   if (!m.booked) return { text: "скасувала", className: "text-muted" };
-  if (m.spent) return { text: "оплачено з пакета", className: "text-teal" };
+  if (m.spent) return { text: "оплачено", className: "text-teal" };
   if (m.packageLeft > 0) return { text: `оплачено · залишилось ${m.packageLeft}`, className: "text-teal" };
   return { text: "не оплачено", className: "text-muted" };
 }

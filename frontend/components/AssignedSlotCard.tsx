@@ -49,9 +49,9 @@ export function AssignedSlotCard({ slot, onMutate }: AssignedSlotCardProps) {
         ) : (
           <div className="flex flex-col space-y-2">
             {slot.spent ? (
-              <p className="text-sm text-body">оплачено з пакета</p>
+              <p className="text-sm text-body">оплачено</p>
             ) : slot.packageLeft > 0 ? (
-              <p className="text-sm text-body">з пакета · залишилось {slot.packageLeft}</p>
+              <p className="text-sm text-body">оплачено наперед · залишилось {slot.packageLeft}</p>
             ) : (
               <Link
                 href={`/purchases?type=${encodeURIComponent(slot.trainingType)}`}

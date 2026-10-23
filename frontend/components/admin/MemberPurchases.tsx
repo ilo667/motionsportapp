@@ -15,29 +15,38 @@ type Pack = MemberPurchasesData["packages"][number];
 const cardDates = (c: Card): string => {
   switch (c.state) {
     case "waiting":
-      return `чекає активації, до ${formatDate(c.activateBy)}`;
+      return `Активувати до ${formatDate(c.activateBy)}, інакше згорить`;
     case "active":
-      return `${formatDate(c.validFrom!)} – ${formatDate(c.validUntil!)}`;
+      return `Діє ${formatDate(c.validFrom!)} – ${formatDate(c.validUntil!)}`;
     case "expired":
-      return `закінчилась ${formatDate(c.validUntil!)}`;
+      return `Діяла до ${formatDate(c.validUntil!)}`;
     case "burned":
-      return "не активована, згоріла";
+      return `Не активована до ${formatDate(c.activateBy)}`;
   }
 };
 
 const packDates = (p: Pack): string => {
   switch (p.state) {
     case "waiting":
-      return `не почато, до ${formatDate(p.activateBy)}`;
+      return `почнеться з першого тренування, до ${formatDate(p.activateBy)}`;
     case "active":
-      return `до ${formatDate(p.validUntil!)}`;
+      return `діє до ${formatDate(p.validUntil!)}`;
     case "expired":
       return `закінчився ${formatDate(p.validUntil!)}`;
     case "burned":
-      return "не почато, згорів";
+      return "не почато вчасно, згорів";
     case "used":
       return "використано";
   }
+};
+
+const sectionTitle = "text-subtle text-xs font-semibold uppercase tracking-wide mb-2";
+
+const CARD_BADGE: Record<Card["state"], { text: string; className: string }> = {
+  waiting: { text: "Чекає", className: "text-warn bg-warn-bg border-warn-line" },
+  active: { text: "Діє", className: "text-accent bg-teal/10 border-teal/30" },
+  expired: { text: "Закінчилась", className: "text-subtle border-line" },
+  burned: { text: "Згоріла", className: "text-danger bg-danger/10 border-danger/30" },
 };
 
 const STATUS: Record<Purchase["status"], string> = {
@@ -50,7 +59,7 @@ const STATUS: Record<Purchase["status"], string> = {
 };
 
 // Expanded under a client: their cards (with «Активувати з сьогодні»), packages and purchase history,
-// plus «Додати карту вручну»
+// plus «Додати клубну карту з рецепції»
 export function MemberPurchases({ memberId, onChanged }: { memberId: string; onChanged: () => void }) {
   const [data, setData] = useState<MemberPurchasesData | null>(null);
   const [failed, setFailed] = useState(false);
@@ -77,7 +86,7 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
     api
       .getPrices()
       .then(({ items }) => setCardItems(items.filter((i) => i.section === "club_card")))
-      .catch(() => setError("Не вдалося завантажити карти"));
+      .catch(() => setError("Не вдалося завантажити клубні карти"));
 
   const activate = async (id: string) => {
     setSaving(true);
@@ -87,7 +96,7 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
       await load();
       onChanged();
     } catch {
-      setError("Не вдалося активувати карту");
+      setError("Не вдалося активувати клубну карту");
     } finally {
       setSaving(false);
     }
@@ -104,7 +113,7 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
       await load();
       onChanged();
     } catch {
-      setError("Не вдалося додати карту");
+      setError("Не вдалося додати клубну карту");
     } finally {
       setSaving(false);
     }
@@ -114,36 +123,48 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
   if (!data) return <p className="text-muted text-xs">Завантаження...</p>;
 
   return (
-    <div className="flex flex-col space-y-4 text-sm">
-      <div>
-        <h3 className="text-muted text-xs uppercase tracking-wide mb-1">Клубна карта</h3>
-        {data.cards.length === 0 && <p className="text-muted">Немає</p>}
-        {data.cards.map((c) => (
-          <div key={c.id} className="flex items-center justify-between space-x-3 py-0.5">
-            <p className={c.id === data.card?.id ? "text-accent" : "text-muted"}>
-              {c.label} · {cardDates(c)}
-              {c.source === "manual" && " · додано вручну"}
-            </p>
-            {c.state === "waiting" && (
-              <button
-                onClick={() => activate(c.id)}
-                disabled={saving}
-                className="btn-primary px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-40"
-              >
-                Активувати з сьогодні
-              </button>
-            )}
-          </div>
-        ))}
+    <div className="flex flex-col">
+      <section className="pb-4">
+        <h3 className={sectionTitle}>Клубна карта</h3>
+        {data.cards.length === 0 && <p className="text-subtle">Ще немає</p>}
+        <div className="flex flex-col space-y-3">
+          {data.cards.map((c) => (
+            <div key={c.id} className="flex items-center justify-between space-x-3">
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-center -m-1">
+                  <span className={`m-1 font-semibold ${c.state === "waiting" || c.state === "active" ? "text-heading" : "text-subtle"}`}>
+                    {c.label}
+                  </span>
+                  <span className={`m-1 text-xs font-semibold border rounded-full px-2 py-0.5 ${CARD_BADGE[c.state].className}`}>
+                    {CARD_BADGE[c.state].text}
+                  </span>
+                </p>
+                <p className="text-subtle text-xs mt-1">
+                  {cardDates(c)}
+                  {c.source === "manual" && " · додано тренером"}
+                </p>
+              </div>
+              {c.state === "waiting" && (
+                <button
+                  onClick={() => activate(c.id)}
+                  disabled={saving}
+                  className="btn-primary px-4 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-40"
+                >
+                  Активувати з сьогодні
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
         {cardItems ? (
-          <div className="flex flex-wrap items-center -m-1 mt-1">
+          <div className="flex flex-wrap items-center -m-1 mt-2">
             <select
               aria-label="Клубна карта"
               value={cardId}
               onChange={(e) => setCardId(e.target.value)}
-              className="input-field border rounded-lg px-2 py-1.5 text-sm focus:outline-none m-1"
+              className="input-field border rounded-lg px-2 py-1.5 text-xs focus:outline-none m-1"
             >
-              <option value="">Виберіть карту</option>
+              <option value="">Виберіть клубну карту</option>
               {cardItems.map((i) => (
                 <option key={i.id} value={i.id}>
                   {lineName(i)}
@@ -164,40 +185,45 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
             >
               Додати
             </button>
-            <button onClick={() => setCardItems(null)} className="text-muted text-xs hover:text-body m-1">
+            <button onClick={() => setCardItems(null)} className="text-subtle text-xs hover:text-body m-1">
               Скасувати
             </button>
           </div>
         ) : (
-          <button onClick={openAddCard} className="text-accent text-xs hover:underline mt-1">
-            + Додати карту вручну
+          <button onClick={openAddCard} className="text-accent text-xs hover:underline mt-2">
+            + Додати клубну карту з рецепції
           </button>
         )}
-        <p className="text-muted text-xs mt-1">
-          Для карти, купленої на рецепції. Не активована протягом місяця, карта згорає.
-        </p>
-      </div>
+      </section>
 
-      <div>
-        <h3 className="text-muted text-xs uppercase tracking-wide mb-1">Пакети й абонементи</h3>
-        {data.packages.length === 0 && <p className="text-muted">Немає</p>}
-        {data.packages.map((p) => (
-          <p key={p.id} className={p.state === "waiting" || p.state === "active" ? "text-body" : "text-muted"}>
-            {p.title} · залишилось <span className="tabular-nums">{p.left} з {p.total}</span> · {packDates(p)}
-          </p>
-        ))}
-      </div>
-
-      <div>
-        <h3 className="text-muted text-xs uppercase tracking-wide mb-1">Історія покупок</h3>
-        {data.purchases.length === 0 && <p className="text-muted">Покупок ще не було</p>}
-        {data.purchases.map((p) => (
-          <div key={p.id} className="py-1 border-b border-line last:border-0">
-            <div className="flex justify-between space-x-3">
-              <span className="text-body">{p.lines.map(lineName).join(" + ")}</span>
-              <span className="tabular-nums text-body">{formatUah(p.totalUah)}</span>
+      <section className="py-4 border-t border-line">
+        <h3 className={sectionTitle}>Послуги тренера й абонементи</h3>
+        {data.packages.length === 0 && <p className="text-subtle">Ще немає</p>}
+        <div className="flex flex-col space-y-2">
+          {data.packages.map((p) => (
+            <div key={p.id} className="flex justify-between space-x-3">
+              <span className={p.state === "waiting" || p.state === "active" ? "text-heading" : "text-subtle"}>
+                {p.trainingType === "групові" ? `Групові · ${p.title}` : p.title}
+                <span className="block text-subtle text-xs">{packDates(p)}</span>
+              </span>
+              <span className="tabular-nums text-body whitespace-nowrap">
+                {p.left} з {p.total}
+              </span>
             </div>
-            <p className="text-muted text-xs">
+          ))}
+        </div>
+      </section>
+
+      <section className="pt-4 border-t border-line">
+        <h3 className={sectionTitle}>Історія покупок</h3>
+        {data.purchases.length === 0 && <p className="text-subtle">Покупок ще не було</p>}
+        {data.purchases.map((p) => (
+          <div key={p.id} className="py-1.5 border-b border-line last:border-0">
+            <div className="flex justify-between space-x-3">
+              <span className="text-heading">{p.lines.map(lineName).join(" + ")}</span>
+              <span className="tabular-nums text-heading font-semibold whitespace-nowrap">{formatUah(p.totalUah)}</span>
+            </div>
+            <p className="text-subtle text-xs">
               {new Date(p.createdAt).toLocaleDateString("uk-UA", { day: "numeric", month: "short", timeZone: "Europe/Kyiv" })}
               {" · "}
               {p.method === "CASH" ? "готівка" : "онлайн"} · {STATUS[p.status]}
@@ -205,8 +231,8 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
             </p>
           </div>
         ))}
-      </div>
-      {error && <p className="text-danger text-xs">{error}</p>}
+      </section>
+      {error && <p className="text-danger text-xs mt-2">{error}</p>}
     </div>
   );
 }

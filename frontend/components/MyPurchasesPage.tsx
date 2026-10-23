@@ -80,7 +80,7 @@ function ClubCardBlock({ data }: { data: MyPurchases }) {
           BADGE.waiting,
           "Чекає активації",
           card.label,
-          `Тренер активує карту, коли прийдете в зал. Встигніть до ${formatDate(card.activateBy)}`,
+          `Тренер активує клубну карту, коли прийдете в зал. Встигніть до ${formatDate(card.activateBy)}`,
         ]
     : lastCard?.state === "burned"
       ? [BADGE.ended, "Згоріла", lastCard.label, "Не активована вчасно. Купіть нову, щоб займатися в залі"]

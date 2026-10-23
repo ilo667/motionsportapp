@@ -20,14 +20,20 @@ const TYPE_SHORT: Record<AdminMember["packagesLeft"][number]["trainingType"], st
 
 const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 
-// «карта до 15.12 · Перс. 5 · Спліт 2» under the client's name
+// Under the client's name: a badge for the club card («Клубна карта чекає активації»), then «Перс. 5 · Спліт 2»
 function purchaseSummary(m: AdminMember) {
-  const card = !m.clubCard
-    ? "без карти"
+  const [text, className] = !m.clubCard
+    ? ["Без клубної карти", "text-subtle border-line"]
     : m.clubCard.state === "active"
-      ? `карта до ${ddmm(m.clubCard.until)}`
-      : "клубна карта чекає активації";
-  return [card, ...m.packagesLeft.map((p) => `${TYPE_SHORT[p.trainingType]} ${p.left}`)].join(" · ");
+      ? [`Клубна карта до ${ddmm(m.clubCard.until)}`, "text-accent bg-teal/10 border-teal/30"]
+      : ["Клубна карта чекає активації", "text-warn bg-warn-bg border-warn-line"];
+  const left = m.packagesLeft.map((p) => `${TYPE_SHORT[p.trainingType]} ${p.left}`).join(" · ");
+  return (
+    <>
+      <span className={`m-1 font-semibold border rounded-full px-2.5 py-1 ${className}`}>{text}</span>
+      {left && <span className="m-1 text-body">{left}</span>}
+    </>
+  );
 }
 
 function trainingLabel(c: MemberCancellation) {
@@ -241,9 +247,10 @@ export default function ClientsPage() {
                 <button
                   onClick={() => setOpenPurchases(openPurchases === m.id ? null : m.id)}
                   aria-expanded={openPurchases === m.id}
-                  className="text-xs text-body hover:text-heading transition-colors mt-1 text-left"
+                  className="flex flex-wrap items-center -m-1 mt-1 text-xs text-left hover:opacity-80 transition-opacity"
                 >
-                  {purchaseSummary(m)} {openPurchases === m.id ? "▴" : "▾"}
+                  {purchaseSummary(m)}
+                  <span className="m-1 text-subtle">{openPurchases === m.id ? "▴" : "▾"}</span>
                 </button>
                 <TrainerPicker member={m} trainers={trainers} myId={myId} onAssigned={(trainerId) => updateTrainer(m.id, trainerId)} />
               </td>

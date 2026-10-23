@@ -208,7 +208,7 @@ export function PurchaseFlow({
           <>
             <h1 className="font-geologica font-semibold text-title text-heading uppercase mb-3">Клубна карта</h1>
             <p className="rounded-xl border border-line bg-background px-4 py-3 text-sm text-body mb-2">
-              Карту активує тренер у залі, з того дня рахується строк. Якщо не активувати протягом місяця від
+              Клубну карту активує тренер у залі, з того дня рахується строк. Якщо не активувати протягом місяця від
               покупки, вона згорає.
             </p>
           </>
