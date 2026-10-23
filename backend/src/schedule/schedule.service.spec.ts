@@ -14,7 +14,7 @@ function makeDb(results: unknown[][] = []) {
   function readLink(): any {
     const then = (resolve: (v: unknown) => void) => resolve(next());
     const chain: any = { then };
-    for (const m of ['from', 'innerJoin', 'where', 'for', 'orderBy', 'limit', 'inArray']) {
+    for (const m of ['from', 'innerJoin', 'leftJoin', 'where', 'for', 'orderBy', 'limit', 'inArray']) {
       chain[m] = jest.fn().mockImplementation(() => readLink());
     }
     return chain;
@@ -138,7 +138,7 @@ describe('ScheduleService — assigned trainings', () => {
     ];
     const { db } = makeDb([
       assigned,
-      [{ slotId: 'p-evening' }],
+      [{ slotId: 'p-evening', spentFrom: 'pkg-1' }],
       [{ trainerId: 'trainer-1' }], // the member's trainer
       [trainingDay],
       HAS_GROUP,
@@ -156,7 +156,7 @@ describe('ScheduleService — assigned trainings', () => {
 
     // 12:00 ended at 13:00, so only the evening split is shown; its trainings left = all split packages
     expect(result?.assignedSlots).toEqual([
-      expect.objectContaining({ id: 'p-evening', isMyBooking: true, packageLeft: 5, started: false }),
+      expect.objectContaining({ id: 'p-evening', isMyBooking: true, spent: true, packageLeft: 5, started: false }),
     ]);
     expect(result?.assignedSlots?.[0]).not.toHaveProperty('myPaymentStatus');
   });

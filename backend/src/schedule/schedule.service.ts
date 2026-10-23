@@ -2,7 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { and, eq, gte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { trainingDays, trainingSlots, bookings, vacancyAlerts, announcements, slotMembers } from '../database/schema';
+import {
+  trainingDays,
+  trainingSlots,
+  bookings,
+  vacancyAlerts,
+  announcements,
+  slotMembers,
+  packageSpends,
+} from '../database/schema';
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { EntitlementsService } from '../purchases/entitlements.service';
@@ -230,9 +238,11 @@ export class ScheduleService {
     );
     if (visible.length === 0) return [];
 
+    // spentFrom: this booking was already paid from a package (the trainer marked it)
     const mine = await this.database.db
-      .select({ slotId: bookings.slotId })
+      .select({ slotId: bookings.slotId, spentFrom: packageSpends.packageId })
       .from(bookings)
+      .leftJoin(packageSpends, eq(packageSpends.bookingId, bookings.id))
       .where(
         and(
           eq(bookings.memberId, memberId),
@@ -252,6 +262,7 @@ export class ScheduleService {
     return visible.map((r) => ({
       ...r,
       isMyBooking: mine.some((b) => b.slotId === r.id),
+      spent: mine.some((b) => b.slotId === r.id && !!b.spentFrom),
       packageLeft: leftOf(r.trainingType),
       // Cancellation is allowed until the training starts
       started: now >= slotStartsAt(r.localDate, r.slotTime),

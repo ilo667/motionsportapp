@@ -3,7 +3,16 @@ import { eq, and, or, inArray, gte, lt, lte, asc, desc, isNotNull, isNull, sql, 
 import { alias } from 'drizzle-orm/pg-core';
 import { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
-import { trainingDays, trainingSlots, bookings, members, attendance, slotMembers, admins } from '../database/schema';
+import {
+  trainingDays,
+  trainingSlots,
+  bookings,
+  members,
+  attendance,
+  slotMembers,
+  admins,
+  packageSpends,
+} from '../database/schema';
 import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
 import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
@@ -245,8 +254,9 @@ export class AdminScheduleService {
     const booked =
       assignedIds.length > 0
         ? await this.database.db
-            .select({ slotId: bookings.slotId, memberId: bookings.memberId })
+            .select({ slotId: bookings.slotId, memberId: bookings.memberId, spentFrom: packageSpends.packageId })
             .from(bookings)
+            .leftJoin(packageSpends, eq(packageSpends.bookingId, bookings.id))
             .where(and(inArray(bookings.slotId, assignedIds), eq(bookings.status, 'ACTIVE')))
         : [];
     const summaries = await this.entitlements.summaries([...new Set(assigned.map((a) => a.id))]);
@@ -264,6 +274,8 @@ export class AdminScheduleService {
           id,
           displayName,
           booked: booked.some((b) => b.slotId === r.slotId && b.memberId === id),
+          // Already paid from a package (marked): «оплачено» even if the package is empty now
+          spent: booked.some((b) => b.slotId === r.slotId && b.memberId === id && !!b.spentFrom),
           packageLeft: summaries.get(id)?.packagesLeft.find((p) => p.trainingType === r.trainingType)?.left ?? 0,
         })),
     }));

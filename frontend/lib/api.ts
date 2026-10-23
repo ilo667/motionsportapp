@@ -190,6 +190,7 @@ export interface AssignedSlotView {
   capacity: number;
   bookedCount: number;
   isMyBooking: boolean;
+  spent: boolean; // already paid from a package (the trainer marked it)
   packageLeft: number; // trainings left in the member's packages of this type (0 = none: «Оплатити»)
   started: boolean;
 }
@@ -277,8 +278,9 @@ export interface CalendarSlot {
   trainingType: TrainingType;
   bookedCount: number;
   capacity: number;
-  // Assigned members, assigned slots only. booked: false = cancelled it; packageLeft: trainings of this type left
-  members: { id: string; displayName: string; booked: boolean; packageLeft: number }[];
+  // Assigned members, assigned slots only. booked: false = cancelled it; spent: paid from a package already;
+  // packageLeft: trainings of this type left
+  members: { id: string; displayName: string; booked: boolean; spent: boolean; packageLeft: number }[];
 }
 
 export const api = {

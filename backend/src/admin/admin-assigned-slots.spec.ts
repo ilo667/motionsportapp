@@ -289,8 +289,8 @@ describe('Calendar — assigned slot members', () => {
         { slotId: 'p1', id: M3, displayName: 'Іра' },
       ],
       [
-        { slotId: 'p1', memberId: M1 },
-        { slotId: 'p1', memberId: M2 },
+        { slotId: 'p1', memberId: M1, spentFrom: null },
+        { slotId: 'p1', memberId: M2, spentFrom: 'pkg-2' },
       ],
     ]);
     const summaries = new Map([
@@ -300,11 +300,11 @@ describe('Calendar — assigned slot members', () => {
     const entitlements = { summaries: jest.fn().mockResolvedValue(summaries) };
     const result = await makeService(db, entitlements).getCalendar(TRAINER, '2026-10');
     expect(result.find((s) => s.slotId === 'g1')?.members).toEqual([]);
-    // Оля has personal trainings only: nothing left for a split. Іра cancelled
+    // Оля's training was already spent from a package (now empty): paid all the same. Іра cancelled
     expect(result.find((s) => s.slotId === 'p1')?.members).toEqual([
-      { id: M1, displayName: 'Катя', booked: true, packageLeft: 5 },
-      { id: M2, displayName: 'Оля', booked: true, packageLeft: 0 },
-      { id: M3, displayName: 'Іра', booked: false, packageLeft: 0 },
+      { id: M1, displayName: 'Катя', booked: true, spent: false, packageLeft: 5 },
+      { id: M2, displayName: 'Оля', booked: true, spent: true, packageLeft: 0 },
+      { id: M3, displayName: 'Іра', booked: false, spent: false, packageLeft: 0 },
     ]);
   });
 });

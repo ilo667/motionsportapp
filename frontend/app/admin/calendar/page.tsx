@@ -39,8 +39,9 @@ const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
 const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 
 // A member of an assigned training: cancelled, paid (trainings left in a package of that type) or not paid
-function memberLabel(m: { booked: boolean; packageLeft: number }) {
+function memberLabel(m: { booked: boolean; spent: boolean; packageLeft: number }) {
   if (!m.booked) return { text: "скасувала", className: "text-muted" };
+  if (m.spent) return { text: "оплачено з пакета", className: "text-teal" };
   if (m.packageLeft > 0) return { text: `оплачено · залишилось ${m.packageLeft}`, className: "text-teal" };
   return { text: "не оплачено", className: "text-muted" };
 }
@@ -133,7 +134,7 @@ export default function CalendarPage() {
     // Group: how full it is. Assigned: who has a package ("Спліт · Катя ✓, Оля")
     const detail = s.trainingType === "групові"
       ? `${s.bookedCount}/${s.capacity}`
-      : s.members.map((m) => `${m.displayName}${m.booked && m.packageLeft > 0 ? " ✓" : ""}`).join(", ") || "без людей";
+      : s.members.map((m) => `${m.displayName}${m.booked && (m.spent || m.packageLeft > 0) ? " ✓" : ""}`).join(", ") || "без людей";
     return {
       id: s.slotId,
       title: `${TYPE_SHORT[s.trainingType]} · ${detail}`,
