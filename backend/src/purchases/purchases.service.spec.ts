@@ -67,6 +67,7 @@ const PERSONAL = {
 const SPLIT = { id: 'price-s1', section: 'assigned', title: 'Спліт', optionLabel: '1 тренування', amountUah: 400 };
 const GROUP = { id: 'price-g', section: 'group', title: 'Абонемент', optionLabel: '10 занять', amountUah: 2200 };
 const MEMBER = [{ trainerId: 'trainer-1', displayName: 'Катя' }];
+const GROUP_SLOT = [{ trainingType: 'групові' }];
 
 function makeService(db: any, opts: { card?: unknown; pushFails?: boolean; packages?: unknown[] } = {}) {
   const entitlements = {
@@ -174,8 +175,26 @@ describe('Purchases — create', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  // The slot is checked before anything is written: a slot id that is not in the DB used to fail the purchase
+  // insert on the foreign key (500)
+  it('a slot that does not exist → 404, nothing bought', async () => {
+    const { db, inserts } = makeDb([[GROUP], []]);
+    await expect(
+      makeService(db).svc.create('m1', { priceItemIds: ['price-g'], method: 'LIQPAY', slotId: 'slot-x' }),
+    ).rejects.toThrow(NotFoundException);
+    expect(inserts).toHaveLength(0);
+  });
+
+  it('a slot that is not a group training → 404', async () => {
+    const { db, inserts } = makeDb([[GROUP], [{ trainingType: 'персональні' }]]);
+    await expect(
+      makeService(db).svc.create('m1', { priceItemIds: ['price-g'], method: 'LIQPAY', slotId: 'slot-p' }),
+    ).rejects.toThrow(NotFoundException);
+    expect(inserts).toHaveLength(0);
+  });
+
   it('LiqPay group pass from «Записатися»: remembers the slot, books nothing yet', async () => {
-    const { db, inserts } = makeDb([[GROUP], MEMBER, []]);
+    const { db, inserts } = makeDb([[GROUP], GROUP_SLOT, MEMBER, []]);
     await makeService(db).svc.create('m1', { priceItemIds: ['price-g'], method: 'LIQPAY', slotId: 'slot-1' });
     expect(inserts.find((i) => i.table === purchases)?.values).toMatchObject({ slotId: 'slot-1', method: 'LIQPAY' });
     expect(mockTryBook).not.toHaveBeenCalled();
@@ -183,7 +202,7 @@ describe('Purchases — create', () => {
 
   it('cash for a group pass books the slot at once and remembers the booking', async () => {
     mockTryBook.mockResolvedValueOnce({ ok: true, bookingId: 'b1' });
-    const { db, sets } = makeDb([[GROUP], MEMBER, []]);
+    const { db, sets } = makeDb([[GROUP], GROUP_SLOT, MEMBER, []]);
     const { svc, notifications } = makeService(db);
     await svc.create('m1', { priceItemIds: ['price-g'], method: 'CASH', slotId: 'slot-1' });
     expect(mockTryBook).toHaveBeenCalledWith(db, NOW, 'm1', 'slot-1');
@@ -197,7 +216,7 @@ describe('Purchases — create', () => {
 
   it('cash for a group pass on a full slot: 409 and the purchase is rolled back (the error leaves the transaction)', async () => {
     mockTryBook.mockResolvedValueOnce({ ok: false, reason: 'FULL' });
-    const { db } = makeDb([[GROUP], MEMBER, []]);
+    const { db } = makeDb([[GROUP], GROUP_SLOT, MEMBER, []]);
     const { svc, notifications } = makeService(db);
     await expect(svc.create('m1', { priceItemIds: ['price-g'], method: 'CASH', slotId: 'slot-1' })).rejects.toThrow(
       'Slot is full',

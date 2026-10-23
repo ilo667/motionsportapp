@@ -55,7 +55,9 @@ export function GroupPassModal({
             ? "Місць вже немає, хтось встиг раніше"
             : raw.includes("Booking window has closed")
               ? "Час запису вже минув"
-              : "Не вдалося оформити покупку. Спробуйте ще раз.",
+              : raw.includes("Slot not found")
+                ? "Цього тренування вже немає в розкладі"
+                : "Не вдалося оформити покупку. Спробуйте ще раз.",
       );
       setBusy(false);
     }

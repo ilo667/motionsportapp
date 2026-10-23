@@ -21,6 +21,7 @@ import { NotificationService } from '../notifications/notification.service';
 import type { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { tryBookGroup, type GroupBookingResult } from '../booking/group-booking';
 import { cardState } from './validity';
+import { GROUP_TYPE } from '../schedule/training-types';
 
 // Same answers as BookingService.book gives for the same reasons
 function bookingError(reason: Extract<GroupBookingResult, { ok: false }>['reason']) {
@@ -154,6 +155,15 @@ export class PurchasesService {
     const cardAndService = groups.length === 0 && cards.length <= 1 && services.length <= 1;
     if (!groupAlone && !cardAndService) throw new BadRequestException('Not a valid set of items');
     if (dto.slotId && !groupAlone) throw new BadRequestException('A slot goes only with a group pass');
+    if (dto.slotId) {
+      // Checked before anything is written: an unknown id would fail the purchase insert on the foreign key (500)
+      const [slot] = await this.database.db
+        .select({ trainingType: trainingSlots.trainingType })
+        .from(trainingSlots)
+        .where(eq(trainingSlots.id, dto.slotId))
+        .limit(1);
+      if (slot?.trainingType !== GROUP_TYPE) throw new NotFoundException('Slot not found');
+    }
     if (cards.length || services.length) {
       const hasCard = !!(await this.entitlements.usableCard(memberId));
       // One club card at a time: a new one only once the current card has ended or burned
