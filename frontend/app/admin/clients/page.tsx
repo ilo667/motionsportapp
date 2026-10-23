@@ -26,7 +26,7 @@ function purchaseSummary(m: AdminMember) {
     ? "без карти"
     : m.clubCard.state === "active"
       ? `карта до ${ddmm(m.clubCard.until)}`
-      : "карта чекає активації";
+      : "клубна карта чекає активації";
   return [card, ...m.packagesLeft.map((p) => `${TYPE_SHORT[p.trainingType]} ${p.left}`)].join(" · ");
 }
 
