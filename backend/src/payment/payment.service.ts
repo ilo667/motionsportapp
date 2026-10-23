@@ -202,17 +202,20 @@ export class PaymentService {
   // Used by /payment/return. Asks LiqPay directly while still PENDING, so the page
   // shows the real result even if the callback is late or lost.
   // errCode is set when LiqPay rejected an attempt but the order is still open (status=try_again);
-  // expiresAt — when a still PENDING purchase will expire
+  // expiresAt — when a still PENDING purchase will expire; booked — for a group pass bought from «Записатися»,
+  // whether the slot got booked once paid
   async getStatus(
     orderId: string,
     memberId: string,
-  ): Promise<{ status: PaymentStatus; errCode?: string; expiresAt?: string }> {
+  ): Promise<{ status: PaymentStatus; errCode?: string; expiresAt?: string; booked?: boolean }> {
     const [payment] = await this.database.db
       .select({
         id: payments.id,
         purchaseId: payments.purchaseId,
         status: payments.status,
         createdAt: payments.createdAt,
+        slotId: purchases.slotId,
+        bookingId: purchases.bookingId,
       })
       .from(payments)
       .innerJoin(purchases, eq(purchases.id, payments.purchaseId))
@@ -222,7 +225,8 @@ export class PaymentService {
     if (!payment) throw new NotFoundException('Payment not found');
     if (payment.status !== 'PENDING') {
       this.logger.log(`Status check: order=${orderId} → ${payment.status} (from DB)`);
-      return { status: payment.status as PaymentStatus };
+      const status = payment.status as PaymentStatus;
+      return status === 'PAID' && payment.slotId ? { status, booked: !!payment.bookingId } : { status };
     }
 
     const expiresAt = new Date(payment.createdAt.getTime() + this.expiryMs).toISOString();
@@ -240,6 +244,15 @@ export class PaymentService {
         ? remote.err_code
         : undefined;
     this.logger.log(`Status check: order=${orderId} → ${status}${errCode ? ` errCode=${errCode}` : ''}`);
+    if (status === 'PAID' && payment.slotId && payment.purchaseId) {
+      // Paid just now: the booking was made in the same transaction
+      const [after] = await this.database.db
+        .select({ bookingId: purchases.bookingId })
+        .from(purchases)
+        .where(eq(purchases.id, payment.purchaseId))
+        .limit(1);
+      return { status, booked: !!after?.bookingId };
+    }
     if (status !== 'PENDING') return { status };
     return errCode ? { status, errCode, expiresAt } : { status, expiresAt };
   }

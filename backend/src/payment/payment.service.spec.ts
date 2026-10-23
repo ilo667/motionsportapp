@@ -259,6 +259,16 @@ describe('PaymentService — getStatus', () => {
     expect(mockLiqpayStatus).not.toHaveBeenCalled();
   });
 
+  it('a paid group pass bought from «Записатися» says whether the slot got booked', async () => {
+    const { db } = makeDb([[{ ...pending, status: 'PAID', slotId: 'slot-1', bookingId: 'b1' }]]);
+    await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({ status: 'PAID', booked: true });
+    const other = makeDb([[{ ...pending, status: 'PAID', slotId: 'slot-1', bookingId: null }]]);
+    await expect(makeService(other.db).getStatus('mg-1', 'member-1')).resolves.toEqual({
+      status: 'PAID',
+      booked: false,
+    });
+  });
+
   it('marks PAID when LiqPay reports success', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'ok', status: 'success', order_id: 'mg-1' });
     const { db, sets } = makeDb([[pending]]);

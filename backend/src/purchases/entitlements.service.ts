@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, NotFoundException, Logger } from '@nestjs/common';
 import { and, asc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
@@ -16,6 +16,7 @@ import {
   trainingSlots,
 } from '../database/schema';
 import { GROUP_TYPE, KY_ZONE, PASS_TYPES } from '../schedule/training-types';
+import { tryBookGroup } from '../booking/group-booking';
 import { activateByFor, cardState, passState, PassState, passUsableOn, validUntilFor } from './validity';
 
 type Db = DatabaseService['db'];
@@ -86,6 +87,8 @@ const PASS_DATES = {
 // not activated within a month of the purchase, it burns (validity.ts)
 @Injectable()
 export class EntitlementsService {
+  private readonly logger = new Logger(EntitlementsService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly clock: ClockService,
@@ -95,8 +98,9 @@ export class EntitlementsService {
     return this.clock.now().toISODate()!;
   }
 
-  // A paid purchase turns into a club card and / or a package. Called in the transaction that marks it PAID
-  async activate(tx: Q, purchaseId: string) {
+  // A paid purchase turns into a club card and / or a package. Called in the transaction that marks it PAID.
+  // A group pass bought from «Записатися» then books its slot (LiqPay) and pays for that booking
+  async activate(tx: Tx, purchaseId: string) {
     const lines = await tx
       .select({
         id: purchaseItems.id,
@@ -139,6 +143,26 @@ export class EntitlementsService {
         });
       }
     }
+
+    const [purchase] = await tx
+      .select({ memberId: purchases.memberId, slotId: purchases.slotId, bookingId: purchases.bookingId })
+      .from(purchases)
+      .where(eq(purchases.id, purchaseId))
+      .limit(1);
+    if (!purchase?.slotId) return;
+    let bookingId = purchase.bookingId;
+    if (!bookingId) {
+      // Paid by LiqPay: book now. Can't (window closed, slot full) → the pass stays, never fail the payment
+      const booked = await tryBookGroup(tx, this.clock.now(), purchase.memberId, purchase.slotId);
+      if (!booked.ok) {
+        this.logger.log(`Purchase ${purchaseId}: paid, not booked (${booked.reason})`);
+        return;
+      }
+      bookingId = booked.bookingId;
+      await tx.update(purchases).set({ bookingId }).where(eq(purchases.id, purchaseId));
+    }
+    // Already marked (cash confirmed after the training): spend from this pass now
+    await this.syncSpend(tx, bookingId);
   }
 
   // The card the member has now, waiting or active (a waiting card counts when buying a trainer service)

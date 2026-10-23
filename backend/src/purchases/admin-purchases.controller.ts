@@ -40,6 +40,16 @@ export class AdminPurchasesController {
     @Body() dto: AddClubCardDto,
     @CurrentUser() user: SessionUser,
   ) {
-    return this.purchasesService.addCard(user.id, memberId, dto.priceItemId);
+    return this.purchasesService.addCard(user.id, memberId, dto.priceItemId, dto.activate ?? false);
+  }
+
+  @Post('members/:memberId/club-cards/:cardId/activate')
+  @HttpCode(200)
+  activateCard(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @Param('cardId', ParseUUIDPipe) cardId: string,
+    @CurrentUser() user: SessionUser,
+  ) {
+    return this.purchasesService.activateCard(user.id, memberId, cardId);
   }
 }

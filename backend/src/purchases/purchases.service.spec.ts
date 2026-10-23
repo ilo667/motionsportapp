@@ -9,6 +9,11 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { MemberGuard } from '../common/guards/member.guard';
 import { payments, purchases, purchaseItems } from '../database/schema';
 import { KY_ZONE } from '../schedule/training-types';
+import { tryBookGroup } from '../booking/group-booking';
+
+jest.mock('../booking/group-booking', () => ({ tryBookGroup: jest.fn() }));
+const mockTryBook = tryBookGroup as jest.Mock;
+beforeEach(() => mockTryBook.mockReset());
 
 const NOW = DateTime.fromISO('2026-10-23T12:00:00', { zone: KY_ZONE });
 
@@ -92,14 +97,69 @@ describe('Purchases — create', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
-  it('400 for a group item (group trainings stay free)', async () => {
-    const { db } = makeDb([[GROUP]]);
-    await expect(makeService(db).svc.create('m1', { priceItemIds: ['price-g'], method: 'LIQPAY' })).rejects.toThrow(
-      BadRequestException,
+  it('a club card alone can be bought', async () => {
+    const { db, inserts } = makeDb([[CARD], MEMBER, []]);
+    const { svc, payments } = makeService(db);
+    await svc.create('m1', { priceItemIds: ['price-card'], method: 'LIQPAY' });
+    expect(inserts.find((i) => i.table === purchaseItems)?.values).toEqual([
+      expect.objectContaining({ priceItemId: 'price-card', amountUah: 1400 }),
+    ]);
+    expect(payments.checkoutPurchase).toHaveBeenCalledWith('purchase-1', 'm1');
+  });
+
+  it('a group pass is bought alone: with a card or a trainer service → 400', async () => {
+    const a = makeDb([[GROUP, CARD]]);
+    await expect(
+      makeService(a.db).svc.create('m1', { priceItemIds: ['price-g', 'price-card'], method: 'LIQPAY' }),
+    ).rejects.toThrow(BadRequestException);
+    const b = makeDb([[GROUP, PERSONAL]]);
+    await expect(
+      makeService(b.db, { card: { id: 'c' } }).svc.create('m1', {
+        priceItemIds: ['price-g', 'price-p8'],
+        method: 'LIQPAY',
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('a slot goes only with a group pass → 400 otherwise', async () => {
+    const { db } = makeDb([[CARD]]);
+    await expect(
+      makeService(db).svc.create('m1', { priceItemIds: ['price-card'], method: 'LIQPAY', slotId: 'slot-1' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('LiqPay group pass from «Записатися»: remembers the slot, books nothing yet', async () => {
+    const { db, inserts } = makeDb([[GROUP], MEMBER, []]);
+    await makeService(db).svc.create('m1', { priceItemIds: ['price-g'], method: 'LIQPAY', slotId: 'slot-1' });
+    expect(inserts.find((i) => i.table === purchases)?.values).toMatchObject({ slotId: 'slot-1', method: 'LIQPAY' });
+    expect(mockTryBook).not.toHaveBeenCalled();
+  });
+
+  it('cash for a group pass books the slot at once and remembers the booking', async () => {
+    mockTryBook.mockResolvedValueOnce({ ok: true, bookingId: 'b1' });
+    const { db, sets } = makeDb([[GROUP], MEMBER, []]);
+    const { svc, notifications } = makeService(db);
+    await svc.create('m1', { priceItemIds: ['price-g'], method: 'CASH', slotId: 'slot-1' });
+    expect(mockTryBook).toHaveBeenCalledWith(db, NOW, 'm1', 'slot-1');
+    expect(sets).toContainEqual({ bookingId: 'b1' });
+    expect(notifications.enqueueAndProcess).toHaveBeenCalledWith(
+      'CASH_REQUESTED',
+      expect.any(String),
+      expect.anything(),
     );
   });
 
-  it('400 unless exactly one trainer service', async () => {
+  it('cash for a group pass on a full slot: 409 and the purchase is rolled back (the error leaves the transaction)', async () => {
+    mockTryBook.mockResolvedValueOnce({ ok: false, reason: 'FULL' });
+    const { db } = makeDb([[GROUP], MEMBER, []]);
+    const { svc, notifications } = makeService(db);
+    await expect(svc.create('m1', { priceItemIds: ['price-g'], method: 'CASH', slotId: 'slot-1' })).rejects.toThrow(
+      'Slot is full',
+    );
+    expect(notifications.enqueueAndProcess).not.toHaveBeenCalled();
+  });
+
+  it('400 for two trainer services', async () => {
     const { db } = makeDb([[PERSONAL, SPLIT]]);
     await expect(
       makeService(db, { card: { id: 'c' } }).svc.create('m1', {
@@ -140,7 +200,14 @@ describe('Purchases — create', () => {
     });
     expect(inserts[0]).toEqual({
       table: purchases,
-      values: { memberId: 'm1', trainerId: 'trainer-1', method: 'LIQPAY', status: 'PENDING', totalUah: 5000 },
+      values: {
+        memberId: 'm1',
+        trainerId: 'trainer-1',
+        method: 'LIQPAY',
+        status: 'PENDING',
+        totalUah: 5000,
+        slotId: null,
+      },
     });
     expect(inserts[1]).toEqual({
       table: purchaseItems,

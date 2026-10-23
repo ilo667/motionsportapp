@@ -1,8 +1,13 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { EntitlementsService } from './entitlements.service';
-import { clubCards, packages, packageSpends } from '../database/schema';
+import { clubCards, packages, packageSpends, purchases } from '../database/schema';
 import { KY_ZONE } from '../schedule/training-types';
+import { tryBookGroup } from '../booking/group-booking';
+
+jest.mock('../booking/group-booking', () => ({ tryBookGroup: jest.fn() }));
+const mockTryBook = tryBookGroup as jest.Mock;
+beforeEach(() => mockTryBook.mockReset());
 
 const NOW = DateTime.fromISO('2026-10-23T12:00:00', { zone: KY_ZONE });
 
@@ -151,6 +156,50 @@ describe('Entitlements — buying', () => {
       table: packages,
       values: { trainingType: 'групові', total: 10, purchasedOn: '2026-10-23', activateBy: '2026-11-23' },
     });
+  });
+});
+
+describe('Entitlements — group pass bought from «Записатися»', () => {
+  const groupLine = line({
+    section: 'group',
+    title: 'Разове відвідування',
+    optionLabel: null,
+    durationMonths: 1,
+    trainingType: 'групові',
+    trainingCount: 1,
+    createdAt: BOUGHT,
+  });
+
+  // Reads: the lines, the package insert (the mock's writes take a result too), the purchase
+  it('once paid, books the remembered slot and keeps the booking on the purchase', async () => {
+    mockTryBook.mockResolvedValueOnce({ ok: true, bookingId: 'b1' });
+    const { db, updates } = makeDb([[groupLine], [], [{ memberId: 'm1', slotId: 'slot-1', bookingId: null }]]);
+    const svc = makeService(db);
+    const spend = jest.spyOn(svc, 'syncSpend').mockResolvedValue(undefined);
+    await svc.activate(db, 'p1');
+    expect(mockTryBook).toHaveBeenCalledWith(db, NOW, 'm1', 'slot-1');
+    expect(updates).toEqual([{ table: purchases, set: { bookingId: 'b1' } }]);
+    expect(spend).toHaveBeenCalledWith(db, 'b1');
+  });
+
+  it('cannot book any more (window closed, slot full): the pass stays, nothing throws', async () => {
+    mockTryBook.mockResolvedValueOnce({ ok: false, reason: 'WINDOW' });
+    const { db, inserts, updates } = makeDb([[groupLine], [], [{ memberId: 'm1', slotId: 'slot-1', bookingId: null }]]);
+    const svc = makeService(db);
+    const spend = jest.spyOn(svc, 'syncSpend').mockResolvedValue(undefined);
+    await expect(svc.activate(db, 'p1')).resolves.toBeUndefined();
+    expect(inserts).toHaveLength(1);
+    expect(updates).toEqual([]);
+    expect(spend).not.toHaveBeenCalled();
+  });
+
+  it('cash confirmed after the mark: the training is spent from this pass right away', async () => {
+    const { db } = makeDb([[groupLine], [], [{ memberId: 'm1', slotId: 'slot-1', bookingId: 'b1' }]]);
+    const svc = makeService(db);
+    const spend = jest.spyOn(svc, 'syncSpend').mockResolvedValue(undefined);
+    await svc.activate(db, 'p1');
+    expect(mockTryBook).not.toHaveBeenCalled();
+    expect(spend).toHaveBeenCalledWith(db, 'b1');
   });
 });
 

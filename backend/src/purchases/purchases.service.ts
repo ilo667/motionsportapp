@@ -7,6 +7,26 @@ import { EntitlementsService } from './entitlements.service';
 import { PaymentService } from '../payment/payment.service';
 import { NotificationService } from '../notifications/notification.service';
 import type { CreatePurchaseDto } from './dto/create-purchase.dto';
+import { tryBookGroup, type GroupBookingResult } from '../booking/group-booking';
+import { cardState } from './validity';
+
+// Same answers as BookingService.book gives for the same reasons
+function bookingError(reason: Extract<GroupBookingResult, { ok: false }>['reason']) {
+  switch (reason) {
+    case 'NOT_FOUND':
+      return new NotFoundException('Slot not found');
+    case 'CANCELLED':
+      return new ConflictException('Slot is cancelled');
+    case 'NOT_SCHEDULED':
+      return new ConflictException('Training day is not scheduled');
+    case 'WINDOW':
+      return new BadRequestException('Booking window has closed');
+    case 'FULL':
+      return new ConflictException('Slot is full');
+    case 'ALREADY_BOOKED':
+      return new ConflictException('You already have an active booking for this day');
+  }
+}
 
 // Latest purchases shown on a client's page
 const MEMBER_PURCHASES_LIMIT = 20;
@@ -49,7 +69,7 @@ export class PurchasesService {
         trainingCount: priceItems.trainingCount,
       })
       .from(priceItems)
-      .where(inArray(priceItems.section, ['club_card', 'assigned']))
+      .where(inArray(priceItems.section, ['club_card', 'assigned', 'group']))
       .orderBy(asc(priceItems.sortOrder));
 
     const [member] = await this.database.db
@@ -67,6 +87,7 @@ export class PurchasesService {
       catalog: {
         clubCards: catalog.filter((c) => c.section === 'club_card'),
         services: catalog.filter((c) => c.section === 'assigned'),
+        groupPasses: catalog.filter((c) => c.section === 'group'),
       },
       card: await this.entitlements.usableCard(memberId),
       packages: await this.entitlements.packagesOf(memberId),
@@ -90,19 +111,21 @@ export class PurchasesService {
       .from(priceItems)
       .where(inArray(priceItems.id, ids));
     if (items.length !== ids.length) throw new NotFoundException('Price not found');
-    if (items.some((i) => i.section === 'group')) throw new BadRequestException('Group trainings are free');
 
+    // One purchase is: a group pass alone; or a club card, a trainer service, or both
+    const groups = items.filter((i) => i.section === 'group');
     const services = items.filter((i) => i.section === 'assigned');
     const cards = items.filter((i) => i.section === 'club_card');
-    if (services.length !== 1 || cards.length > 1) {
-      throw new BadRequestException('Buy one trainer service, with at most one club card');
-    }
-    if (cards.length === 0 && !(await this.entitlements.usableCard(memberId))) {
+    const groupAlone = groups.length === 1 && items.length === 1;
+    const cardAndService = groups.length === 0 && cards.length <= 1 && services.length <= 1;
+    if (!groupAlone && !cardAndService) throw new BadRequestException('Not a valid set of items');
+    if (dto.slotId && !groupAlone) throw new BadRequestException('A slot goes only with a group pass');
+    if (services.length === 1 && cards.length === 0 && !(await this.entitlements.usableCard(memberId))) {
       throw new BadRequestException('Club card required');
     }
 
     // The club card goes first, as on the page
-    const lines = [...cards, ...services];
+    const lines = [...cards, ...services, ...groups];
     const totalUah = lines.reduce((sum, l) => sum + l.amountUah, 0);
 
     const { purchaseId, trainerId, displayName } = await this.database.db.transaction(async (tx) => {
@@ -125,7 +148,14 @@ export class PurchasesService {
 
       const [created] = await tx
         .insert(purchases)
-        .values({ memberId, trainerId: member.trainerId, method: dto.method, status: 'PENDING', totalUah })
+        .values({
+          memberId,
+          trainerId: member.trainerId,
+          method: dto.method,
+          status: 'PENDING',
+          totalUah,
+          slotId: dto.slotId ?? null,
+        })
         .returning({ id: purchases.id });
       await tx.insert(purchaseItems).values(
         lines.map((l) => ({
@@ -136,6 +166,13 @@ export class PurchasesService {
           amountUah: l.amountUah,
         })),
       );
+      // Cash for a group training: booked now, the trainer takes the money in the hall. Can't book → nothing is
+      // bought (the throw rolls the purchase back)
+      if (dto.method === 'CASH' && dto.slotId) {
+        const booked = await tryBookGroup(tx, this.clock.now(), memberId, dto.slotId);
+        if (!booked.ok) throw bookingError(booked.reason);
+        await tx.update(purchases).set({ bookingId: booked.bookingId }).where(eq(purchases.id, created.id));
+      }
       return { purchaseId: created.id, trainerId: member.trainerId, displayName: member.displayName };
     });
 
@@ -227,14 +264,16 @@ export class PurchasesService {
     await this.visibleMember(trainerId, memberId);
     const cards = await this.database.db
       .select({
+        id: clubCards.id,
         label: clubCards.label,
         validFrom: clubCards.validFrom,
         validUntil: clubCards.validUntil,
+        activateBy: clubCards.activateBy,
         purchaseItemId: clubCards.purchaseItemId,
       })
       .from(clubCards)
       .where(eq(clubCards.memberId, memberId))
-      .orderBy(desc(clubCards.validUntil));
+      .orderBy(desc(clubCards.createdAt));
     const history = await this.database.db
       .select({ id: purchases.id, decidedBy: admins.username })
       .from(purchases)
@@ -246,16 +285,27 @@ export class PurchasesService {
 
     return {
       card: await this.entitlements.usableCard(memberId),
-      cards: cards.map(({ purchaseItemId, ...c }) => ({ ...c, source: purchaseItemId ? 'purchase' : 'manual' })),
+      cards: cards.map(({ purchaseItemId, ...c }) => ({
+        ...c,
+        state: cardState(c, this.clock.now().toISODate()!),
+        source: purchaseItemId ? 'purchase' : 'manual',
+      })),
       packages: await this.entitlements.packagesOf(memberId),
       purchases: views.map((v) => ({ ...v, decidedBy: history.find((h) => h.id === v.id)?.decidedBy ?? null })),
     };
   }
 
-  // «Додати карту вручну»: a card bought at the reception
-  async addCard(trainerId: string, memberId: string, priceItemId: string) {
+  // «Додати карту вручну»: a card bought at the reception, waiting or (activate) active from today
+  async addCard(trainerId: string, memberId: string, priceItemId: string, activate: boolean) {
     await this.visibleMember(trainerId, memberId);
-    await this.entitlements.addManualCard(this.database.db, memberId, trainerId, priceItemId, false);
+    await this.entitlements.addManualCard(this.database.db, memberId, trainerId, priceItemId, activate);
+    return { ok: true };
+  }
+
+  // «Активувати з сьогодні»
+  async activateCard(trainerId: string, memberId: string, cardId: string) {
+    await this.visibleMember(trainerId, memberId);
+    await this.entitlements.activateCard(this.database.db, memberId, cardId);
     return { ok: true };
   }
 

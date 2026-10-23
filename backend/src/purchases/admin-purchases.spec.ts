@@ -33,7 +33,11 @@ function makeDb(results: unknown[][], updateResult: () => unknown[] = () => [{ i
 }
 
 function makeService(db: any) {
-  const entitlements = { activate: jest.fn().mockResolvedValue(undefined), addManualCard: jest.fn() };
+  const entitlements = {
+    activate: jest.fn().mockResolvedValue(undefined),
+    addManualCard: jest.fn(),
+    activateCard: jest.fn(),
+  };
   const svc = new PurchasesService({ db } as any, { now: () => NOW }, entitlements as any, {} as any, {} as any);
   return { svc, entitlements };
 }
@@ -86,15 +90,44 @@ describe('Trainer — client purchases', () => {
   it('adding a card by hand checks the client is visible to this trainer first', async () => {
     const { db } = makeDb([[]]);
     const { svc, entitlements } = makeService(db);
-    await expect(svc.addCard('trainer-2', 'm1', 'price-card')).rejects.toThrow(NotFoundException);
+    await expect(svc.addCard('trainer-2', 'm1', 'price-card', false)).rejects.toThrow(NotFoundException);
     expect(entitlements.addManualCard).not.toHaveBeenCalled();
   });
 
   it('adds the card for a visible client, signed by the trainer', async () => {
     const { db } = makeDb([[{ id: 'm1' }]]);
     const { svc, entitlements } = makeService(db);
-    await svc.addCard('trainer-1', 'm1', 'price-card');
+    await svc.addCard('trainer-1', 'm1', 'price-card', false);
     expect(entitlements.addManualCard).toHaveBeenCalledWith(db, 'm1', 'trainer-1', 'price-card', false);
+  });
+
+  it('«Додати й активувати з сьогодні» passes activate on', async () => {
+    const { db } = makeDb([[{ id: 'm1' }]]);
+    const { svc, entitlements } = makeService(db);
+    await svc.addCard('trainer-1', 'm1', 'price-card', true);
+    expect(entitlements.addManualCard).toHaveBeenCalledWith(db, 'm1', 'trainer-1', 'price-card', true);
+  });
+
+  it('activates a waiting card of a visible client', async () => {
+    const { db } = makeDb([[{ id: 'm1' }]]);
+    const { svc, entitlements } = makeService(db);
+    await svc.activateCard('trainer-1', 'm1', 'card-1');
+    expect(entitlements.activateCard).toHaveBeenCalledWith(db, 'm1', 'card-1');
+  });
+
+  it("another trainer's client: 404, the card is not touched", async () => {
+    const { db } = makeDb([[]]);
+    const { svc, entitlements } = makeService(db);
+    await expect(svc.activateCard('trainer-1', 'm1', 'card-1')).rejects.toThrow(NotFoundException);
+    expect(entitlements.activateCard).not.toHaveBeenCalled();
+  });
+
+  it('rejecting cash for a group pass leaves the booking alone', async () => {
+    const { db } = makeDb([]);
+    const { svc } = makeService(db);
+    await svc.rejectCash('trainer-1', 'purchase-1');
+    // Only the purchase row is updated
+    expect(db.update).toHaveBeenCalledTimes(1);
   });
 
   it('trainer purchase endpoints are admin-only (AdminGuard on the controller)', () => {
