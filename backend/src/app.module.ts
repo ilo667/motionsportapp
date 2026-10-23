@@ -12,6 +12,7 @@ import { ClockModule } from './clock/clock.module';
 import { PaymentModule } from './payment/payment.module';
 import { PricesModule } from './prices/prices.module';
 import { PurchasesModule } from './purchases/purchases.module';
+import { TrainerScheduleModule } from './trainer-schedule/trainer-schedule.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PurchasesModule } from './purchases/purchases.module';
     PaymentModule,
     PricesModule,
     PurchasesModule,
+    TrainerScheduleModule,
   ],
 })
 export class AppModule {}

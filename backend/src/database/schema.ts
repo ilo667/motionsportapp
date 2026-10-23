@@ -428,3 +428,32 @@ export const packageSpends = pgTable('package_spends', {
     .references(() => packages.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// A trainer's regular group trainings («Мій розклад»). No row: the first trainer gets the old Mon/Wed/Fri
+// 19:00 / 20:00 schedule, any other trainer an empty one (`loadTrainerSchedule`)
+export const trainerSchedules = pgTable('trainer_schedules', {
+  trainerId: uuid('trainer_id')
+    .primaryKey()
+    .references(() => admins.id),
+  // 'HH:MM' on the training day; one time for every day
+  bookingOpensAt: text('booking_opens_at').notNull().default('14:00'),
+  // Create the group trainings 3 weeks ahead by themselves
+  autoCreate: boolean('auto_create').notNull().default(false),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// One row per group training of the week: weekday as in Luxon (1 = Mon … 7 = Sun), 'HH:MM'
+export const trainerScheduleTimes = pgTable(
+  'trainer_schedule_times',
+  {
+    trainerId: uuid('trainer_id')
+      .notNull()
+      .references(() => admins.id),
+    weekday: integer('weekday').notNull(),
+    slotTime: text('slot_time').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.trainerId, table.weekday, table.slotTime] }),
+    check('trainer_schedule_times_weekday_check', sql`weekday between 1 and 7`),
+  ],
+);
