@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import { tryBookGroup } from './group-booking';
+import { vacancyAlerts } from '../database/schema';
 
 const at = (hour: number) => DateTime.fromObject({ year: 2026, month: 10, day: 20, hour }, { zone: 'Europe/Kyiv' });
 
@@ -21,12 +22,20 @@ function makeTx(reads: unknown[][]) {
     });
     return chain;
   }
+  const updates: { table: unknown; set: unknown }[] = [];
   const tx: any = {
     select: jest.fn(() => link()),
     insert: jest.fn(() => link(() => [{ id: 'booking-1' }])),
-    update: jest.fn(() => link(() => undefined)),
+    update: jest.fn((table: unknown) => {
+      const chain = link(() => undefined);
+      chain.set = jest.fn((v: unknown) => {
+        updates.push({ table, set: v });
+        return chain;
+      });
+      return chain;
+    }),
   };
-  return { tx, inserts };
+  return { tx, inserts, updates };
 }
 
 const slot = {
@@ -48,6 +57,14 @@ describe('tryBookGroup — booking inside someone else’s transaction, never th
     const { tx, inserts } = makeTx([MEMBER, [slot], TRAINER, []]);
     expect(await tryBookGroup(tx, at(15), 'member-1', 'slot-1')).toEqual({ ok: true, bookingId: 'booking-1' });
     expect(inserts).toEqual([{ memberId: 'member-1', slotId: 'slot-1', status: 'ACTIVE' }]);
+  });
+
+  // Booked through «Купити разово / абонемент / готівкою»: the «Повідомити про місце» alert for this slot goes off,
+  // as after «Записатись»
+  it("turns off the member's vacancy alert for the slot", async () => {
+    const { tx, updates } = makeTx([MEMBER, [slot], TRAINER, []]);
+    await tryBookGroup(tx, at(15), 'member-1', 'slot-1');
+    expect(updates).toContainEqual({ table: vacancyAlerts, set: { active: false } });
   });
 
   it('a full slot: FULL, nothing inserted', async () => {

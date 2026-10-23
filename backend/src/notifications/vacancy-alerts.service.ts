@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { vacancyAlerts } from '../database/schema';
+import { bookings, vacancyAlerts } from '../database/schema';
 
 @Injectable()
 export class VacancyAlertsService {
@@ -24,12 +24,22 @@ export class VacancyAlertsService {
       .where(and(eq(vacancyAlerts.memberId, memberId), eq(vacancyAlerts.slotId, slotId)));
   }
 
+  // Who to tell a seat is free: members waiting for this slot, except those already booked on it (whichever way
+  // they booked) and the member who just freed it
   async findActiveSubscribersBySlot(slotId: string, excludeMemberId?: string) {
     const rows = await this.database.db
-      .select({ memberId: vacancyAlerts.memberId })
+      .select({ memberId: vacancyAlerts.memberId, bookingId: bookings.id })
       .from(vacancyAlerts)
+      .leftJoin(
+        bookings,
+        and(
+          eq(bookings.memberId, vacancyAlerts.memberId),
+          eq(bookings.slotId, vacancyAlerts.slotId),
+          eq(bookings.status, 'ACTIVE'),
+        ),
+      )
       .where(and(eq(vacancyAlerts.slotId, slotId), eq(vacancyAlerts.active, true)));
-    return rows.map((r) => r.memberId).filter((id) => id !== excludeMemberId);
+    return rows.filter((r) => !r.bookingId && r.memberId !== excludeMemberId).map((r) => r.memberId);
   }
 
   async deactivateBySlot(slotId: string) {

@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { DatabaseService } from '../database/database.service';
-import { bookings, members, trainingDays, trainingSlots } from '../database/schema';
+import { bookings, members, trainingDays, trainingSlots, vacancyAlerts } from '../database/schema';
 import { GROUP_TYPE, KY_ZONE } from '../schedule/training-types';
 import { getMemberTrainerId } from '../schedule/default-trainer';
 
@@ -90,5 +90,10 @@ export async function tryBookGroup(
     .update(trainingSlots)
     .set({ bookedCount: sql`${trainingSlots.bookedCount} + 1` })
     .where(eq(trainingSlots.id, slotId));
+  // They hold a seat now: no «З'явилось місце» for this slot (BookingService.book does the same)
+  await tx
+    .update(vacancyAlerts)
+    .set({ active: false })
+    .where(and(eq(vacancyAlerts.memberId, memberId), eq(vacancyAlerts.slotId, slotId)));
   return { ok: true, bookingId: booking.id };
 }
