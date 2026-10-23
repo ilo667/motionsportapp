@@ -294,8 +294,8 @@ describe('Calendar — assigned slot members', () => {
       ],
     ]);
     const summaries = new Map([
-      [M1, { clubCardUntil: null, packagesLeft: [{ trainingType: 'спліт', left: 5 }] }],
-      [M2, { clubCardUntil: null, packagesLeft: [{ trainingType: 'персональні', left: 2 }] }],
+      [M1, { clubCard: null, packagesLeft: [{ trainingType: 'спліт', left: 5 }] }],
+      [M2, { clubCard: null, packagesLeft: [{ trainingType: 'персональні', left: 2 }] }],
     ]);
     const entitlements = { summaries: jest.fn().mockResolvedValue(summaries) };
     const result = await makeService(db, entitlements).getCalendar(TRAINER, '2026-10');

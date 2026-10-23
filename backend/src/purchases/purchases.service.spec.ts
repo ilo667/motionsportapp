@@ -65,7 +65,7 @@ const MEMBER = [{ trainerId: 'trainer-1', displayName: 'Катя' }];
 
 function makeService(db: any, opts: { card?: unknown; pushFails?: boolean } = {}) {
   const entitlements = {
-    activeCard: jest.fn().mockResolvedValue(opts.card ?? null),
+    usableCard: jest.fn().mockResolvedValue(opts.card ?? null),
     packagesOf: jest.fn().mockResolvedValue([]),
   };
   const payments = { checkoutPurchase: jest.fn().mockResolvedValue({ data: 'd', signature: 's' }) };

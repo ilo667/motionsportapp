@@ -41,20 +41,26 @@ describe('Admin members — trainer note', () => {
     ];
     const { db } = makeDb(rows);
     await expect(makeService(db).getMembers('trainer-1')).resolves.toEqual([
-      { ...rows[0], clubCardUntil: null, packagesLeft: [] },
+      { ...rows[0], clubCard: null, packagesLeft: [] },
     ]);
   });
 
   it("shows each client's club card and trainings left", async () => {
     const { db } = makeDb([{ id: 'm1', displayName: 'Катя' }]);
     const summaries = new Map([
-      ['m1', { clubCardUntil: '2026-12-15', packagesLeft: [{ trainingType: 'персональні', left: 5 }] }],
+      [
+        'm1',
+        {
+          clubCard: { state: 'active', until: '2026-12-15' },
+          packagesLeft: [{ trainingType: 'персональні', left: 5 }],
+        },
+      ],
     ]);
     await expect(makeService(db, summaries).getMembers('trainer-1')).resolves.toEqual([
       {
         id: 'm1',
         displayName: 'Катя',
-        clubCardUntil: '2026-12-15',
+        clubCard: { state: 'active', until: '2026-12-15' },
         packagesLeft: [{ trainingType: 'персональні', left: 5 }],
       },
     ]);

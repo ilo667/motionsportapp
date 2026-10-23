@@ -68,7 +68,7 @@ export class PurchasesService {
         clubCards: catalog.filter((c) => c.section === 'club_card'),
         services: catalog.filter((c) => c.section === 'assigned'),
       },
-      card: await this.entitlements.activeCard(memberId),
+      card: await this.entitlements.usableCard(memberId),
       packages: await this.entitlements.packagesOf(memberId),
       pending: pending ? (await this.views([pending.id]))[0] : null,
       // Cash goes to the member's trainer, so a member without one can only pay by LiqPay
@@ -97,7 +97,7 @@ export class PurchasesService {
     if (services.length !== 1 || cards.length > 1) {
       throw new BadRequestException('Buy one trainer service, with at most one club card');
     }
-    if (cards.length === 0 && !(await this.entitlements.activeCard(memberId))) {
+    if (cards.length === 0 && !(await this.entitlements.usableCard(memberId))) {
       throw new BadRequestException('Club card required');
     }
 
@@ -245,7 +245,7 @@ export class PurchasesService {
     const views = await this.views(history.map((h) => h.id));
 
     return {
-      card: await this.entitlements.activeCard(memberId),
+      card: await this.entitlements.usableCard(memberId),
       cards: cards.map(({ purchaseItemId, ...c }) => ({ ...c, source: purchaseItemId ? 'purchase' : 'manual' })),
       packages: await this.entitlements.packagesOf(memberId),
       purchases: views.map((v) => ({ ...v, decidedBy: history.find((h) => h.id === v.id)?.decidedBy ?? null })),
@@ -255,7 +255,7 @@ export class PurchasesService {
   // «Додати карту вручну»: a card bought at the reception
   async addCard(trainerId: string, memberId: string, priceItemId: string) {
     await this.visibleMember(trainerId, memberId);
-    await this.entitlements.addManualCard(this.database.db, memberId, trainerId, priceItemId);
+    await this.entitlements.addManualCard(this.database.db, memberId, trainerId, priceItemId, false);
     return { ok: true };
   }
 

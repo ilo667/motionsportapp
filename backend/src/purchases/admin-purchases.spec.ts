@@ -94,7 +94,7 @@ describe('Trainer — client purchases', () => {
     const { db } = makeDb([[{ id: 'm1' }]]);
     const { svc, entitlements } = makeService(db);
     await svc.addCard('trainer-1', 'm1', 'price-card');
-    expect(entitlements.addManualCard).toHaveBeenCalledWith(db, 'm1', 'trainer-1', 'price-card');
+    expect(entitlements.addManualCard).toHaveBeenCalledWith(db, 'm1', 'trainer-1', 'price-card', false);
   });
 
   it('trainer purchase endpoints are admin-only (AdminGuard on the controller)', () => {

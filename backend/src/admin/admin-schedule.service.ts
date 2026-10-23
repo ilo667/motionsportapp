@@ -684,7 +684,7 @@ export class AdminScheduleService {
 
     // «карта до DD.MM», «Перс. 5 · Спліт 2» under each client
     const summaries = await this.entitlements.summaries(rows.map((r) => r.id));
-    return rows.map((r) => ({ ...r, clubCardUntil: null, packagesLeft: [], ...summaries.get(r.id) }));
+    return rows.map((r) => ({ ...r, clubCard: null, packagesLeft: [], ...summaries.get(r.id) }));
   }
 
   // For the reassign picker. Usernames only, never password hashes
