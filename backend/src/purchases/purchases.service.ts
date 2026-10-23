@@ -140,6 +140,7 @@ export class PurchasesService {
         title: priceItems.title,
         optionLabel: priceItems.optionLabel,
         amountUah: priceItems.amountUah,
+        trainingType: priceItems.trainingType,
       })
       .from(priceItems)
       .where(inArray(priceItems.id, ids));
@@ -158,6 +159,16 @@ export class PurchasesService {
       // One club card at a time: a new one only once the current card has ended or burned
       if (cards.length && hasCard) throw new ConflictException('Member already has a club card');
       if (services.length && !cards.length && !hasCard) throw new BadRequestException('Club card required');
+    }
+
+    // No buying ahead: more trainings of a type only once the member has none of it left to use
+    const passType = (groups[0] ?? services[0])?.trainingType;
+    if (passType) {
+      const own = await this.entitlements.packagesOf(memberId);
+      const unused = own.some(
+        (p) => p.trainingType === passType && p.left > 0 && (p.state === 'waiting' || p.state === 'active'),
+      );
+      if (unused) throw new ConflictException('Member still has trainings of this type');
     }
 
     // The club card goes first, as on the page

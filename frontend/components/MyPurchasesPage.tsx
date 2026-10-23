@@ -205,6 +205,15 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
   }
 
   const pending = data?.pending;
+  // No buying ahead: a tile shows only while the member has nothing of that kind left to use
+  // (the club card is shown above; trainings with some left are listed above too)
+  const hasUnused = (types: string[]) =>
+    !!data?.packages.some(
+      (p) => types.includes(p.trainingType) && p.left > 0 && (p.state === "waiting" || p.state === "active"),
+    );
+  const canBuyService = !hasUnused(["персональні", "спліт"]);
+  const canBuyGroup = !hasUnused(["групові"]);
+  const canBuyCard = !data?.card;
   return (
     <PageLayout variant="top" loading={!data && !loadError} action={action}>
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">
@@ -290,34 +299,39 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
 
           {error && <p className="text-danger text-sm">{error}</p>}
 
-          {!pending && (
+          {!pending && (canBuyService || canBuyGroup || canBuyCard) && (
             <>
               <h2 className={`${sectionTitle} pt-3`}>Купити</h2>
-              <button
-                onClick={() => setBuying("service")}
-                className="btn-primary w-full rounded-xl p-4 text-left transition-colors"
-              >
-                <PersonIcon />
-                <span className="block font-semibold mt-3">З тренером</span>
-                <span className="block text-xs mt-0.5">Персональні та спліт · {fromPrice(data.catalog.services)}</span>
-              </button>
-              <div className="flex space-x-3">
-                <BuyTile
-                  icon={<GroupIcon />}
-                  title="Групові"
-                  price={fromPrice(data.catalog.groupPasses)}
-                  onClick={() => setBuying("group")}
-                />
-                {/* A member with a club card (active or waiting) sees it above; a second one can't be bought */}
-                {!data.card && (
-                  <BuyTile
-                    icon={<CardIcon />}
-                    title="Клубна карта"
-                    price={fromPrice(data.catalog.clubCards)}
-                    onClick={() => setBuying("card")}
-                  />
-                )}
-              </div>
+              {canBuyService && (
+                <button
+                  onClick={() => setBuying("service")}
+                  className="btn-primary w-full rounded-xl p-4 text-left transition-colors"
+                >
+                  <PersonIcon />
+                  <span className="block font-semibold mt-3">З тренером</span>
+                  <span className="block text-xs mt-0.5">Персональні та спліт · {fromPrice(data.catalog.services)}</span>
+                </button>
+              )}
+              {(canBuyGroup || canBuyCard) && (
+                <div className="flex space-x-3">
+                  {canBuyGroup && (
+                    <BuyTile
+                      icon={<GroupIcon />}
+                      title="Групові"
+                      price={fromPrice(data.catalog.groupPasses)}
+                      onClick={() => setBuying("group")}
+                    />
+                  )}
+                  {canBuyCard && (
+                    <BuyTile
+                      icon={<CardIcon />}
+                      title="Клубна карта"
+                      price={fromPrice(data.catalog.clubCards)}
+                      onClick={() => setBuying("card")}
+                    />
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>

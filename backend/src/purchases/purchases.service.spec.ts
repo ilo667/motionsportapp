@@ -68,10 +68,10 @@ const SPLIT = { id: 'price-s1', section: 'assigned', title: 'Спліт', option
 const GROUP = { id: 'price-g', section: 'group', title: 'Абонемент', optionLabel: '10 занять', amountUah: 2200 };
 const MEMBER = [{ trainerId: 'trainer-1', displayName: 'Катя' }];
 
-function makeService(db: any, opts: { card?: unknown; pushFails?: boolean } = {}) {
+function makeService(db: any, opts: { card?: unknown; pushFails?: boolean; packages?: unknown[] } = {}) {
   const entitlements = {
     usableCard: jest.fn().mockResolvedValue(opts.card ?? null),
-    packagesOf: jest.fn().mockResolvedValue([]),
+    packagesOf: jest.fn().mockResolvedValue(opts.packages ?? []),
   };
   const payments = { checkoutPurchase: jest.fn().mockResolvedValue({ data: 'd', signature: 's' }) };
   const notifications = {
@@ -116,6 +116,41 @@ describe('Purchases — create', () => {
       }),
     ).rejects.toThrow(ConflictException);
     expect(inserts).toEqual([]);
+  });
+
+  it('409 for more personal trainings while the member still has some to use', async () => {
+    const { db, inserts } = makeDb([[{ ...PERSONAL, trainingType: 'персональні' }]]);
+    const packages = [{ trainingType: 'персональні', state: 'active', left: 2 }];
+    await expect(
+      makeService(db, { card: { id: 'c' }, packages }).svc.create('m1', {
+        priceItemIds: ['price-p8'],
+        method: 'LIQPAY',
+      }),
+    ).rejects.toThrow(ConflictException);
+    expect(inserts).toEqual([]);
+  });
+
+  it('a used-up, burned or expired package does not stop a new purchase; another type does not either', async () => {
+    const { db } = makeDb([[{ ...PERSONAL, trainingType: 'персональні' }], MEMBER, []]);
+    const packages = [
+      { trainingType: 'персональні', state: 'used', left: 0 },
+      { trainingType: 'персональні', state: 'burned', left: 3 },
+      { trainingType: 'спліт', state: 'active', left: 4 },
+    ];
+    await expect(
+      makeService(db, { card: { id: 'c' }, packages }).svc.create('m1', {
+        priceItemIds: ['price-p8'],
+        method: 'LIQPAY',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ purchaseId: 'purchase-1' }));
+  });
+
+  it('409 for a group pass while the member still has group trainings to use', async () => {
+    const { db } = makeDb([[{ ...GROUP, trainingType: 'групові' }]]);
+    const packages = [{ trainingType: 'групові', state: 'waiting', left: 10 }];
+    await expect(
+      makeService(db, { packages }).svc.create('m1', { priceItemIds: ['price-g'], method: 'LIQPAY' }),
+    ).rejects.toThrow(ConflictException);
   });
 
   it('a group pass is bought alone: with a card or a trainer service → 400', async () => {
