@@ -25,19 +25,24 @@ function trainingsLeft(n: number, forms: [string, string, string]) {
 
 const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 
-// Under the client's name: a badge for the club card («Клубна карта чекає активації»), then «Залишилось: 5 персональних · 2 спліт»
-export function PurchaseSummary({ m }: { m: AdminMember }) {
-  const [text, className] = !m.clubCard
+// Under the client's name, one badge per line: the club card («Клубна карта чекає активації»),
+// then one per type of trainings left («8 персональних», «9 групових»)
+export function PurchaseSummary({ m, className = "" }: { m: AdminMember; className?: string }) {
+  const [text, cardClass] = !m.clubCard
     ? ["Без клубної карти", "text-subtle border-line"]
     : m.clubCard.state === "active"
       ? [`Клубна карта до ${ddmm(m.clubCard.until)}`, "text-accent bg-teal/10 border-teal/30"]
       : ["Клубна карта чекає активації", "text-warn bg-warn-bg border-warn-line"];
-  const left = m.packagesLeft.map((p) => trainingsLeft(p.left, TYPE_FORMS[p.trainingType])).join(" · ");
+  const badge = "border rounded-full px-2.5 py-1";
   return (
-    <>
-      <span className={`m-1 font-semibold border rounded-full px-2.5 py-1 ${className}`}>{text}</span>
-      {left && <span className="m-1 text-body">Залишилось: {left}</span>}
-    </>
+    <div className={`flex flex-col items-start space-y-1.5 text-xs ${className}`}>
+      <span className={`font-semibold ${badge} ${cardClass}`}>{text}</span>
+      {m.packagesLeft.map((p) => (
+        <span key={p.trainingType} className={`text-body border-line ${badge}`}>
+          {trainingsLeft(p.left, TYPE_FORMS[p.trainingType])}
+        </span>
+      ))}
+    </div>
   );
 }
 

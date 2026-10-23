@@ -69,9 +69,7 @@ export default function ClientsPage() {
                 {m.displayName} <span className="text-subtle">›</span>
               </Link>
               <div className="text-muted text-xs">{m.memberCode}</div>
-              <div className="flex flex-wrap items-center -m-1 mt-1 text-xs">
-                <PurchaseSummary m={m} />
-              </div>
+              <PurchaseSummary m={m} className="mt-1" />
               <TrainerPicker member={m} trainers={trainers} myId={myId} onAssigned={(trainerId) => updateTrainer(m.id, trainerId)} />
             </td>
             <td className="py-3 pr-3">

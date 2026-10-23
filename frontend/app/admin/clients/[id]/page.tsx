@@ -105,9 +105,7 @@ export default function ClientPage() {
           <div>
             <h1 className="font-geologica font-semibold text-title text-heading uppercase">{member.displayName}</h1>
             <p className="text-muted text-xs mt-1">{member.memberCode}</p>
-            <div className="flex flex-wrap items-center -m-1 mt-2 text-xs">
-              <PurchaseSummary m={member} />
-            </div>
+            <PurchaseSummary m={member} className="mt-2" />
             <TrainerPicker
               member={member}
               trainers={trainers}
