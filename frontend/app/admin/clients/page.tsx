@@ -18,8 +18,14 @@ export default function ClientsPage() {
 
   // After a cash decision: the request list and the summaries change
   const reloadPurchases = () => {
-    api.getPendingCash().then(setCash).catch(() => {});
-    api.getMembers().then(setMembers).catch(() => {});
+    api
+      .getPendingCash()
+      .then(setCash)
+      .catch(() => {});
+    api
+      .getMembers()
+      .then(setMembers)
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -42,10 +48,11 @@ export default function ClientsPage() {
 
   // Given to another trainer: the client leaves this trainer's list
   const updateTrainer = (id: string, trainerId: string) =>
-    setMembers((prev) =>
-      (trainerId === myId
-        ? prev?.map((m) => (m.id === id ? { ...m, trainerId } : m))
-        : prev?.filter((m) => m.id !== id)) ?? null,
+    setMembers(
+      (prev) =>
+        (trainerId === myId
+          ? prev?.map((m) => (m.id === id ? { ...m, trainerId } : m))
+          : prev?.filter((m) => m.id !== id)) ?? null,
     );
 
   const mine = members?.filter((m) => m.trainerId) ?? [];
@@ -57,7 +64,9 @@ export default function ClientsPage() {
         <tr className="text-muted text-xs text-left border-b border-line">
           <th className="py-2 pr-3 font-medium w-2/5">Клієнт</th>
           <th className="py-2 pr-3 font-medium">Примітка</th>
-          <th className="py-2 font-medium text-right" title="Скасування за останні 30 днів">Скасувань</th>
+          <th className="py-2 font-medium text-right" title="Скасування за останні 30 днів">
+            Скасувань
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -70,7 +79,12 @@ export default function ClientsPage() {
               </Link>
               <div className="text-muted text-xs">{m.memberCode}</div>
               <PurchaseSummary m={m} className="mt-1" />
-              <TrainerPicker member={m} trainers={trainers} myId={myId} onAssigned={(trainerId) => updateTrainer(m.id, trainerId)} />
+              <TrainerPicker
+                member={m}
+                trainers={trainers}
+                myId={myId}
+                onAssigned={(trainerId) => updateTrainer(m.id, trainerId)}
+              />
             </td>
             <td className="py-3 pr-3">
               <NoteCell member={m} onSaved={(note) => updateNote(m.id, note)} />
@@ -89,14 +103,8 @@ export default function ClientsPage() {
   );
 
   return (
-    <PageLayout
-      variant="top"
-      loading={!members && !loadError}
-      action={<AdminMenu />}
-    >
-      <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">
-        Клієнти
-      </h1>
+    <PageLayout variant="top" loading={!members && !loadError} action={<AdminMenu />}>
+      <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">Клієнти</h1>
 
       {loadError && <p className="text-danger text-sm">Не вдалося завантажити клієнтів.</p>}
 

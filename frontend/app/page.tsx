@@ -44,7 +44,11 @@ function nextPollDelay(data: ScheduleNext | undefined): number {
 
 // Set on login, cleared on logout / 401. Without it the page shows the landing and skips the API call
 function readAuthFlag(): boolean {
-  try { return localStorage.getItem('mg_authed') === '1'; } catch { return true; }
+  try {
+    return localStorage.getItem("mg_authed") === "1";
+  } catch {
+    return true;
+  }
 }
 
 export default function SchedulePage() {
@@ -77,7 +81,9 @@ export default function SchedulePage() {
       setSchedule(data);
     } catch (err: unknown) {
       if ((err as { status?: number }).status === 401 && !authedRef.current) {
-        try { localStorage.removeItem('mg_authed'); } catch {}
+        try {
+          localStorage.removeItem("mg_authed");
+        } catch {}
         setAuthed(false);
         setLoading(false);
         throw err;
@@ -85,7 +91,9 @@ export default function SchedulePage() {
     }
     if (pollingRef.current) {
       if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => { fetchRef.current?.().catch(() => {}); }, nextPollDelay(data));
+      timerRef.current = setTimeout(() => {
+        fetchRef.current?.().catch(() => {});
+      }, nextPollDelay(data));
     }
   }, []);
 
@@ -103,13 +111,15 @@ export default function SchedulePage() {
 
     pollingRef.current = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchSchedule is async: state is set after the await, not synchronously
-    fetchSchedule().then(() => {
-      authedRef.current = true;
-      setAuthed(true);
-      setLoading(false);
-      // Signed in: this browser's pushes belong to this member again (logout switched them off)
-      resyncExistingSubscription();
-    }).catch(() => stopPolling());
+    fetchSchedule()
+      .then(() => {
+        authedRef.current = true;
+        setAuthed(true);
+        setLoading(false);
+        // Signed in: this browser's pushes belong to this member again (logout switched them off)
+        resyncExistingSubscription();
+      })
+      .catch(() => stopPolling());
 
     const onVisibility = () => {
       if (document.hidden) stopPolling();
@@ -130,16 +140,23 @@ export default function SchedulePage() {
       await fetchSchedule();
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : "";
-      const msg =
-        raw.includes("Slot is full") ? "Місць вже немає, хтось встиг раніше" :
-        raw.includes("Booking opens at 14:00") ? "Запис відкривається о 14:00" :
-        raw.includes("Booking window has closed") ? "Час запису вже минув" :
-        raw.includes("already have an active booking") ? "Ви вже записані на цей день" :
-        raw.includes("already booked this training") ? "Ви вже записані на це тренування" :
-        raw.includes("already started") ? "Тренування вже почалося" :
-        raw.includes("Slot is cancelled") ? "Цей час скасовано тренером" :
-        raw.includes("Group pass required") ? "Потрібен абонемент на групові: натисніть «Записатись» ще раз" :
-        raw || "Помилка. Спробуйте ще раз.";
+      const msg = raw.includes("Slot is full")
+        ? "Місць вже немає, хтось встиг раніше"
+        : raw.includes("Booking opens at 14:00")
+          ? "Запис відкривається о 14:00"
+          : raw.includes("Booking window has closed")
+            ? "Час запису вже минув"
+            : raw.includes("already have an active booking")
+              ? "Ви вже записані на цей день"
+              : raw.includes("already booked this training")
+                ? "Ви вже записані на це тренування"
+                : raw.includes("already started")
+                  ? "Тренування вже почалося"
+                  : raw.includes("Slot is cancelled")
+                    ? "Цей час скасовано тренером"
+                    : raw.includes("Group pass required")
+                      ? "Потрібен абонемент на групові: натисніть «Записатись» ще раз"
+                      : raw || "Помилка. Спробуйте ще раз.";
       setMutateError(msg);
     }
   };
@@ -156,17 +173,21 @@ export default function SchedulePage() {
   if (authed === false) {
     return (
       <PageLayout className="items-center text-center">
-          <h1 className="font-geologica font-semibold text-display text-heading mb-3 uppercase">
-            Motion Gym
-          </h1>
-          <div className="flex flex-col w-full max-w-xs space-y-3 mt-10">
-            <Link href="/login" className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center">
-              Увійти як клієнт
-            </Link>
-            <Link href="/admin/login" className="btn-secondary w-full py-4 rounded-lg border font-medium text-sm transition-colors text-center">
-              Вхід для тренера
-            </Link>
-          </div>
+        <h1 className="font-geologica font-semibold text-display text-heading mb-3 uppercase">Motion Gym</h1>
+        <div className="flex flex-col w-full max-w-xs space-y-3 mt-10">
+          <Link
+            href="/login"
+            className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center"
+          >
+            Увійти як клієнт
+          </Link>
+          <Link
+            href="/admin/login"
+            className="btn-secondary w-full py-4 rounded-lg border font-medium text-sm transition-colors text-center"
+          >
+            Вхід для тренера
+          </Link>
+        </div>
       </PageLayout>
     );
   }
@@ -207,73 +228,63 @@ export default function SchedulePage() {
           {!schedule.localDate ? (
             <p className="text-muted text-sm mb-4">Групових тренувань поки не заплановано.</p>
           ) : (
-          <>
-          <p className="text-muted text-sm mb-4 capitalize">
-            {formatLocalDate(schedule.localDate)}
-          </p>
-
-          {schedule.announcement && (
-            <div className="bg-teal/8 border border-teal/20 rounded-xl px-4 py-3 mb-5 text-sm text-body">
-              {schedule.announcement}
-            </div>
-          )}
-
-          <div className="rounded-2xl border border-line p-3 flex flex-col space-y-3">
-            <div className="flex items-center">
-              {beforeWindow ? (
-                <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
-                  До 14:00
-                </span>
-              ) : afterWindow ? (
-                <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
-                  Запис закрито
-                </span>
-              ) : (
-                <span className="text-sm font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-4 py-1.5 flex items-center space-x-1.5">
-                  <span className="relative flex w-3 h-3 shrink-0 items-center justify-center mr-1.5">
-                    <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-teal opacity-75"></span>
-                    <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-teal"></span>
-                  </span>
-                  Запис відкрито
-                </span>
-              )}
-            </div>
-            {schedule.slots.map((slot) => (
-              <SlotCard
-                key={slot.id}
-                slot={slot}
-                allSlots={schedule.slots}
-                groupPassLeft={schedule.groupPassLeft ?? 0}
-                bookingWindowOpen={schedule.bookingWindowOpen}
-                afterWindow={afterWindow}
-                onMutate={handleMutate}
-                onRefresh={fetchSchedule}
-              />
-            ))}
-          </div>
-          </>
-          )}
-
-          {!!schedule.assignedSlots?.length && (
             <>
-              <h2 className="font-geologica font-semibold text-heading uppercase mt-8 mb-3">
-                Мої тренування
-              </h2>
-              <div className="flex flex-col space-y-3">
-                {schedule.assignedSlots.map((slot) => (
-                  <AssignedSlotCard
+              <p className="text-muted text-sm mb-4 capitalize">{formatLocalDate(schedule.localDate)}</p>
+
+              {schedule.announcement && (
+                <div className="bg-teal/8 border border-teal/20 rounded-xl px-4 py-3 mb-5 text-sm text-body">
+                  {schedule.announcement}
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-line p-3 flex flex-col space-y-3">
+                <div className="flex items-center">
+                  {beforeWindow ? (
+                    <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
+                      До 14:00
+                    </span>
+                  ) : afterWindow ? (
+                    <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
+                      Запис закрито
+                    </span>
+                  ) : (
+                    <span className="text-sm font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-4 py-1.5 flex items-center space-x-1.5">
+                      <span className="relative flex w-3 h-3 shrink-0 items-center justify-center mr-1.5">
+                        <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-teal opacity-75"></span>
+                        <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-teal"></span>
+                      </span>
+                      Запис відкрито
+                    </span>
+                  )}
+                </div>
+                {schedule.slots.map((slot) => (
+                  <SlotCard
                     key={slot.id}
                     slot={slot}
+                    allSlots={schedule.slots}
+                    groupPassLeft={schedule.groupPassLeft ?? 0}
+                    bookingWindowOpen={schedule.bookingWindowOpen}
+                    afterWindow={afterWindow}
                     onMutate={handleMutate}
+                    onRefresh={fetchSchedule}
                   />
                 ))}
               </div>
             </>
           )}
 
-          {mutateError && (
-            <p className="text-danger text-sm mt-4 text-center">{mutateError}</p>
+          {!!schedule.assignedSlots?.length && (
+            <>
+              <h2 className="font-geologica font-semibold text-heading uppercase mt-8 mb-3">Мої тренування</h2>
+              <div className="flex flex-col space-y-3">
+                {schedule.assignedSlots.map((slot) => (
+                  <AssignedSlotCard key={slot.id} slot={slot} onMutate={handleMutate} />
+                ))}
+              </div>
+            </>
           )}
+
+          {mutateError && <p className="text-danger text-sm mt-4 text-center">{mutateError}</p>}
         </>
       )}
     </PageLayout>

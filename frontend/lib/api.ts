@@ -337,7 +337,9 @@ export const api = {
   // Logged out = no pushes: this browser's subscription is switched off on the server first, while the
   // session still says whose it is. The browser keeps it, so signing in again turns pushes back on
   logout: async () => {
-    try { localStorage.removeItem("mg_authed"); } catch {}
+    try {
+      localStorage.removeItem("mg_authed");
+    } catch {}
     const endpoint = await currentPushEndpoint();
     if (endpoint) await api.unsubscribePush(endpoint).catch(() => {});
     return request<{ ok: boolean }>("/auth/logout", { method: "POST" });
@@ -379,9 +381,7 @@ export const api = {
 
   // Newest first; pass the returned nextBefore to load older days
   getHistory: (before?: string) =>
-    request<{ days: HistoryDay[]; nextBefore: string | null }>(
-      `/admin/history${before ? `?before=${before}` : ""}`,
-    ),
+    request<{ days: HistoryDay[]; nextBefore: string | null }>(`/admin/history${before ? `?before=${before}` : ""}`),
 
   cancelSlot: (slotId: string) =>
     request<{ ok: boolean }>(`/admin/slots/${slotId}`, {
@@ -435,7 +435,9 @@ export const api = {
     request<{ ok: boolean }>(`/purchases/${purchaseId}/cancel`, { method: "POST" }),
 
   getPaymentStatus: (orderId: string) =>
-    request<{ status: PaymentStatus; errCode?: string; expiresAt?: string; booked?: boolean }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
+    request<{ status: PaymentStatus; errCode?: string; expiresAt?: string; booked?: boolean }>(
+      `/payments/status?order=${encodeURIComponent(orderId)}`,
+    ),
 
   getMembers: () =>
     request<AdminMember[]>("/admin/members").then((list) =>
@@ -457,8 +459,7 @@ export const api = {
   getMemberCancellations: (memberId: string) =>
     request<MemberCancellation[]>(`/admin/members/${memberId}/cancellations`),
 
-  getSlotCancellations: (slotId: string) =>
-    request<Cancellation[]>(`/admin/slots/${slotId}/cancellations`),
+  getSlotCancellations: (slotId: string) => request<Cancellation[]>(`/admin/slots/${slotId}/cancellations`),
 
   updateMemberNote: (memberId: string, note: string) =>
     request<{ id: string; trainerNote: string | null }>(`/admin/members/${memberId}/note`, {
@@ -475,8 +476,7 @@ export const api = {
       body: JSON.stringify({ amountUah, expectedAmountUah }),
     }),
 
-  getCalendar: (month: string) =>
-    request<CalendarSlot[]>(`/admin/calendar?month=${month}`),
+  getCalendar: (month: string) => request<CalendarSlot[]>(`/admin/calendar?month=${month}`),
 
   upsertGroupSlot: (date: string, slotTime: string) =>
     request<{ ok: boolean }>(`/admin/training-days/${date}/slots/${encodeURIComponent(slotTime)}`, {
@@ -506,8 +506,7 @@ export const api = {
       body: JSON.stringify({ status }),
     }),
 
-  getVapidPublicKey: () =>
-    request<{ publicKey: string }>("/push/vapid-public-key"),
+  getVapidPublicKey: () => request<{ publicKey: string }>("/push/vapid-public-key"),
 
   subscribePush: (sub: { endpoint: string; p256dh: string; auth: string }) =>
     request<{ ok: boolean }>("/push/subscriptions", {
@@ -521,14 +520,12 @@ export const api = {
       body: JSON.stringify({ endpoint }),
     }),
 
-  subscribeVacancy: (slotId: string) =>
-    request<{ ok: boolean }>(`/slots/${slotId}/vacancy-alert`, { method: "PUT" }),
+  subscribeVacancy: (slotId: string) => request<{ ok: boolean }>(`/slots/${slotId}/vacancy-alert`, { method: "PUT" }),
 
   unsubscribeVacancy: (slotId: string) =>
     request<{ ok: boolean }>(`/slots/${slotId}/vacancy-alert`, { method: "DELETE" }),
 
-  listAnnouncementExamples: () =>
-    request<AnnouncementExample[]>("/admin/announcement-examples"),
+  listAnnouncementExamples: () => request<AnnouncementExample[]>("/admin/announcement-examples"),
 
   addAnnouncementExample: (text: string) =>
     request<AnnouncementExample>("/admin/announcement-examples", {
@@ -539,8 +536,7 @@ export const api = {
   deleteAnnouncementExample: (id: string) =>
     request<{ ok: boolean }>(`/admin/announcement-examples/${id}`, { method: "DELETE" }),
 
-  getAnnouncement: (date: string) =>
-    request<Announcement>(`/admin/announcements/${date}`),
+  getAnnouncement: (date: string) => request<Announcement>(`/admin/announcements/${date}`),
 
   generateAnnouncement: (date: string) =>
     request<Announcement>(`/admin/announcements/${date}/generate`, { method: "POST" }),

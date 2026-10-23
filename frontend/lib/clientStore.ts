@@ -5,5 +5,9 @@ import { useSyncExternalStore } from "react";
 export const noopSubscribe = () => () => {};
 
 export function useIsClient(): boolean {
-  return useSyncExternalStore(noopSubscribe, () => true, () => false);
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
 }

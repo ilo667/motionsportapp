@@ -16,7 +16,10 @@ const REJECT_REASONS: Record<string, string> = {
   "9859": "Недостатньо коштів на картці.",
 };
 
-const CONTENT: Record<Exclude<ResultState, "PENDING" | "REJECTED">, { icon: string; iconClass: string; title: string; text: string }> = {
+const CONTENT: Record<
+  Exclude<ResultState, "PENDING" | "REJECTED">,
+  { icon: string; iconClass: string; title: string; text: string }
+> = {
   PAID: {
     icon: "✓",
     iconClass: "text-accent",
@@ -51,7 +54,11 @@ const CONTENT: Record<Exclude<ResultState, "PENDING" | "REJECTED">, { icon: stri
 
 function holdUntil(expiresAt?: string) {
   if (!expiresAt) return "ще кілька хвилин";
-  const time = new Date(expiresAt).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Kyiv" });
+  const time = new Date(expiresAt).toLocaleTimeString("uk-UA", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Kyiv",
+  });
   return `до ${time}`;
 }
 

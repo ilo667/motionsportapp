@@ -115,7 +115,9 @@ export function LoginForm({ variant }: { variant: "member" | "admin" }) {
     setLoading(true);
     try {
       await config.submit(login, secret);
-      try { localStorage.setItem('mg_authed', '1'); } catch {}
+      try {
+        localStorage.setItem("mg_authed", "1");
+      } catch {}
       router.push(config.redirectTo);
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
@@ -135,7 +137,9 @@ export function LoginForm({ variant }: { variant: "member" | "admin" }) {
       <Link href="/" className="inline-flex items-center text-sm text-muted hover:text-body transition-colors mb-6">
         ← Назад
       </Link>
-      <h1 className={`font-geologica font-semibold text-3xl sm:text-4xl text-heading ${config.subtitle ? "mb-2" : "mb-8"}`}>
+      <h1
+        className={`font-geologica font-semibold text-3xl sm:text-4xl text-heading ${config.subtitle ? "mb-2" : "mb-8"}`}
+      >
         {config.title}
       </h1>
       {config.subtitle && <p className="text-body text-sm mb-8">{config.subtitle}</p>}

@@ -50,7 +50,17 @@ const CardIcon = () => (
   </svg>
 );
 
-function BuyTile({ icon, title, price, onClick }: { icon: ReactNode; title: string; price: string; onClick: () => void }) {
+function BuyTile({
+  icon,
+  title,
+  price,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  price: string;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
@@ -115,7 +125,18 @@ function TrainingDots({ done, total }: { done: number; total: number }) {
           }`}
         >
           {i < done && (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-on-teal" aria-hidden>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-on-teal"
+              aria-hidden
+            >
               <path d="M5 12l5 5 9-10" />
             </svg>
           )}
@@ -236,7 +257,9 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
                     {p.trainingType === "групові" ? `Групові · ${p.title}` : p.title}
                   </span>
                   <span className="text-subtle text-xs whitespace-nowrap">
-                    {p.state === "active" ? `діє до ${formatDate(p.validUntil!)}` : `почати до ${formatDate(p.activateBy)}`}
+                    {p.state === "active"
+                      ? `діє до ${formatDate(p.validUntil!)}`
+                      : `почати до ${formatDate(p.activateBy)}`}
                   </span>
                 </div>
                 <TrainingDots done={p.total - p.left} total={p.total} />
@@ -309,7 +332,9 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
                 >
                   <PersonIcon />
                   <span className="block font-semibold mt-3">З тренером</span>
-                  <span className="block text-xs mt-0.5">Персональні та спліт · {fromPrice(data.catalog.services)}</span>
+                  <span className="block text-xs mt-0.5">
+                    Персональні та спліт · {fromPrice(data.catalog.services)}
+                  </span>
                 </button>
               )}
               {(canBuyGroup || canBuyCard) && (

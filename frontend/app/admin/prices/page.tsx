@@ -52,7 +52,9 @@ function ConfirmModal({
   const confirmRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     confirmRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onDismiss(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDismiss();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onDismiss]);
@@ -60,7 +62,9 @@ function ConfirmModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={(e) => { if (e.target === e.currentTarget && !saving) onDismiss(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !saving) onDismiss();
+      }}
     >
       <div className="absolute inset-0 bg-black/40 pointer-events-none" />
       <div
@@ -77,8 +81,8 @@ function ConfirmModal({
           {formatUah(amountUah)}
         </p>
         <p className="mt-3 mb-5 rounded-xl border border-line bg-background px-3 py-2.5 text-sm text-body">
-          Ціна зміниться <span className="text-heading font-medium">для всіх тренерів</span>. В історії буде
-          видно, що її змінили ви.
+          Ціна зміниться <span className="text-heading font-medium">для всіх тренерів</span>. В історії буде видно, що
+          її змінили ви.
         </p>
         <div className="flex flex-col space-y-2">
           <button
@@ -129,7 +133,9 @@ export default function PricesPage() {
     [router],
   );
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const startEdit = (item: PriceItem) => {
     setEditingId(item.id);

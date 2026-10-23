@@ -18,8 +18,14 @@ function getSnapshot() {
 }
 
 function subscribe(onChange: () => void) {
-  const goOffline = () => { offlineEpisode = ++episodeCounter; onChange(); };
-  const goOnline = () => { offlineEpisode = 0; onChange(); };
+  const goOffline = () => {
+    offlineEpisode = ++episodeCounter;
+    onChange();
+  };
+  const goOnline = () => {
+    offlineEpisode = 0;
+    onChange();
+  };
   window.addEventListener("offline", goOffline);
   window.addEventListener("online", goOnline);
   return () => {

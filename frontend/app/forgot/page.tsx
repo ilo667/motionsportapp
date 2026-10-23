@@ -35,7 +35,9 @@ export default function ForgotPage() {
     setLoading(true);
     try {
       const data = await api.forgotPin(memberCode.trim().toUpperCase(), recoveryCode.trim(), newPin);
-      try { localStorage.setItem("mg_authed", "1"); } catch {}
+      try {
+        localStorage.setItem("mg_authed", "1");
+      } catch {}
       setResult(data);
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
@@ -53,12 +55,8 @@ export default function ForgotPage() {
   if (result) {
     return (
       <PageLayout>
-        <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
-          PIN змінено
-        </h1>
-        <p className="text-muted text-sm mb-6">
-          Збережіть новий код відновлення — він більше не буде показаний.
-        </p>
+        <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">PIN змінено</h1>
+        <p className="text-muted text-sm mb-6">Збережіть новий код відновлення — він більше не буде показаний.</p>
 
         <div className="bg-surface rounded-xl p-5 mb-4">
           <p className="text-muted text-xs mb-1">Новий код відновлення</p>
@@ -89,9 +87,7 @@ export default function ForgotPage() {
 
   return (
     <PageLayout>
-      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
-        Відновлення PIN
-      </h1>
+      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">Відновлення PIN</h1>
       <p className="text-body text-sm mb-8">
         Згадали PIN?{" "}
         <Link href="/login" className="text-accent hover:underline">

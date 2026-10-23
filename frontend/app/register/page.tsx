@@ -49,21 +49,15 @@ export default function RegisterPage() {
 
   if (result) {
     return (
-    <PageLayout>
-        <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
-          Вітаємо!
-        </h1>
-        <p className="text-muted text-sm mb-6">
-          Збережіть ці дані — ви більше не побачите код відновлення.
-        </p>
+      <PageLayout>
+        <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">Вітаємо!</h1>
+        <p className="text-muted text-sm mb-6">Збережіть ці дані — ви більше не побачите код відновлення.</p>
 
         <div className="bg-surface rounded-xl p-5 mb-4 space-y-4">
           <div>
             <p className="text-muted text-xs mb-1">Ваш код учасника</p>
             <div className="flex items-center justify-between">
-              <span className="font-geologica font-semibold text-xl text-heading">
-                {result.memberCode}
-              </span>
+              <span className="font-geologica font-semibold text-xl text-heading">{result.memberCode}</span>
               <button
                 onClick={() => copyToClipboard(result.memberCode, "code")}
                 className="text-accent text-sm hover:underline ml-2"
@@ -76,13 +70,9 @@ export default function RegisterPage() {
           <div>
             <p className="text-muted text-xs mb-1">Код відновлення</p>
             <div className="flex items-center justify-between space-x-2">
-              <span className="font-mono text-sm text-body break-all">
-                {result.recoveryCode}
-              </span>
+              <span className="font-mono text-sm text-body break-all">{result.recoveryCode}</span>
               <button
-                onClick={() =>
-                  copyToClipboard(result.recoveryCode, "recovery")
-                }
+                onClick={() => copyToClipboard(result.recoveryCode, "recovery")}
                 className="text-accent text-sm hover:underline shrink-0"
               >
                 {copied === "recovery" ? "Скопійовано ✓" : "Копіювати"}
@@ -101,15 +91,13 @@ export default function RegisterPage() {
         >
           Продовжити →
         </button>
-    </PageLayout>
+      </PageLayout>
     );
   }
 
   return (
     <PageLayout>
-      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">
-        Реєстрація
-      </h1>
+      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">Реєстрація</h1>
       <p className="text-body text-sm mb-8">
         Вже є код?{" "}
         <Link href="/login" className="text-accent hover:underline">
@@ -119,9 +107,7 @@ export default function RegisterPage() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <label className="block text-body text-sm mb-1.5">
-            {"Ваше ім'я"}
-          </label>
+          <label className="block text-body text-sm mb-1.5">{"Ваше ім'я"}</label>
           <input
             type="text"
             value={displayName}
@@ -134,9 +120,7 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label className="block text-body text-sm mb-1.5">
-            PIN-код (6 цифр)
-          </label>
+          <label className="block text-body text-sm mb-1.5">PIN-код (6 цифр)</label>
           <input
             type="password"
             inputMode="numeric"
@@ -151,14 +135,10 @@ export default function RegisterPage() {
             className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="••••••"
           />
-          {pinError && (
-            <p className="text-danger text-xs mt-1">{pinError}</p>
-          )}
+          {pinError && <p className="text-danger text-xs mt-1">{pinError}</p>}
         </div>
 
-        {error && (
-          <p className="text-danger text-sm">{error}</p>
-        )}
+        {error && <p className="text-danger text-sm">{error}</p>}
 
         <button
           type="submit"

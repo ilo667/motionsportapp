@@ -78,7 +78,10 @@ export function GroupPassModal({
           <>
             <h2 className="font-geologica font-semibold text-lg text-heading mb-1">Записано на {slotTime}</h2>
             <p className="text-body text-sm mb-4">Оплатіть тренеру в залі, і він підтвердить оплату.</p>
-            <button onClick={onDismiss} className="btn-primary w-full py-3 rounded-xl text-sm font-medium transition-colors">
+            <button
+              onClick={onDismiss}
+              className="btn-primary w-full py-3 rounded-xl text-sm font-medium transition-colors"
+            >
               Добре
             </button>
           </>

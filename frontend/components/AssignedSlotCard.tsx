@@ -30,7 +30,9 @@ export function AssignedSlotCard({ slot, onMutate }: AssignedSlotCardProps) {
 
   return (
     <>
-      <div className={`rounded-xl border-2 p-5 ${slot.isMyBooking ? "bg-teal/5 border-teal" : "bg-surface border-line"}`}>
+      <div
+        className={`rounded-xl border-2 p-5 ${slot.isMyBooking ? "bg-teal/5 border-teal" : "bg-surface border-line"}`}
+      >
         <div className="flex items-start justify-between mb-4">
           <div>
             <span className="font-geologica font-semibold text-title text-heading">{slot.slotTime}</span>
@@ -39,7 +41,9 @@ export function AssignedSlotCard({ slot, onMutate }: AssignedSlotCardProps) {
           <div className="text-right">
             <span className="text-sm text-body">{TYPE_LABELS[slot.trainingType]}</span>
             {slot.trainingType === "спліт" && (
-              <p className="text-muted text-xs mt-1">{slot.bookedCount}/{slot.capacity} місць</p>
+              <p className="text-muted text-xs mt-1">
+                {slot.bookedCount}/{slot.capacity} місць
+              </p>
             )}
           </div>
         </div>

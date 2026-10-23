@@ -8,7 +8,10 @@ export function submitLiqPay({ data, signature }: LiqPayCheckout) {
   form.method = "POST";
   form.action = LIQPAY_URL;
   form.style.display = "none";
-  [["data", data], ["signature", signature]].forEach(([name, value]) => {
+  [
+    ["data", data],
+    ["signature", signature],
+  ].forEach(([name, value]) => {
     const input = document.createElement("input");
     input.type = "hidden";
     input.name = name;

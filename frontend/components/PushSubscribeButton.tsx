@@ -20,12 +20,14 @@ export function PushSubscribeButton() {
 
   useEffect(() => {
     if (support !== "available") return;
-    navigator.serviceWorker.ready.then(async (reg) => {
-      const existing = await reg.pushManager.getSubscription();
-      // Keep the server in sync for the current role (same browser may have subscribed as the other one)
-      if (existing) syncSubscription(existing).catch(() => {});
-      setSubscribed(!!existing);
-    }).catch(() => setSubscribed(false));
+    navigator.serviceWorker.ready
+      .then(async (reg) => {
+        const existing = await reg.pushManager.getSubscription();
+        // Keep the server in sync for the current role (same browser may have subscribed as the other one)
+        if (existing) syncSubscription(existing).catch(() => {});
+        setSubscribed(!!existing);
+      })
+      .catch(() => setSubscribed(false));
   }, [support]);
 
   const subscribe = async () => {

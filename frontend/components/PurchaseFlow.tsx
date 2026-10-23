@@ -186,7 +186,12 @@ export function PurchaseFlow({
         </p>
         <div className="flex flex-col space-y-2">
           {data.catalog.groupPasses.map((p) => (
-            <Option key={p.id} item={{ ...p, optionLabel: lineName(p) }} selected={p.id === passId} onSelect={() => setPassId(p.id)} />
+            <Option
+              key={p.id}
+              item={{ ...p, optionLabel: lineName(p) }}
+              selected={p.id === passId}
+              onSelect={() => setPassId(p.id)}
+            />
           ))}
         </div>
         <button

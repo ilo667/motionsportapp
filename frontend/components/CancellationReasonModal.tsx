@@ -16,18 +16,11 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
     textareaRef.current?.focus();
   }, []);
 
-  const title =
-    action === "switch"
-      ? `Перенести на ${switchTime}`
-      : "Скасувати запис";
+  const title = action === "switch" ? `Перенести на ${switchTime}` : "Скасувати запис";
 
-  const prompt =
-    action === "switch"
-      ? "Чому переносите час?"
-      : "Чому скасовуєте запис?";
+  const prompt = action === "switch" ? "Чому переносите час?" : "Чому скасовуєте запис?";
 
-  const submitLabel =
-    action === "switch" ? `Перенести на ${switchTime}` : "Скасувати запис";
+  const submitLabel = action === "switch" ? `Перенести на ${switchTime}` : "Скасувати запис";
 
   const canSubmit = reason.trim().length > 0;
 
@@ -39,13 +32,13 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={(e) => { if (e.target === e.currentTarget) onDismiss(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onDismiss();
+      }}
     >
       <div className="absolute inset-0 bg-black/40" />
       <div className="relative w-full max-w-[480px] mx-auto bg-surface rounded-t-[20px] sm:rounded-2xl px-5 pt-6 pb-8 shadow-xl border border-line">
-        <h2 className="font-geologica font-semibold text-lg text-heading mb-1">
-          {title}
-        </h2>
+        <h2 className="font-geologica font-semibold text-lg text-heading mb-1">{title}</h2>
         <p className="text-muted text-sm mb-4">{prompt}</p>
 
         <textarea
@@ -67,10 +60,7 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
           >
             {submitLabel}
           </button>
-          <button
-            onClick={onDismiss}
-            className="btn-ghost w-full py-3 rounded-xl border text-sm transition-colors"
-          >
+          <button onClick={onDismiss} className="btn-ghost w-full py-3 rounded-xl border text-sm transition-colors">
             Назад
           </button>
         </div>

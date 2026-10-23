@@ -19,7 +19,8 @@ const TYPE_FORMS: Record<AdminMember["packagesLeft"][number]["trainingType"], [s
 function trainingsLeft(n: number, forms: [string, string, string]) {
   const tens = n % 100;
   const ones = n % 10;
-  const form = tens >= 11 && tens <= 14 ? forms[2] : ones === 1 ? forms[0] : ones >= 2 && ones <= 4 ? forms[1] : forms[2];
+  const form =
+    tens >= 11 && tens <= 14 ? forms[2] : ones === 1 ? forms[0] : ones >= 2 && ones <= 4 ? forms[1] : forms[2];
   return `${n} ${form}`;
 }
 
@@ -75,8 +76,7 @@ export function CancellationHistory({
       .then((list) => {
         const monthAgo = Date.now() - MONTH_MS;
         setRecentMoves(
-          list.filter((c) => c.switchedToTime && c.cancelledAt && new Date(c.cancelledAt).getTime() >= monthAgo)
-            .length,
+          list.filter((c) => c.switchedToTime && c.cancelledAt && new Date(c.cancelledAt).getTime() >= monthAgo).length,
         );
         setItems(list);
       })
@@ -98,10 +98,7 @@ export function CancellationHistory({
         (list.length === 0 ? (
           <p className="text-subtle">Не було</p>
         ) : (
-          <CancellationList
-            items={list.map((c) => ({ ...c, label: trainingLabel(c), moveInLabel: true }))}
-            withDate
-          />
+          <CancellationList items={list.map((c) => ({ ...c, label: trainingLabel(c), moveInLabel: true }))} withDate />
         ))}
     </section>
   );
@@ -141,7 +138,10 @@ export function NoteCell({ member, onSaved }: { member: AdminMember; onSaved: (n
   if (!editing) {
     return (
       <button
-        onClick={() => { setDraft(member.trainerNote ?? ""); setEditing(true); }}
+        onClick={() => {
+          setDraft(member.trainerNote ?? "");
+          setEditing(true);
+        }}
         className="w-full text-left text-sm hover:text-heading transition-colors"
       >
         {member.trainerNote ? (
@@ -164,7 +164,10 @@ export function NoteCell({ member, onSaved }: { member: AdminMember; onSaved: (n
         onChange={(e) => setDraft(e.target.value)}
         onBlur={save}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); }
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            save();
+          }
           if (e.key === "Escape") setEditing(false);
         }}
         className="input-field w-full border rounded-lg px-3 py-2 text-sm focus:outline-none resize-none"
@@ -226,7 +229,9 @@ export function TrainerPicker({
         >
           {!member.trainerId && <option value="">не вибрано</option>}
           {trainers.map((c) => (
-            <option key={c.id} value={c.id}>{c.id === myId ? `${c.username} (я)` : c.username}</option>
+            <option key={c.id} value={c.id}>
+              {c.id === myId ? `${c.username} (я)` : c.username}
+            </option>
           ))}
         </select>
       </label>
@@ -234,4 +239,3 @@ export function TrainerPicker({
     </div>
   );
 }
-

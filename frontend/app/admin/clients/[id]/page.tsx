@@ -32,7 +32,10 @@ function Visits({ memberId }: { memberId: string }) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    api.getMemberVisits(memberId).then(setItems).catch(() => setFailed(true));
+    api
+      .getMemberVisits(memberId)
+      .then(setItems)
+      .catch(() => setFailed(true));
   }, [memberId]);
 
   if (failed) return <p className="text-danger text-xs">Не вдалося завантажити відвідування</p>;

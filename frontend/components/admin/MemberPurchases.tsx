@@ -132,10 +132,14 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
             <div key={c.id} className="flex items-center justify-between space-x-3">
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center -m-1">
-                  <span className={`m-1 font-semibold ${c.state === "waiting" || c.state === "active" ? "text-heading" : "text-subtle"}`}>
+                  <span
+                    className={`m-1 font-semibold ${c.state === "waiting" || c.state === "active" ? "text-heading" : "text-subtle"}`}
+                  >
                     {c.label}
                   </span>
-                  <span className={`m-1 text-xs font-semibold border rounded-full px-2 py-0.5 ${CARD_BADGE[c.state].className}`}>
+                  <span
+                    className={`m-1 text-xs font-semibold border rounded-full px-2 py-0.5 ${CARD_BADGE[c.state].className}`}
+                  >
                     {CARD_BADGE[c.state].text}
                   </span>
                 </p>
@@ -227,7 +231,11 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
               <span className="tabular-nums text-heading font-semibold whitespace-nowrap">{formatUah(p.totalUah)}</span>
             </div>
             <p className="text-subtle text-xs">
-              {new Date(p.createdAt).toLocaleDateString("uk-UA", { day: "numeric", month: "short", timeZone: "Europe/Kyiv" })}
+              {new Date(p.createdAt).toLocaleDateString("uk-UA", {
+                day: "numeric",
+                month: "short",
+                timeZone: "Europe/Kyiv",
+              })}
               {" · "}
               {p.method === "CASH" ? "готівка" : "онлайн"} · {STATUS[p.status]}
               {p.decidedBy && ` · ${p.decidedBy}`}

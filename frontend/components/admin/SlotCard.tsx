@@ -14,15 +14,15 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
   const isGroup = slot.trainingType === "групові";
   // "мало учасників" is about group trainings; assigned ones are for 1–3 assigned people
   const belowMin = isGroup && slot.status === "ACTIVE" && slot.bookedCount < 3;
-  const allPresent = slot.participants.length > 0 && slot.participants.every(p => p.attendanceStatus === "PRESENT");
+  const allPresent = slot.participants.length > 0 && slot.participants.every((p) => p.attendanceStatus === "PRESENT");
 
   return (
-    <div className={`rounded-xl border-2 p-5 ${slot.status === "CANCELLED" ? "bg-surface border-line opacity-60" : "bg-surface border-line"}`}>
+    <div
+      className={`rounded-xl border-2 p-5 ${slot.status === "CANCELLED" ? "bg-surface border-line opacity-60" : "bg-surface border-line"}`}
+    >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-baseline space-x-3">
-          <span className="font-geologica font-semibold text-title text-heading">
-            {slot.slotTime}
-          </span>
+          <span className="font-geologica font-semibold text-title text-heading">{slot.slotTime}</span>
           {!isGroup && (
             <span className="text-muted text-sm">{slot.trainingType === "спліт" ? "Спліт" : "Персональне"}</span>
           )}
@@ -51,9 +51,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                 <li key={p.bookingId} className="flex items-center justify-between space-x-2">
                   <span className="text-body text-sm">
                     {p.displayName}
-                    {p.switchedFromTime && (
-                      <span className="ml-2 text-xs text-amber-400">з {p.switchedFromTime}</span>
-                    )}
+                    {p.switchedFromTime && <span className="ml-2 text-xs text-amber-400">з {p.switchedFromTime}</span>}
                   </span>
                   {/* Editable after "Підтвердити всіх" too: the trainer can fix a mistake */}
                   <AttendanceButton
@@ -73,8 +71,8 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
           )}
 
           <div className="flex flex-col space-y-2">
-            {slot.participants.length > 0 && (
-              allPresent ? (
+            {slot.participants.length > 0 &&
+              (allPresent ? (
                 <p className="text-teal text-sm text-center py-2">✓ Всі учасники підтверджені</p>
               ) : (
                 <button
@@ -83,8 +81,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                 >
                   Підтвердити всіх
                 </button>
-              )
-            )}
+              ))}
 
             {!confirmCancel ? (
               <button

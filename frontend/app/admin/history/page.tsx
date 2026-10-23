@@ -15,7 +15,11 @@ const TYPE_LABEL: Record<TrainingType, string> = {
 };
 
 function formatDay(localDate: string) {
-  return new Date(localDate + "T12:00:00").toLocaleDateString("uk-UA", { weekday: "long", day: "numeric", month: "long" });
+  return new Date(localDate + "T12:00:00").toLocaleDateString("uk-UA", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 }
 
 // "11 прийшли з 12 · 1 скасування" for the collapsed day row
@@ -97,19 +101,22 @@ export default function HistoryPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
 
-  const load = useCallback(async (before?: string) => {
-    try {
-      const page = await api.getHistory(before);
-      setDays((prev) => [...(before ? prev ?? [] : []), ...page.days]);
-      setNextBefore(page.nextBefore);
-      // The latest day starts expanded
-      if (!before && page.days[0]) setOpen(new Set([page.days[0].localDate]));
-    } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      if (status === 401 || status === 403) router.push("/admin/login");
-      else setError("Не вдалося завантажити історію.");
-    }
-  }, [router]);
+  const load = useCallback(
+    async (before?: string) => {
+      try {
+        const page = await api.getHistory(before);
+        setDays((prev) => [...(before ? (prev ?? []) : []), ...page.days]);
+        setNextBefore(page.nextBefore);
+        // The latest day starts expanded
+        if (!before && page.days[0]) setOpen(new Set([page.days[0].localDate]));
+      } catch (err: unknown) {
+        const status = (err as { status?: number }).status;
+        if (status === 401 || status === 403) router.push("/admin/login");
+        else setError("Не вдалося завантажити історію.");
+      }
+    },
+    [router],
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- load is async: state is set after the await, not synchronously
@@ -132,14 +139,17 @@ export default function HistoryPage() {
     });
 
   const setAttendance = (bookingId: string, status: AttendanceStatus) =>
-    setDays((prev) =>
-      prev?.map((d) => ({
-        ...d,
-        slots: d.slots.map((s) => ({
-          ...s,
-          participants: s.participants.map((p) => (p.bookingId === bookingId ? { ...p, attendanceStatus: status } : p)),
-        })),
-      })) ?? null,
+    setDays(
+      (prev) =>
+        prev?.map((d) => ({
+          ...d,
+          slots: d.slots.map((s) => ({
+            ...s,
+            participants: s.participants.map((p) =>
+              p.bookingId === bookingId ? { ...p, attendanceStatus: status } : p,
+            ),
+          })),
+        })) ?? null,
     );
 
   // Optimistic: the mark changes at once and rolls back if saving fails
@@ -156,9 +166,7 @@ export default function HistoryPage() {
 
   return (
     <PageLayout variant="top" loading={!days && !error} action={<AdminMenu />}>
-      <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">
-        Історія
-      </h1>
+      <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">Історія</h1>
 
       {error && <p className="text-danger text-sm mb-4">{error}</p>}
 
@@ -171,7 +179,9 @@ export default function HistoryPage() {
             const dayTitle = (
               <span className="flex flex-col">
                 <span className="text-heading text-sm font-semibold capitalize">{formatDay(day.localDate)}</span>
-                <span className={`text-xs ${day.status === "CANCELLED" ? "text-danger" : "text-muted"}`}>{daySummary(day)}</span>
+                <span className={`text-xs ${day.status === "CANCELLED" ? "text-danger" : "text-muted"}`}>
+                  {daySummary(day)}
+                </span>
               </span>
             );
             return (
@@ -186,7 +196,12 @@ export default function HistoryPage() {
                     className="w-full text-left bg-surface px-4 py-3 flex items-start justify-between space-x-3 hover:bg-surface/70 transition-colors"
                   >
                     {dayTitle}
-                    <span className={`text-muted transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true">▾</span>
+                    <span
+                      className={`text-muted transition-transform ${expanded ? "rotate-180" : ""}`}
+                      aria-hidden="true"
+                    >
+                      ▾
+                    </span>
                   </button>
                 )}
                 {expanded && day.status !== "CANCELLED" && (
@@ -196,7 +211,8 @@ export default function HistoryPage() {
                         key={slot.id}
                         slot={slot}
                         onAttendance={(bookingId, next) => {
-                          const previous = slot.participants.find((p) => p.bookingId === bookingId)?.attendanceStatus ?? "UNMARKED";
+                          const previous =
+                            slot.participants.find((p) => p.bookingId === bookingId)?.attendanceStatus ?? "UNMARKED";
                           changeAttendance(bookingId, previous, next);
                         }}
                       />

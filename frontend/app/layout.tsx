@@ -33,9 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="text-base sm:text-sm min-h-full flex flex-col">
         <OfflineBanner />
         <main className="flex-1 flex flex-col px-5">
-          <div className="w-full max-w-xl mx-auto flex-1 flex flex-col">
-            {children}
-          </div>
+          <div className="w-full max-w-xl mx-auto flex-1 flex flex-col">{children}</div>
         </main>
         <SwRegister />
       </body>

@@ -15,9 +15,9 @@
   --text-sm--line-height: 28px;
 
   /* Heading scale */
-  --text-display: 2.75rem;              /* 44px — page title (sm+) */
+  --text-display: 2.75rem; /* 44px — page title (sm+) */
   --text-display--line-height: 38px;
-  --text-title: 2.375rem;               /* 38px — card heading */
+  --text-title: 2.375rem; /* 38px — card heading */
   --text-title--line-height: 32px;
 
   /* Brand */
@@ -30,7 +30,7 @@
   --color-heading: #d8e4f8;
   --color-body: #c8d4ec;
   --color-muted: #4a5a80;
-  --color-subtle: #8a9bc0;    /* secondary text that must stay readable (4.5:1 on the background) */
+  --color-subtle: #8a9bc0; /* secondary text that must stay readable (4.5:1 on the background) */
 
   /* Waiting state (a card waiting for activation) */
   --color-warn: #f5c56b;
@@ -54,12 +54,24 @@ body {
 }
 
 @layer base {
-  button { @apply cursor-pointer; }
-  button:disabled { @apply cursor-not-allowed; }
-  a, button { -webkit-tap-highlight-color: transparent; }
+  button {
+    @apply cursor-pointer;
+  }
+  button:disabled {
+    @apply cursor-not-allowed;
+  }
+  a,
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-geologica), Arial, Helvetica, sans-serif;
 }
 
@@ -70,7 +82,7 @@ h1, h2, h3, h4, h5, h6 {
   place-items: center;
   width: 92px;
   height: 92px;
-  filter: drop-shadow(0 0 13px rgba(147, 210, 60, .23));
+  filter: drop-shadow(0 0 13px rgba(147, 210, 60, 0.23));
 }
 
 .gym-loader__outer,
@@ -92,8 +104,8 @@ h1, h2, h3, h4, h5, h6 {
   inset: 13px;
   border: 3px solid transparent;
   border-bottom-color: var(--color-teal);
-  border-left-color: rgba(147, 210, 60, .53);
-  animation: gym-spin .8s linear infinite reverse;
+  border-left-color: rgba(147, 210, 60, 0.53);
+  animation: gym-spin 0.8s linear infinite reverse;
 }
 
 .gym-loader__center {
@@ -101,29 +113,39 @@ h1, h2, h3, h4, h5, h6 {
   height: 21px;
   border-radius: 50%;
   background: var(--color-teal);
-  box-shadow: 0 0 19px rgba(147, 210, 60, .5);
+  box-shadow: 0 0 19px rgba(147, 210, 60, 0.5);
   animation: gym-pulse 1.3s ease-in-out infinite;
 }
 
 .gym-loader__text {
   color: var(--color-teal);
-  font: 700 10px Inter, Arial, sans-serif;
+  font:
+    700 10px Inter,
+    Arial,
+    sans-serif;
   letter-spacing: 4px;
   padding-left: 5px;
 }
 
 @keyframes gym-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes gym-pulse {
-  50% { transform: scale(.6); opacity: .45; }
+  50% {
+    transform: scale(0.6);
+    opacity: 0.45;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .gym-loader__outer,
   .gym-loader__inner,
-  .gym-loader__center { animation: none; }
+  .gym-loader__center {
+    animation: none;
+  }
 }
 
 /* ── Semantic component classes — all color decisions in one place ── */
@@ -133,7 +155,9 @@ h1, h2, h3, h4, h5, h6 {
     background-color: var(--color-teal);
     color: var(--color-on-teal);
   }
-  .btn-primary:hover:not(:disabled) { background-color: var(--color-teal-light); }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--color-teal-light);
+  }
 
   /* Outlined teal button — add `border` class for border-width */
   .btn-secondary {
@@ -196,6 +220,12 @@ h1, h2, h3, h4, h5, h6 {
     border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-line));
     color: color-mix(in srgb, var(--color-danger) 65%, var(--color-muted));
   }
-  .hover-danger:hover:not(:disabled) { border-color: var(--color-danger); color: var(--color-danger); }
-  .hover-accent:hover:not(:disabled) { border-color: var(--color-teal);   color: var(--color-teal); }
+  .hover-danger:hover:not(:disabled) {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+  }
+  .hover-accent:hover:not(:disabled) {
+    border-color: var(--color-teal);
+    color: var(--color-teal);
+  }
 }
