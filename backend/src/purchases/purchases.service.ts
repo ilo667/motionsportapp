@@ -40,7 +40,8 @@ export type PurchaseView = {
   status: string;
   totalUah: number;
   createdAt: string;
-  lines: { title: string; optionLabel: string | null; amountUah: number }[];
+  // section: the price list section (club_card | assigned | group), so a club card line can say so
+  lines: { section: string; title: string; optionLabel: string | null; amountUah: number }[];
 };
 
 @Injectable()
@@ -355,11 +356,13 @@ export class PurchasesService {
     const lines = await db
       .select({
         purchaseId: purchaseItems.purchaseId,
+        section: priceItems.section,
         title: purchaseItems.title,
         optionLabel: purchaseItems.optionLabel,
         amountUah: purchaseItems.amountUah,
       })
       .from(purchaseItems)
+      .innerJoin(priceItems, eq(priceItems.id, purchaseItems.priceItemId))
       .where(inArray(purchaseItems.purchaseId, ids));
     return ids
       .map((id) => rows.find((r) => r.id === id))
@@ -369,7 +372,7 @@ export class PurchasesService {
         createdAt: r.createdAt.toISOString(),
         lines: lines
           .filter((l) => l.purchaseId === r.id)
-          .map((l) => ({ title: l.title, optionLabel: l.optionLabel, amountUah: l.amountUah })),
+          .map((l) => ({ section: l.section, title: l.title, optionLabel: l.optionLabel, amountUah: l.amountUah })),
       }));
   }
 

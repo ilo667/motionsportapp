@@ -125,6 +125,7 @@ export interface TrainingPackage {
 }
 
 export interface PurchaseLine {
+  section?: PriceSection; // club_card → shown as «Клубна карта · …»
   title: string;
   optionLabel: string | null;
   amountUah: number;

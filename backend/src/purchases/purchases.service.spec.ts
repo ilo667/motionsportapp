@@ -286,6 +286,21 @@ describe('Purchases — what the member sees', () => {
   });
 });
 
+describe('Purchases — views', () => {
+  it('each line says its price list section, so a club card line can be labelled «Клубна карта»', async () => {
+    const created = new Date('2026-10-23T09:00:00Z');
+    const { db } = makeDb([
+      [{ id: 'p1', method: 'CASH', status: 'PENDING', totalUah: 1600, createdAt: created }],
+      [
+        { purchaseId: 'p1', section: 'club_card', title: 'Денний', optionLabel: '1 місяць', amountUah: 1200 },
+        { purchaseId: 'p1', section: 'assigned', title: 'Спліт', optionLabel: '1 тренування', amountUah: 400 },
+      ],
+    ]);
+    const [view] = await makeService(db).svc.views(['p1']);
+    expect(view.lines.map((l) => l.section)).toEqual(['club_card', 'assigned']);
+  });
+});
+
 describe('Purchases — cancel', () => {
   it('cancels own pending purchase and its open LiqPay attempts', async () => {
     const { db, sets } = makeDb([[], [{ id: 'purchase-1' }]]);
