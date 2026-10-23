@@ -43,6 +43,13 @@ npm run format     # prettier (printWidth 120); the local pre-commit hook reject
 
 Frontend (`/api/*`) → Next.js rewrite → `BACKEND_URL` (dev: `localhost:3001`, prod: Vercel backend project). Backend on Vercel uses `backend/api/index.ts` as the serverless entrypoint — it lazily bootstraps NestJS and delegates requests.
 
+App setup (helmet, CORS, `ValidationPipe`, cookie parser) lives in **`configureApp()`** (`backend/src/configure-app.ts`), shared by `main.ts` (local) and `api/index.ts` (Vercel). Add any global middleware there, never in just one entrypoint, or Vercel silently runs without it.
+
+### Security headers
+
+- API: `helmet()` defaults (incl. its CSP and HSTS); fine for JSON, since browsers reach the API only through the `/api` rewrite and LiqPay callbacks / Vercel Cron ignore response headers.
+- Frontend pages: `headers()` in `frontend/next.config.ts` sets `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`. **No CSP yet** on pages: it would need tuning for the LiqPay form POST (`form-action`), Next.js inline scripts and fonts; test a payment if you add one. HSTS comes from Vercel.
+
 ### Auth
 
 Opaque session token (no JWT) in an `httpOnly`, `sameSite: strict` cookie named **`session`** (`secure` in production, 30 days). The DB stores only its SHA-256 in `sessions` (`principal_type` member | admin, `principal_id`, `expires_at`, `revoked_at`); logout revokes it. `SessionGuard` hashes the cookie, finds a live session and sets `req.user` (`SessionUser`: member or admin). Then `AdminGuard` (admin only) or `MemberGuard` (member only, e.g. payment checkout). `ValidationPipe(whitelist: true)` is global.
