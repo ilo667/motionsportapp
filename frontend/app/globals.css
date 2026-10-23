@@ -30,6 +30,12 @@
   --color-heading: #d8e4f8;
   --color-body: #c8d4ec;
   --color-muted: #4a5a80;
+  --color-subtle: #8a9bc0;    /* secondary text that must stay readable (4.5:1 on the background) */
+
+  /* Waiting state (a card waiting for activation) */
+  --color-warn: #f5c56b;
+  --color-warn-bg: #1d170b;
+  --color-warn-line: #5a4520;
 
   /* UI */
   --color-surface: #0d1019;
