@@ -339,7 +339,8 @@ describe('Cancellation reasons for the trainer', () => {
   ];
 
   it('calendar modal: cancelled and moved, with reason and time', async () => {
-    const { db } = makeDb([[{ id: 's1', trainerId: TRAINER }], rows]);
+    // the slot, who is booked on it now (nobody), then the cancellations
+    const { db } = makeDb([[{ id: 's1', trainerId: TRAINER }], [], rows]);
     await expect(makeService(db).getSlotCancellations(TRAINER, 's1')).resolves.toEqual([
       {
         bookingId: 'b1',
@@ -456,6 +457,31 @@ describe('History of past trainings', () => {
     ]);
   });
 
+  it('a member back on the training (moved away and returned) is not listed under «Скасували»', async () => {
+    const { db } = makeDb([
+      [day(20)],
+      [slot],
+      [{ bookingId: 'b5', slotId: 's1', memberId: M1, displayName: 'Катерина', attendanceStatus: null }],
+      [
+        {
+          bookingId: 'b4',
+          slotId: 's1',
+          memberId: M1,
+          displayName: 'Катерина',
+          reason: 'Хочу раніше',
+          cancelledAt: new Date('2026-10-20T16:06:00Z'),
+          slotTime: '20:00',
+          localDate: '2026-10-20',
+          switchedToSlotId: 's0',
+          switchedToTime: '19:00',
+        },
+      ],
+    ]);
+    const { days } = await makeService(db).getHistory(TRAINER);
+    expect(days[0].slots[0].cancellations).toEqual([]);
+    expect(days[0].slots[0].participants).toHaveLength(1);
+  });
+
   it('returns a cursor when there are older days than one page', async () => {
     const fifteen = Array.from({ length: 15 }, (_, i) => day(20 - i));
     const { db } = makeDb([fifteen, []]);
@@ -471,6 +497,40 @@ describe('History of past trainings', () => {
     await makeService(db).getHistory(TRAINER, '2026-12-31');
     const cond = new PgDialect().sqlToQuery((where.mock.calls[0] as unknown[])[0] as any);
     expect(cond.params).toContain('2026-10-20'); // today in the test clock, not the cursor
+  });
+});
+
+describe('Calendar «Скасували»', () => {
+  it('leaves out members who are booked on the training again', async () => {
+    const mine = { id: 's1', trainerId: TRAINER, status: 'ACTIVE' };
+    const { db } = makeDb([
+      [mine],
+      [{ memberId: M1 }],
+      [
+        {
+          bookingId: 'b4',
+          slotId: 's1',
+          memberId: M1,
+          displayName: 'Катерина',
+          reason: 'Хочу раніше',
+          cancelledAt: new Date(),
+          switchedToSlotId: 's0',
+          switchedToTime: '19:00',
+        },
+        {
+          bookingId: 'b6',
+          slotId: 's1',
+          memberId: M2,
+          displayName: 'Оля',
+          reason: 'Захворіла',
+          cancelledAt: new Date(),
+          switchedToSlotId: null,
+          switchedToTime: null,
+        },
+      ],
+    ]);
+    const list = await makeService(db).getSlotCancellations(TRAINER, 's1');
+    expect(list.map((c) => c.displayName)).toEqual(['Оля']);
   });
 });
 

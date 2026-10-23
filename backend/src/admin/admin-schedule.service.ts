@@ -217,7 +217,12 @@ export class AdminScheduleService {
           switchedFromTime:
             cancellations.find((c) => c.switchedToSlotId === s.id && c.memberId === p.memberId)?.slotTime ?? null,
         })),
-      cancellations: cancellations.filter((c) => c.slotId === s.id).map(toCancellationView),
+      // Someone who moved away and came back is a participant again, not one who cancelled
+      cancellations: cancellations
+        .filter(
+          (c) => c.slotId === s.id && !participantRows.some((p) => p.slotId === s.id && p.memberId === c.memberId),
+        )
+        .map(toCancellationView),
     }));
   }
 
@@ -731,7 +736,13 @@ export class AdminScheduleService {
   // Calendar modal: who cancelled or moved away from this slot and why
   async getSlotCancellations(adminId: string, slotId: string) {
     await this.ownSlot(adminId, slotId);
-    return (await this.memberCancellations(eq(bookings.slotId, slotId))).map(toCancellationView);
+    // Members booked on it again (moved away and came back) are not shown as having cancelled
+    const booked = await this.database.db
+      .select({ memberId: bookings.memberId })
+      .from(bookings)
+      .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
+    const rows = await this.memberCancellations(eq(bookings.slotId, slotId));
+    return rows.filter((r) => !booked.some((b) => b.memberId === r.memberId)).map(toCancellationView);
   }
 
   // Clients page: one member's latest cancellations and moves
