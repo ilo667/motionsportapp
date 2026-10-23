@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, max, sql } from 'drizzle-orm';
 import type { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
 import { ClockService } from '../clock/clock.service';
@@ -114,6 +114,36 @@ export class EntitlementsService {
       left: r.total - r.used,
       createdAt: r.createdAt.toISOString(),
     }));
+  }
+
+  // Clients list: per member, until when the card lasts and how many trainings are left by type (only types with some)
+  async summaries(memberIds: string[], db: Q = this.database.db) {
+    const result = new Map<
+      string,
+      { clubCardUntil: string | null; packagesLeft: { trainingType: string; left: number }[] }
+    >();
+    if (memberIds.length === 0) return result;
+    const cards = await db
+      .select({ memberId: clubCards.memberId, until: max(clubCards.validUntil) })
+      .from(clubCards)
+      .where(and(inArray(clubCards.memberId, memberIds), gte(clubCards.validUntil, this.clock.now().toISODate()!)))
+      .groupBy(clubCards.memberId);
+    const packs = await db
+      .select({ memberId: packages.memberId, trainingType: packages.trainingType, total: packages.total, used: USED })
+      .from(packages)
+      .where(inArray(packages.memberId, memberIds));
+
+    for (const id of memberIds) {
+      const left = new Map<string, number>();
+      for (const p of packs.filter((p) => p.memberId === id)) {
+        left.set(p.trainingType, (left.get(p.trainingType) ?? 0) + p.total - p.used);
+      }
+      result.set(id, {
+        clubCardUntil: cards.find((c) => c.memberId === id)?.until ?? null,
+        packagesLeft: [...left].filter(([, n]) => n > 0).map(([trainingType, n]) => ({ trainingType, left: n })),
+      });
+    }
+    return result;
   }
 
   // Keeps the package in step with the attendance mark of one booking: any mark (✓ or ✗) on a personal / split

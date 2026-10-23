@@ -1,12 +1,15 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException, Logger } from '@nestjs/common';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { ClockService } from '../clock/clock.service';
-import { members, payments, priceItems, purchaseItems, purchases } from '../database/schema';
+import { admins, clubCards, members, payments, priceItems, purchaseItems, purchases } from '../database/schema';
 import { EntitlementsService } from './entitlements.service';
 import { PaymentService } from '../payment/payment.service';
 import { NotificationService } from '../notifications/notification.service';
 import type { CreatePurchaseDto } from './dto/create-purchase.dto';
+
+// Latest purchases shown on a client's page
+const MEMBER_PURCHASES_LIMIT = 20;
 
 type Db = DatabaseService['db'];
 type Q = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -167,6 +170,100 @@ export class PurchasesService {
         .where(and(eq(payments.purchaseId, purchaseId), eq(payments.status, 'PENDING')));
     });
     return { ok: true };
+  }
+
+  // ── Trainer side ──────────────────────────────────────────────────────────
+
+  // Cash requests waiting for this trainer, oldest first
+  async pendingCash(trainerId: string) {
+    const rows = await this.database.db
+      .select({ id: purchases.id, memberId: purchases.memberId, displayName: members.displayName })
+      .from(purchases)
+      .innerJoin(members, eq(members.id, purchases.memberId))
+      .where(and(eq(purchases.trainerId, trainerId), eq(purchases.method, 'CASH'), eq(purchases.status, 'PENDING')))
+      .orderBy(asc(purchases.createdAt));
+    const views = await this.views(rows.map((r) => r.id));
+    return views.map((v) => {
+      const row = rows.find((r) => r.id === v.id)!;
+      return { ...v, memberId: row.memberId, displayName: row.displayName };
+    });
+  }
+
+  // «Оплату отримано»: only the member's trainer, only a cash request still awaiting payment
+  async confirmCash(trainerId: string, purchaseId: string) {
+    await this.database.db.transaction(async (tx) => {
+      await this.decideCash(tx, trainerId, purchaseId, 'PAID');
+      await this.entitlements.activate(tx, purchaseId);
+    });
+    return { ok: true };
+  }
+
+  // The member never paid
+  async rejectCash(trainerId: string, purchaseId: string) {
+    await this.database.db.transaction((tx) => this.decideCash(tx, trainerId, purchaseId, 'REJECTED'));
+    return { ok: true };
+  }
+
+  // Compare-and-set, so a double tap can't confirm (and activate) twice. Another trainer's request
+  // or a LiqPay purchase answers 404 like a missing one
+  private async decideCash(tx: Q, trainerId: string, purchaseId: string, status: 'PAID' | 'REJECTED') {
+    const mine = and(eq(purchases.id, purchaseId), eq(purchases.trainerId, trainerId), eq(purchases.method, 'CASH'));
+    const [decided] = await tx
+      .update(purchases)
+      .set({ status, decidedBy: trainerId, decidedAt: this.clock.now().toJSDate() })
+      .where(and(mine, eq(purchases.status, 'PENDING')))
+      .returning({ id: purchases.id });
+    if (decided) return;
+    const [exists] = await tx.select({ status: purchases.status }).from(purchases).where(mine).limit(1);
+    if (!exists) throw new NotFoundException('Purchase not found');
+    throw new ConflictException('Purchase was already decided');
+  }
+
+  // A client's page: cards, packages and purchase history
+  async memberPurchases(trainerId: string, memberId: string) {
+    await this.visibleMember(trainerId, memberId);
+    const cards = await this.database.db
+      .select({
+        label: clubCards.label,
+        validFrom: clubCards.validFrom,
+        validUntil: clubCards.validUntil,
+        purchaseItemId: clubCards.purchaseItemId,
+      })
+      .from(clubCards)
+      .where(eq(clubCards.memberId, memberId))
+      .orderBy(desc(clubCards.validUntil));
+    const history = await this.database.db
+      .select({ id: purchases.id, decidedBy: admins.username })
+      .from(purchases)
+      .leftJoin(admins, eq(admins.id, purchases.decidedBy))
+      .where(eq(purchases.memberId, memberId))
+      .orderBy(desc(purchases.createdAt))
+      .limit(MEMBER_PURCHASES_LIMIT);
+    const views = await this.views(history.map((h) => h.id));
+
+    return {
+      card: await this.entitlements.activeCard(memberId),
+      cards: cards.map(({ purchaseItemId, ...c }) => ({ ...c, source: purchaseItemId ? 'purchase' : 'manual' })),
+      packages: await this.entitlements.packagesOf(memberId),
+      purchases: views.map((v) => ({ ...v, decidedBy: history.find((h) => h.id === v.id)?.decidedBy ?? null })),
+    };
+  }
+
+  // «Додати карту вручну»: a card bought at the reception
+  async addCard(trainerId: string, memberId: string, priceItemId: string) {
+    await this.visibleMember(trainerId, memberId);
+    await this.entitlements.addManualCard(this.database.db, memberId, trainerId, priceItemId);
+    return { ok: true };
+  }
+
+  // Same rule as the rest of the admin: own clients plus unassigned ones; anyone else's answers 404
+  private async visibleMember(trainerId: string, memberId: string) {
+    const [member] = await this.database.db
+      .select({ id: members.id })
+      .from(members)
+      .where(and(eq(members.id, memberId), or(eq(members.trainerId, trainerId), isNull(members.trainerId))))
+      .limit(1);
+    if (!member) throw new NotFoundException('Member not found');
   }
 
   // Purchases with their lines, in the order of `ids`

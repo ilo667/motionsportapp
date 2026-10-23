@@ -11,6 +11,7 @@ import type { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 import type { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { NotificationService } from '../notifications/notification.service';
 import { ClockService } from '../clock/clock.service';
+import { EntitlementsService } from '../purchases/entitlements.service';
 import {
   GROUP_SLOT_TIMES,
   GROUP_TYPE,
@@ -53,6 +54,7 @@ export class AdminScheduleService {
     private readonly database: DatabaseService,
     private readonly notifications: NotificationService,
     private readonly clock: ClockService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   // The trainer's next training day with their own slots
@@ -606,7 +608,7 @@ export class AdminScheduleService {
         AND b.switched_to_slot_id IS NULL
         AND b.cancelled_at >= ${since}
     )`;
-    return this.database.db
+    const rows = await this.database.db
       .select({
         id: members.id,
         memberCode: members.memberCode,
@@ -619,6 +621,10 @@ export class AdminScheduleService {
       .from(members)
       .where(this.visibleTo(adminId))
       .orderBy(asc(members.displayName));
+
+    // «карта до DD.MM», «Перс. 5 · Спліт 2» under each client
+    const summaries = await this.entitlements.summaries(rows.map((r) => r.id));
+    return rows.map((r) => ({ ...r, clubCardUntil: null, packagesLeft: [], ...summaries.get(r.id) }));
   }
 
   // For the reassign picker. Usernames only, never password hashes
