@@ -139,6 +139,8 @@ export class PaymentService {
 
   // Returns a fresh order id for the member's PENDING booking on this slot, 'PAID' if LiqPay says
   // the previous attempt actually succeeded, or null when there is nothing to resume.
+  // 'PAID' is already a string; kept in the type to document the special value
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
   private async resumePendingCheckout(slotId: string, memberId: string): Promise<string | 'PAID' | null> {
     const [pending] = await this.database.db
       .select({ id: payments.id, bookingId: payments.bookingId, orderId: payments.orderId })
@@ -275,7 +277,7 @@ export class PaymentService {
     const expiresAt = new Date(payment.createdAt.getTime() + this.expiryMs).toISOString();
     const remote = await this.fetchLiqpayStatus(orderId);
     if (!remote || remote.result !== 'ok') {
-      this.logger.log(`Status check: order=${orderId} → PENDING (LiqPay ${remote ? 'result=' + String(remote.result as string) : 'unreachable'})`);
+      this.logger.log(`Status check: order=${orderId} → PENDING (LiqPay ${remote ? 'result=' + String(remote.result) : 'unreachable'})`);
       return { status: 'PENDING', expiresAt };
     }
 
@@ -334,6 +336,8 @@ export class PaymentService {
     const status = liqpay.status as string;
 
     if (SUCCESS_STATUSES.includes(status)) {
+      // LiqPay sends payment_id as a number
+      // eslint-disable-next-line @typescript-eslint/no-base-to-string
       const liqpayPaymentId = liqpay.payment_id ? String(liqpay.payment_id) : null;
       const claimed = await this.database.db.transaction(async (tx) => {
         // REPLACED is allowed: the member may pay an old LiqPay tab (caller checks the booking still awaits payment)

@@ -4,7 +4,7 @@ import type { SessionUser } from '../../auth/session.guard';
 @Injectable()
 export class MemberGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
-    const user: SessionUser | undefined = ctx.switchToHttp().getRequest().user;
+    const user = ctx.switchToHttp().getRequest<{ user?: SessionUser }>().user;
     if (!user || user.type !== 'member') throw new ForbiddenException();
     return true;
   }

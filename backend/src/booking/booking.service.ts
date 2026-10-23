@@ -51,7 +51,7 @@ export class BookingService {
 
     if (!day || day.status !== 'SCHEDULED') throw new ConflictException('Training day is not scheduled');
 
-    await this.validateBookingWindow(day.localDate);
+    this.validateBookingWindow(day.localDate);
 
     try {
       await this.database.db.transaction(async (tx) => {
@@ -125,9 +125,9 @@ export class BookingService {
       .where(eq(trainingSlots.id, booking.slotId))
       .limit(1);
 
-    if (day && slotBefore?.trainingType === GROUP_TYPE) await this.validateBeforeClose(day.localDate);
+    if (day && slotBefore?.trainingType === GROUP_TYPE) this.validateBeforeClose(day.localDate);
     if (day && slotBefore && slotBefore.trainingType !== GROUP_TYPE) {
-      await this.validateBeforeStart(day.localDate, slotBefore.slotTime);
+      this.validateBeforeStart(day.localDate, slotBefore.slotTime);
     }
 
     // Vacancy alerts exist only for group slots (assigned ones are not open to others)
@@ -191,7 +191,7 @@ export class BookingService {
       .where(eq(trainingDays.id, current.trainingDayId))
       .limit(1);
 
-    if (day) await this.validateBookingWindow(day.localDate);
+    if (day) this.validateBookingWindow(day.localDate);
 
     const oldSlotId = current.slotId;
 
@@ -277,7 +277,7 @@ export class BookingService {
       const dedupeKey = `vacancy:${oldSlotId}:${current.id}`;
       await this.notifications.enqueueAndProcess('VACANCY', dedupeKey, {
         slotId: oldSlotId,
-        slotTime: oldSlotBefore!.slotTime,
+        slotTime: oldSlotBefore.slotTime,
         localDate: day.localDate,
         excludeMemberId: current.memberId,
       });
@@ -342,12 +342,12 @@ export class BookingService {
     return row ?? null;
   }
 
-  private async validateBeforeStart(localDate: string, slotTime: string) {
+  private validateBeforeStart(localDate: string, slotTime: string) {
     const now = this.clock.now();
     if (now >= slotStartsAt(localDate, slotTime)) throw new BadRequestException('Training has already started');
   }
 
-  private async validateBookingWindow(localDate: string) {
+  private validateBookingWindow(localDate: string) {
     const now = this.clock.now();
     const openAt = DateTime.fromISO(`${localDate}T14:00:00`, { zone: KY_ZONE });
     const closeAt = DateTime.fromISO(`${localDate}T21:00:00`, { zone: KY_ZONE });
@@ -355,7 +355,7 @@ export class BookingService {
     if (now >= closeAt) throw new BadRequestException('Booking window has closed');
   }
 
-  private async validateBeforeClose(localDate: string) {
+  private validateBeforeClose(localDate: string) {
     const now = this.clock.now();
     const closeAt = DateTime.fromISO(`${localDate}T21:00:00`, { zone: KY_ZONE });
     if (now >= closeAt) throw new BadRequestException('Booking window has closed');

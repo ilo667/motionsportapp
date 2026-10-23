@@ -75,7 +75,7 @@ function makeService(db: any, now: DateTime) {
   return new BookingService(
     { db } as any,
     mockNotifications as any,
-    mockClock as any,
+    mockClock,
     mockVacancyAlerts as any,
   );
 }

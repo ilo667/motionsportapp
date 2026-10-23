@@ -56,7 +56,7 @@ const unpublishedAnnouncement = { text: 'Записуйтесь сьогодні
 function makeService(db: any, now: DateTime) {
   const mockClock = { now: () => now };
   const mockPaymentService = { expireStale: jest.fn().mockResolvedValue(undefined) };
-  const service = new ScheduleService({ db } as any, mockClock as any, mockPaymentService as any);
+  const service = new ScheduleService({ db } as any, mockClock, mockPaymentService as any);
   // Default Mon/Wed/Fri group slots are tested separately
   jest.spyOn(service, 'ensureDefaultGroupSlots').mockResolvedValue(undefined);
   return service;
@@ -170,7 +170,7 @@ describe('ScheduleService — default Mon/Wed/Fri group slots', () => {
   // 2026-10-20 is a Tuesday → the next 21 days hold 9 Mon/Wed/Fri dates
   function makeRealService(db: any) {
     const clock = { now: () => kyivAt(10) };
-    return new ScheduleService({ db } as any, clock as any, {} as any);
+    return new ScheduleService({ db } as any, clock, {} as any);
   }
 
   function recordInserts(db: any) {

@@ -77,14 +77,14 @@ describe('Push subscriptions — admin vs member', () => {
 
   it('stores the coach device in the admin table', async () => {
     const svc = makeSvc();
-    await new PushSubscriptionsController(svc as any).subscribe(dto, { user: { type: 'admin', id: 'admin-1' } } as any);
+    await new PushSubscriptionsController(svc as any).subscribe(dto, { user: { type: 'admin', id: 'admin-1' } });
     expect(svc.upsertAdmin).toHaveBeenCalledWith('admin-1', dto.endpoint, dto.p256dh, dto.auth);
     expect(svc.upsert).not.toHaveBeenCalled();
   });
 
   it('stores a member device in the members table', async () => {
     const svc = makeSvc();
-    await new PushSubscriptionsController(svc as any).subscribe(dto, { user: { type: 'member', id: 'member-1' } } as any);
+    await new PushSubscriptionsController(svc as any).subscribe(dto, { user: { type: 'member', id: 'member-1' } });
     expect(svc.upsert).toHaveBeenCalledWith('member-1', dto.endpoint, dto.p256dh, dto.auth);
     expect(svc.upsertAdmin).not.toHaveBeenCalled();
   });
