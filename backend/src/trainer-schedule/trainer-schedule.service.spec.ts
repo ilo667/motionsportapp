@@ -76,20 +76,26 @@ describe('loadTrainerSchedule', () => {
 });
 
 describe('TrainerScheduleService.save', () => {
+  const schedule = { ensureGroupSlots: jest.fn().mockResolvedValue(undefined) };
+  beforeEach(() => schedule.ensureGroupSlots.mockClear());
+
   it('a schedule that breaks the rules: 400, nothing written', async () => {
     const { db, writes } = makeDb([]);
-    const svc = new TrainerScheduleService({ db } as any);
+    const svc = new TrainerScheduleService({ db } as any, schedule as any);
     await expect(svc.save('t2', { ...SCHEDULE, bookingOpensAt: '19:00' })).rejects.toThrow(
       new BadRequestException('Booking must open before the first training'),
     );
     expect(writes).toEqual([]);
+    expect(schedule.ensureGroupSlots).not.toHaveBeenCalled();
   });
 
   it('saves the settings and replaces the times in one transaction, then returns them', async () => {
     const { db, writes } = makeDb([[{ bookingOpensAt: '12:00', autoCreate: true }], SCHEDULE.times]);
-    const svc = new TrainerScheduleService({ db } as any);
+    const svc = new TrainerScheduleService({ db } as any, schedule as any);
     expect(await svc.save('t2', SCHEDULE)).toEqual(SCHEDULE);
     expect(db.transaction).toHaveBeenCalledTimes(1);
+    // the new trainings appear right away, not on the next schedule load
+    expect(schedule.ensureGroupSlots).toHaveBeenCalledWith('t2', { force: true });
     expect(writes).toEqual([
       {
         op: 'insert',

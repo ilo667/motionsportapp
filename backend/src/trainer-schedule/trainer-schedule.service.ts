@@ -1,13 +1,17 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
+import { ScheduleService } from '../schedule/schedule.service';
 import { trainerSchedules, trainerScheduleTimes } from '../database/schema';
 import { scheduleError, type TrainerSchedule } from './rules';
 import { loadTrainerSchedule } from './trainer-schedule.store';
 
 @Injectable()
 export class TrainerScheduleService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly schedule: ScheduleService,
+  ) {}
 
   get(trainerId: string) {
     return loadTrainerSchedule(this.database.db, trainerId);
@@ -35,6 +39,8 @@ export class TrainerScheduleService {
           .values(schedule.times.map((t) => ({ trainerId, weekday: t.weekday, slotTime: t.slotTime })));
       }
     });
+    // The trainer sees the new trainings in the calendar at once
+    await this.schedule.ensureGroupSlots(trainerId, { force: true });
     return loadTrainerSchedule(this.database.db, trainerId);
   }
 }

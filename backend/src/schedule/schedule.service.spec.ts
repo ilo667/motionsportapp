@@ -1,5 +1,9 @@
 import { DateTime } from 'luxon';
 import { ScheduleService } from './schedule.service';
+import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+
+jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
+const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
 
 const KY_ZONE = 'Europe/Kyiv';
 
@@ -61,8 +65,8 @@ function makeService(db: any, now: DateTime, packages: unknown[] = [], groupPass
     groupPassLeft: jest.fn().mockResolvedValue(groupPassLeft),
   };
   const service = new ScheduleService({ db } as any, mockClock, mockPaymentService as any, mockEntitlements as any);
-  // Default Mon/Wed/Fri group slots are tested separately
-  jest.spyOn(service, 'ensureDefaultGroupSlots').mockResolvedValue(undefined);
+  // Group trainings created from the trainer schedules are tested separately
+  jest.spyOn(service, 'ensureGroupSlots').mockResolvedValue(undefined);
   return service;
 }
 
@@ -216,8 +220,8 @@ describe('ScheduleService — no group day ahead', () => {
   });
 });
 
-describe('ScheduleService — default Mon/Wed/Fri group slots', () => {
-  // 2026-10-20 is a Tuesday → the next 21 days hold 9 Mon/Wed/Fri dates
+describe('ScheduleService — group trainings from each trainer schedule', () => {
+  // 2026-10-20 is a Tuesday; the horizon is 21 days: 2026-10-20 … 2026-11-09
   function makeRealService(db: any) {
     const clock = { now: () => kyivAt(10) };
     return new ScheduleService({ db } as any, clock, {} as any, {} as any);
@@ -238,23 +242,35 @@ describe('ScheduleService — default Mon/Wed/Fri group slots', () => {
     return values;
   }
 
-  it('adds 19:00 and 20:00 to every scheduled Mon/Wed/Fri, owned by the first trainer, never overwriting', async () => {
-    const days = [{ id: 'd-wed' }, { id: 'd-fri' }];
-    const { db } = makeDb([[{ id: 'trainer-1' }], days]);
+  const MON_10_WED_19 = {
+    bookingOpensAt: '08:00',
+    autoCreate: true,
+    times: [
+      { weekday: 1, slotTime: '10:00' },
+      { weekday: 3, slotTime: '19:00' },
+    ],
+  };
+
+  beforeEach(() => mockLoadSchedule.mockReset());
+
+  it("creates each trainer's own times on their weekdays only, 8 seats, never overwriting", async () => {
+    mockLoadSchedule.mockResolvedValue(MON_10_WED_19);
+    // reads: trainers, the scheduled days, this trainer's group slots on them
+    const days = [
+      { id: 'd-wed', localDate: '2026-10-21' },
+      { id: 'd-mon', localDate: '2026-10-26' },
+    ];
+    const { db } = makeDb([[{ id: 'trainer-2' }], days, []]);
     const values = recordInserts(db);
 
-    await makeRealService(db).ensureDefaultGroupSlots();
+    await makeRealService(db).ensureGroupSlots();
 
-    const dayRows = values[0] as { localDate: string }[];
-    expect(dayRows.map((d) => d.localDate)).toEqual([
+    expect((values[0] as { localDate: string }[]).map((d) => d.localDate)).toEqual([
       '2026-10-21',
-      '2026-10-23',
       '2026-10-26',
       '2026-10-28',
-      '2026-10-30',
       '2026-11-02',
       '2026-11-04',
-      '2026-11-06',
       '2026-11-09',
     ]);
     expect(values[1]).toEqual([
@@ -262,27 +278,66 @@ describe('ScheduleService — default Mon/Wed/Fri group slots', () => {
         trainingDayId: 'd-wed',
         slotTime: '19:00',
         trainingType: 'групові',
-        trainerId: 'trainer-1',
+        capacity: 8,
+        trainerId: 'trainer-2',
       }),
-      expect.objectContaining({ trainingDayId: 'd-wed', slotTime: '20:00', trainerId: 'trainer-1' }),
-      expect.objectContaining({ trainingDayId: 'd-fri', slotTime: '19:00' }),
-      expect.objectContaining({ trainingDayId: 'd-fri', slotTime: '20:00' }),
+      expect.objectContaining({ trainingDayId: 'd-mon', slotTime: '10:00', trainerId: 'trainer-2' }),
     ]);
   });
 
-  it('runs once per day per instance (the schedule is polled every 5 s)', async () => {
-    const { db } = makeDb([[{ id: 'trainer-1' }], [{ id: 'd-wed' }]]);
+  it('a trainer with automatic creation off gets nothing', async () => {
+    mockLoadSchedule.mockResolvedValue({ ...MON_10_WED_19, autoCreate: false });
+    const { db } = makeDb([[{ id: 'trainer-2' }]]);
+    const values = recordInserts(db);
+    await makeRealService(db).ensureGroupSlots();
+    expect(values).toHaveLength(0);
+  });
+
+  it('skips a day the trainer cancelled (a cancelled group, none active), even for a new time', async () => {
+    mockLoadSchedule.mockResolvedValue(MON_10_WED_19);
+    const days = [
+      { id: 'd-wed', localDate: '2026-10-21' },
+      { id: 'd-mon', localDate: '2026-10-26' },
+    ];
+    const { db } = makeDb([[{ id: 'trainer-2' }], days, [{ trainingDayId: 'd-wed', status: 'CANCELLED' }]]);
+    const values = recordInserts(db);
+    await makeRealService(db).ensureGroupSlots();
+    expect((values[1] as { trainingDayId: string }[]).map((v) => v.trainingDayId)).toEqual(['d-mon']);
+  });
+
+  it('a day with one cancelled and one active group is not skipped (the cancelled time stays cancelled)', async () => {
+    mockLoadSchedule.mockResolvedValue(MON_10_WED_19);
+    const days = [{ id: 'd-wed', localDate: '2026-10-21' }];
+    const { db } = makeDb([
+      [{ id: 'trainer-2' }],
+      days,
+      [
+        { trainingDayId: 'd-wed', status: 'CANCELLED' },
+        { trainingDayId: 'd-wed', status: 'ACTIVE' },
+      ],
+    ]);
+    const values = recordInserts(db);
+    await makeRealService(db).ensureGroupSlots();
+    expect((values[1] as { trainingDayId: string }[]).map((v) => v.trainingDayId)).toEqual(['d-wed']);
+  });
+
+  it('runs once per day per instance, but force (a saved schedule) runs again for that trainer', async () => {
+    mockLoadSchedule.mockResolvedValue(MON_10_WED_19);
+    const day = [{ id: 'd-wed', localDate: '2026-10-21' }];
+    const { db } = makeDb([[{ id: 'trainer-2' }], day, [], day, []]);
     const values = recordInserts(db);
     const service = makeRealService(db);
-    await service.ensureDefaultGroupSlots();
-    await service.ensureDefaultGroupSlots();
+    await service.ensureGroupSlots();
+    await service.ensureGroupSlots();
     expect(values).toHaveLength(2); // days + slots, only from the first call
+    await service.ensureGroupSlots('trainer-2', { force: true });
+    expect(values).toHaveLength(4);
   });
 
   it('creates nothing without a trainer account', async () => {
     const { db } = makeDb([[]]);
     const values = recordInserts(db);
-    await makeRealService(db).ensureDefaultGroupSlots();
+    await makeRealService(db).ensureGroupSlots();
     expect(values).toHaveLength(0);
   });
 });

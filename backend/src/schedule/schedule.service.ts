@@ -10,19 +10,14 @@ import {
   announcements,
   slotMembers,
   packageSpends,
+  admins,
 } from '../database/schema';
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { EntitlementsService } from '../purchases/entitlements.service';
-import {
-  DEFAULT_WEEKDAYS,
-  GROUP_SLOT_TIMES,
-  GROUP_TYPE,
-  KY_ZONE,
-  ASSIGNED_TYPES,
-  slotStartsAt,
-} from './training-types';
-import { getDefaultTrainerId, getMemberTrainerId } from './default-trainer';
+import { GROUP_TYPE, KY_ZONE, ASSIGNED_TYPES, slotStartsAt } from './training-types';
+import { getMemberTrainerId } from './default-trainer';
+import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 
 // An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
 const ASSIGNED_SHOWN_FOR_MINUTES = 60;
@@ -30,14 +25,16 @@ const ASSIGNED_SHOWN_FOR_MINUTES = 60;
 type DayRow = typeof trainingDays.$inferSelect;
 
 // Group trainings appear by themselves on these weekdays, so they exist even if the trainer forgets
-const DEFAULT_HORIZON_DAYS = 21;
+// Group trainings are created this many days ahead
+const GROUP_HORIZON_DAYS = 21;
+const GROUP_CAPACITY = 8;
 
 @Injectable()
 export class ScheduleService {
   private readonly logger = new Logger(ScheduleService.name);
 
-  // Date on which this instance last created the default group slots (see ensureDefaultGroupSlots)
-  private defaultSlotsEnsuredFor: string | null = null;
+  // Date on which this instance last created the group trainings of every trainer (see ensureGroupSlots)
+  private groupSlotsEnsuredFor: string | null = null;
 
   constructor(
     private readonly database: DatabaseService,
@@ -52,7 +49,7 @@ export class ScheduleService {
     await this.paymentService
       .expireStale()
       .catch((err: unknown) => this.logger.warn(`Expire stale payments failed: ${String(err)}`));
-    await this.ensureDefaultGroupSlots();
+    await this.ensureGroupSlots();
 
     const now = this.clock.now();
     const today = now.toISODate()!;
@@ -271,58 +268,77 @@ export class ScheduleService {
     }));
   }
 
-  // Mon/Wed/Fri 19:00 and 20:00 group slots for the next 3 weeks, owned by the first trainer. Idempotent:
-  // a time already taken (by any training, even a cancelled one) is left alone, and days the trainer
-  // cancelled are skipped, so the trainer's changes are never undone
-  async ensureDefaultGroupSlots() {
+  // Group trainings of each trainer for the next 3 weeks, from their «Мій розклад» (the first trainer without one
+  // keeps Mon/Wed/Fri 19:00 and 20:00). Only adds: a time already taken (by any training, even a cancelled one) is
+  // left alone, a CANCELLED day is skipped, and so is a day where the trainer cancelled their own trainings (a
+  // cancelled group, none active), so the trainer's changes are never undone. Without `trainerId`: every trainer,
+  // once per day per instance (the schedule is polled every 5 s). `force`: a schedule was just saved
+  async ensureGroupSlots(trainerId?: string, opts: { force?: boolean } = {}) {
     const now = this.clock.now();
-    // Runs on every schedule load (polled every 5 s in the booking window): once per day per instance is enough,
-    // the horizon only moves at midnight
     const today = now.toISODate()!;
-    if (this.defaultSlotsEnsuredFor === today) return;
+    if (!trainerId && !opts.force && this.groupSlotsEnsuredFor === today) return;
 
+    const trainerIds = trainerId
+      ? [trainerId]
+      : (await this.database.db.select({ id: admins.id }).from(admins)).map((a) => a.id);
+    for (const id of trainerIds) await this.ensureTrainerGroupSlots(id, now);
+    if (!trainerId) this.groupSlotsEnsuredFor = today;
+  }
+
+  private async ensureTrainerGroupSlots(trainerId: string, now: DateTime) {
+    const schedule = await loadTrainerSchedule(this.database.db, trainerId);
+    if (!schedule.autoCreate || schedule.times.length === 0) return;
+
+    const timesOn = (weekday: number) => schedule.times.filter((t) => t.weekday === weekday).map((t) => t.slotTime);
     const dates: string[] = [];
-    for (let i = 0; i < DEFAULT_HORIZON_DAYS; i++) {
+    for (let i = 0; i < GROUP_HORIZON_DAYS; i++) {
       const d = now.plus({ days: i });
-      if (DEFAULT_WEEKDAYS.includes(d.weekday)) dates.push(d.toISODate()!);
+      if (timesOn(d.weekday).length > 0) dates.push(d.toISODate()!);
     }
     if (dates.length === 0) return;
 
-    const trainerId = await getDefaultTrainerId(this.database.db);
-    if (!trainerId) return; // no trainer account yet
-
     await this.database.db
       .insert(trainingDays)
-      .values(
-        dates.map((localDate) => ({
-          localDate,
-          status: 'SCHEDULED',
-        })),
-      )
+      .values(dates.map((localDate) => ({ localDate, status: 'SCHEDULED' })))
       .onConflictDoNothing();
 
     const days = await this.database.db
-      .select({ id: trainingDays.id })
+      .select({ id: trainingDays.id, localDate: trainingDays.localDate })
       .from(trainingDays)
       .where(and(inArray(trainingDays.localDate, dates), eq(trainingDays.status, 'SCHEDULED')));
-    if (days.length > 0) {
-      await this.database.db
-        .insert(trainingSlots)
-        .values(
-          days.flatMap((day) =>
-            GROUP_SLOT_TIMES.map((slotTime) => ({
-              trainingDayId: day.id,
-              slotTime,
-              status: 'ACTIVE' as const,
-              trainingType: GROUP_TYPE,
-              capacity: 8,
-              bookedCount: 0,
-              trainerId,
-            })),
+    if (days.length === 0) return;
+
+    const own = await this.database.db
+      .select({ trainingDayId: trainingSlots.trainingDayId, status: trainingSlots.status })
+      .from(trainingSlots)
+      .where(
+        and(
+          inArray(
+            trainingSlots.trainingDayId,
+            days.map((d) => d.id),
           ),
-        )
-        .onConflictDoNothing();
-    }
-    this.defaultSlotsEnsuredFor = today;
+          eq(trainingSlots.trainerId, trainerId),
+          eq(trainingSlots.trainingType, GROUP_TYPE),
+        ),
+      );
+    const cancelledByTrainer = (dayId: string) => {
+      const slots = own.filter((s) => s.trainingDayId === dayId);
+      return slots.some((s) => s.status === 'CANCELLED') && !slots.some((s) => s.status === 'ACTIVE');
+    };
+
+    const rows = days
+      .filter((day) => !cancelledByTrainer(day.id))
+      .flatMap((day) =>
+        timesOn(DateTime.fromISO(day.localDate, { zone: KY_ZONE }).weekday).map((slotTime) => ({
+          trainingDayId: day.id,
+          slotTime,
+          status: 'ACTIVE' as const,
+          trainingType: GROUP_TYPE,
+          capacity: GROUP_CAPACITY,
+          bookedCount: 0,
+          trainerId,
+        })),
+      );
+    if (rows.length > 0) await this.database.db.insert(trainingSlots).values(rows).onConflictDoNothing();
   }
 }
