@@ -7,7 +7,7 @@ import { NotificationService } from './notification.service';
 import { AnnouncementsService } from '../ai/announcements.service';
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
-import { EntitlementsService } from '../purchases/entitlements.service';
+import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
 import { trainingDays, trainingSlots, bookings, attendance } from '../database/schema';
 import { GROUP_TYPE, KY_ZONE } from '../schedule/training-types';
 import { getDefaultTrainerId } from '../schedule/default-trainer';
@@ -106,7 +106,7 @@ export class InternalCronController {
       .where(and(eq(trainingSlots.trainingDayId, day.id), eq(trainingSlots.status, 'ACTIVE')));
 
     const unmarkedBookings = await this.database.db
-      .select({ id: bookings.id, trainerId: trainingSlots.trainerId })
+      .select({ id: bookings.id, memberId: bookings.memberId, trainerId: trainingSlots.trainerId })
       .from(bookings)
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
       .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
@@ -118,7 +118,7 @@ export class InternalCronController {
 
     const markedAt = now.toJSDate();
     await this.database.db.transaction(async (tx) => {
-      for (const booking of unmarkedBookings) {
+      for (const booking of inLockOrder(unmarkedBookings)) {
         // Marked in the name of the training's trainer; spends from the package like a ✓ by hand
         await tx
           .insert(attendance)

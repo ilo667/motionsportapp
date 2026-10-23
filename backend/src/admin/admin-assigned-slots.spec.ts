@@ -241,9 +241,31 @@ describe('Attendance spends from the package', () => {
 
   it('«Підтвердити всіх» spends for every booking', async () => {
     const entitlements = { syncSpend: jest.fn() };
-    const { db } = makeDb([[{ id: 'slot-1', trainerId: TRAINER }], [{ id: 'b1' }, { id: 'b2' }]]);
+    const { db } = makeDb([
+      [{ id: 'slot-1', trainerId: TRAINER }],
+      [
+        { id: 'b1', memberId: 'm1' },
+        { id: 'b2', memberId: 'm2' },
+      ],
+    ]);
     await makeService(db, entitlements).markAllAttendance('slot-1', TRAINER);
     expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b1', 'b2']);
+  });
+
+  // Packages are locked member by member; the same order everywhere means two batches (this and the 22:00
+  // cron) wait for each other instead of deadlocking and rolling back the whole batch
+  it('«Підтвердити всіх» marks members in a fixed order (by member id)', async () => {
+    const entitlements = { syncSpend: jest.fn() };
+    const { db } = makeDb([
+      [{ id: 'slot-1', trainerId: TRAINER }],
+      [
+        { id: 'b1', memberId: 'm-c' },
+        { id: 'b2', memberId: 'm-a' },
+        { id: 'b3', memberId: 'm-b' },
+      ],
+    ]);
+    await makeService(db, entitlements).markAllAttendance('slot-1', TRAINER);
+    expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b2', 'b3', 'b1']);
   });
 });
 

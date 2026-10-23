@@ -23,6 +23,13 @@ type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 type Q = Db | Tx;
 
+// The order a batch of marks («Підтвердити всіх», the 22:00 cron) goes through its bookings. syncSpend locks the
+// member's packages, so two batches over the same members must take them in the same order: otherwise each holds
+// a member the other waits for, Postgres breaks the deadlock and rolls back a whole batch
+export function inLockOrder<T extends { id: string; memberId: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => a.memberId.localeCompare(b.memberId) || a.id.localeCompare(b.id));
+}
+
 export type PackageView = {
   id: string;
   trainingType: 'групові' | 'персональні' | 'спліт';

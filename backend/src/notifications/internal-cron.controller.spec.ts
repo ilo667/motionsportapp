@@ -77,8 +77,8 @@ describe('InternalCronController — 22:00 auto-confirm', () => {
       [{ id: 'day-1', status: 'SCHEDULED' }],
       [{ id: 'slot-1' }, { id: 'slot-2' }],
       [
-        { id: 'b1', trainerId: 'trainer-2' },
-        { id: 'b2', trainerId: 'trainer-1' },
+        { id: 'b1', memberId: 'm1', trainerId: 'trainer-2' },
+        { id: 'b2', memberId: 'm2', trainerId: 'trainer-1' },
       ],
     ];
     const values: Record<string, unknown>[] = [];
@@ -104,5 +104,33 @@ describe('InternalCronController — 22:00 auto-confirm', () => {
       ['b2', 'trainer-1'],
     ]);
     expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b1', 'b2']);
+  });
+
+  // Same lock order as «Підтвердити всіх», so the two never deadlock
+  it('marks members in a fixed order (by member id, then booking id)', async () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.CRON_SECRET;
+    const reads: unknown[][] = [
+      [{ id: 'day-1', status: 'SCHEDULED' }],
+      [{ id: 'slot-1' }],
+      [
+        { id: 'b3', memberId: 'm-b', trainerId: 't' },
+        { id: 'b2', memberId: 'm-a', trainerId: 't' },
+        { id: 'b1', memberId: 'm-b', trainerId: 't' },
+      ],
+    ];
+    function link(): any {
+      const chain: any = { then: (r: (v: unknown) => void) => r(reads.shift() ?? []) };
+      for (const m of ['from', 'where', 'limit', 'innerJoin', 'leftJoin', 'onConflictDoNothing', 'values'])
+        chain[m] = () => chain;
+      return chain;
+    }
+    const db: any = { select: () => link(), insert: () => link() };
+    db.transaction = (fn: (tx: unknown) => unknown) => fn(db);
+    const entitlements = { syncSpend: jest.fn() };
+
+    const { controller } = makeController(db, entitlements);
+    await controller.autoConfirmAttendance(undefined as any);
+    expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b2', 'b1', 'b3']);
   });
 });

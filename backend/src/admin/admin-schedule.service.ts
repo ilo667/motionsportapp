@@ -20,7 +20,7 @@ import type { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 import type { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { NotificationService } from '../notifications/notification.service';
 import { ClockService } from '../clock/clock.service';
-import { EntitlementsService } from '../purchases/entitlements.service';
+import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
 import {
   GROUP_SLOT_TIMES,
   GROUP_TYPE,
@@ -615,7 +615,7 @@ export class AdminScheduleService {
   async markAllAttendance(slotId: string, adminId: string) {
     await this.ownSlot(adminId, slotId);
     const activeBookings = await this.database.db
-      .select({ id: bookings.id })
+      .select({ id: bookings.id, memberId: bookings.memberId })
       .from(bookings)
       .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
 
@@ -623,7 +623,7 @@ export class AdminScheduleService {
 
     const now = new Date();
     await this.database.db.transaction(async (tx) => {
-      for (const booking of activeBookings) {
+      for (const booking of inLockOrder(activeBookings)) {
         await tx
           .insert(attendance)
           .values({ bookingId: booking.id, status: 'PRESENT', markedAt: now, markedByAdminId: adminId })
