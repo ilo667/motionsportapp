@@ -15,9 +15,9 @@ const TYPE_LABEL: Record<MemberVisit["trainingType"], string> = {
 };
 
 const MARK: Record<MemberVisit["attendance"], { text: string; className: string }> = {
-  PRESENT: { text: "✓ прийшли", className: "text-accent" },
-  ABSENT: { text: "✗ не прийшли", className: "text-danger" },
-  UNMARKED: { text: "— без відмітки", className: "text-subtle" },
+  PRESENT: { text: "✓ Відвідано", className: "text-accent" },
+  ABSENT: { text: "✗ Пропущено", className: "text-danger" },
+  UNMARKED: { text: "— Не відмічено", className: "text-subtle" },
 };
 
 const sectionTitle = "text-subtle text-xs font-semibold uppercase tracking-wide mb-2";
@@ -133,10 +133,11 @@ export default function ClientPage() {
             <Visits memberId={member.id} />
           </section>
 
-          <section>
-            <h2 className={sectionTitle}>Скасування · {member.recentCancellations} за 30 днів</h2>
-            <CancellationHistory memberId={member.id} />
-          </section>
+          <CancellationHistory
+            memberId={member.id}
+            recentCancellations={member.recentCancellations}
+            headingClass={sectionTitle}
+          />
         </div>
       )}
     </PageLayout>

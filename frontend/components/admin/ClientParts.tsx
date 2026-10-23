@@ -43,27 +43,69 @@ export function PurchaseSummary({ m }: { m: AdminMember }) {
 
 export function trainingLabel(c: MemberCancellation) {
   const day = new Date(c.localDate + "T12:00:00").toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
-  return `${day}, ${c.slotTime}`;
+  // A move reads «23 жовт. · 19:00 → 20:00»
+  return c.switchedToTime ? `${day} · ${c.slotTime} → ${c.switchedToTime}` : `${day}, ${c.slotTime}`;
 }
 
-// Latest cancellations and moves of one client
-export function CancellationHistory({ memberId }: { memberId: string }) {
+const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Latest cancellations and moves of one client, as two blocks: «Скасування» and «Переноси».
+// Cancellations over 30 days come from the server (the same number as the list page); moves are counted here
+export function CancellationHistory({
+  memberId,
+  recentCancellations,
+  headingClass,
+}: {
+  memberId: string;
+  recentCancellations: number;
+  headingClass: string;
+}) {
   const [items, setItems] = useState<MemberCancellation[] | null>(null);
+  const [recentMoves, setRecentMoves] = useState(0);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    api.getMemberCancellations(memberId).then(setItems).catch(() => setFailed(true));
+    api
+      .getMemberCancellations(memberId)
+      .then((list) => {
+        const monthAgo = Date.now() - MONTH_MS;
+        setRecentMoves(
+          list.filter((c) => c.switchedToTime && c.cancelledAt && new Date(c.cancelledAt).getTime() >= monthAgo)
+            .length,
+        );
+        setItems(list);
+      })
+      .catch(() => setFailed(true));
   }, [memberId]);
 
-  if (failed) return <p className="text-danger text-xs">Не вдалося завантажити історію</p>;
-  if (!items) return <p className="text-muted text-xs">Завантаження...</p>;
-  if (items.length === 0) return <p className="text-muted text-xs">Скасувань і перенесень не було</p>;
+  const status = failed ? (
+    <p className="text-danger text-xs">Не вдалося завантажити історію</p>
+  ) : !items ? (
+    <p className="text-muted text-xs">Завантаження...</p>
+  ) : null;
+  const cancelled = (items ?? []).filter((c) => !c.switchedToTime);
+  const moved = (items ?? []).filter((c) => c.switchedToTime);
+
+  const block = (title: string, list: MemberCancellation[]) => (
+    <section>
+      <h2 className={headingClass}>{title}</h2>
+      {status ??
+        (list.length === 0 ? (
+          <p className="text-subtle">Не було</p>
+        ) : (
+          <CancellationList
+            items={list.map((c) => ({ ...c, label: trainingLabel(c), moveInLabel: true }))}
+            withDate
+          />
+        ))}
+    </section>
+  );
+
   return (
-    <CancellationList
-      title="Історія скасувань"
-      items={items.map((c) => ({ ...c, label: trainingLabel(c) }))}
-      withDate
-    />
+    <>
+      {block(`Скасування · ${recentCancellations} за 30 днів`, cancelled)}
+      {block(`Переноси · ${items ? recentMoves : "…"} за 30 днів`, moved)}
+    </>
   );
 }
 

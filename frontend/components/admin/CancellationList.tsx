@@ -15,10 +15,11 @@ export function formatCancelledAt(iso: string | null, withDate: boolean): string
 
 export interface CancellationItem extends Cancellation {
   label?: string; // what to show instead of the name (client history shows the training date)
+  moveInLabel?: boolean; // the label already says «19:00 → 20:00», so no «на 20:00» badge
 }
 
 interface CancellationListProps {
-  title: string;
+  title?: string; // none when the page already has a heading
   items: CancellationItem[];
   withDate?: boolean;
 }
@@ -29,7 +30,7 @@ export function CancellationList({ title, items, withDate = false }: Cancellatio
 
   return (
     <div className="flex flex-col space-y-2">
-      <p className="text-muted text-xs uppercase tracking-wide">{title}</p>
+      {title && <p className="text-muted text-xs uppercase tracking-wide">{title}</p>}
       <ul className="flex flex-col space-y-2">
         {items.map((c) => (
           <li key={c.bookingId} className="text-sm">
@@ -37,9 +38,11 @@ export function CancellationList({ title, items, withDate = false }: Cancellatio
               <span className="text-body">
                 {c.label ?? c.displayName}
                 {c.switchedToTime ? (
-                  <span className="ml-2 text-xs text-amber-400 border border-amber-400/40 rounded-full px-2">
-                    на {c.switchedToTime}
-                  </span>
+                  !c.moveInLabel && (
+                    <span className="ml-2 text-xs text-amber-400 border border-amber-400/40 rounded-full px-2">
+                      на {c.switchedToTime}
+                    </span>
+                  )
                 ) : (
                   <span className="ml-2 text-xs text-danger border border-danger/40 rounded-full px-2">скасовано</span>
                 )}
