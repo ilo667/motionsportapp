@@ -381,7 +381,8 @@ export default function CalendarPage() {
                   step={900}
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className={`${FIELD_CLASS} [color-scheme:dark]`}
+                  // iOS Safari gives a time input its own min width and ignores w-full without these
+                  className={`${FIELD_CLASS} block min-w-0 appearance-none [color-scheme:dark] [&::-webkit-date-and-time-value]:text-left`}
                 />
               </div>
             )}
@@ -407,7 +408,7 @@ export default function CalendarPage() {
                       ))}
                   </select>
                 ))}
-                <p className="text-muted text-xs">Тренування побачать і зможуть оплатити тільки вибрані люди</p>
+                <p className="text-muted text-xs">Тренування побачать тільки вибрані люди</p>
               </div>
             )}
 
