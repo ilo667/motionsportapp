@@ -12,8 +12,9 @@ export class PaymentController {
   @Post('checkout')
   @UseGuards(SessionGuard, MemberGuard)
   @HttpCode(200)
+  // Pay (or continue paying) the member's own LiqPay purchase
   createCheckout(@Body() dto: CreateCheckoutDto, @CurrentUser() user: SessionUser) {
-    return this.paymentService.createCheckout(dto.slotId, user.id);
+    return this.paymentService.checkoutPurchase(dto.purchaseId, user.id);
   }
 
   @Get('status')

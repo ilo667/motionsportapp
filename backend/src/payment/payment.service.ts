@@ -1,20 +1,17 @@
 import { Injectable, ConflictException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { and, eq, inArray, lt, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lt, ne } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { trainingSlots, trainingDays, bookings, payments, slotMembers } from '../database/schema';
+import { payments, purchases, purchaseItems } from '../database/schema';
 import { ClockService } from '../clock/clock.service';
-import { ASSIGNED_TYPES, slotStartsAt } from '../schedule/training-types';
+import { EntitlementsService } from '../purchases/entitlements.service';
 import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } from './liqpay.helper';
 
-// Price of a personal / split training, UAH. Hard-coded on purpose, same as PRICE_UAH in frontend/lib/liqpay.ts:
-// change both together (moving it to one place is a later decision)
-const PRICE_UAH = 700;
 const SUCCESS_STATUSES = ['success', 'sandbox'];
 const FAILED_STATUSES = ['failure', 'error', 'reversed'];
 // Stale PENDING payments handled per expireStale() run; the rest wait for the next schedule load
 const EXPIRE_BATCH = 10;
 
-// REPLACED: superseded by a newer attempt for the same booking (member pressed "Оплатити" again)
+// REPLACED: superseded by a newer attempt for the same purchase (member pressed "Оплатити" again)
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'REPLACED';
 
 const LOGGED_LIQPAY_FIELDS = [
@@ -33,9 +30,13 @@ const LOGGED_LIQPAY_FIELDS = [
   'end_date',
 ];
 
-function newOrderId(bookingId: string) {
-  return `mg-${Date.now()}-${bookingId.substring(0, 8)}`;
+function newOrderId(purchaseId: string) {
+  return `mg-${Date.now()}-${purchaseId.substring(0, 8)}`;
 }
+
+// The success transition reached a purchase that no longer awaits payment (cancelled meanwhile):
+// the whole transaction is rolled back and the money is handled by hand
+class PurchaseNotAwaitingPayment extends Error {}
 
 @Injectable()
 export class PaymentService {
@@ -44,6 +45,7 @@ export class PaymentService {
   constructor(
     private readonly database: DatabaseService,
     private readonly clock: ClockService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   private get publicKey() {
@@ -57,116 +59,55 @@ export class PaymentService {
     return parseInt(process.env.PAYMENT_EXPIRY_MINUTES ?? '15', 10) * 60 * 1000;
   }
 
-  async createCheckout(slotId: string, memberId: string) {
+  // LiqPay checkout for the member's own PENDING LiqPay purchase. The amount is the purchase total, fixed when it
+  // was made. Pressing "Оплатити" again continues the same purchase with a new order id
+  async checkoutPurchase(purchaseId: string, memberId: string) {
     if (!this.publicKey || !this.privateKey) {
       throw new BadRequestException('Payment is not configured');
     }
 
-    const [slot] = await this.database.db.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).limit(1);
-
-    if (!slot) throw new NotFoundException('Slot not found');
-    if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
-    if (!ASSIGNED_TYPES.includes(slot.trainingType)) {
-      throw new BadRequestException('This slot does not require payment');
-    }
-
-    // Assigned slots are visible and payable only for the members the trainer assigned
-    const [assigned] = await this.database.db
-      .select({ memberId: slotMembers.memberId })
-      .from(slotMembers)
-      .where(and(eq(slotMembers.slotId, slotId), eq(slotMembers.memberId, memberId)))
+    const [purchase] = await this.database.db
+      .select({ id: purchases.id, status: purchases.status, method: purchases.method, totalUah: purchases.totalUah })
+      .from(purchases)
+      .where(and(eq(purchases.id, purchaseId), eq(purchases.memberId, memberId)))
       .limit(1);
-    if (!assigned) throw new NotFoundException('Slot not found');
+    if (!purchase || purchase.method !== 'LIQPAY') throw new NotFoundException('Purchase not found');
+    if (purchase.status !== 'PENDING') throw new ConflictException('Purchase is no longer awaiting payment');
 
-    const [day] = await this.database.db
-      .select({ localDate: trainingDays.localDate, status: trainingDays.status })
-      .from(trainingDays)
-      .where(eq(trainingDays.id, slot.trainingDayId))
-      .limit(1);
-    if (!day || day.status !== 'SCHEDULED') throw new ConflictException('Training day is not scheduled');
-    if (this.clock.now() >= slotStartsAt(day.localDate, slot.slotTime)) {
-      throw new BadRequestException('Training has already started');
-    }
+    const lines = await this.database.db
+      .select({ title: purchaseItems.title, optionLabel: purchaseItems.optionLabel })
+      .from(purchaseItems)
+      .where(eq(purchaseItems.purchaseId, purchaseId));
+    const description = `Motion Gym: ${lines.map((l) => (l.optionLabel ? `${l.title} · ${l.optionLabel}` : l.title)).join(' + ')}`;
 
-    // "Оплатити" on an own PENDING booking continues that booking instead of creating a new one
-    const resumed = await this.resumePendingCheckout(slotId, memberId);
+    const resumed = await this.resumePendingCheckout(purchase.id, purchase.totalUah);
     if (resumed === 'PAID') {
-      this.logger.log(`Checkout: member=${memberId} slot=${slotId} — previous attempt already paid, no redirect`);
+      this.logger.log(
+        `Checkout: member=${memberId} purchase=${purchaseId} — previous attempt already paid, no redirect`,
+      );
       return { status: 'PAID' as const };
     }
-    if (resumed) return this.buildCheckout(resumed);
+    if (resumed === 'FAILED') throw new ConflictException('Payment failed, start a new purchase');
+    if (resumed) return this.buildCheckout(resumed, purchase.totalUah, description);
 
-    let orderId = '';
+    const orderId = newOrderId(purchase.id);
+    await this.database.db
+      .insert(payments)
+      .values({ purchaseId: purchase.id, orderId, amount: purchase.totalUah, currency: 'UAH', status: 'PENDING' });
 
-    try {
-      await this.database.db.transaction(async (tx) => {
-        const [locked] = await tx
-          .select()
-          .from(trainingSlots)
-          .where(eq(trainingSlots.id, slotId))
-          .for('update')
-          .limit(1);
-
-        if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is no longer available');
-        if (locked.bookedCount >= locked.capacity) throw new ConflictException('Slot is full');
-
-        // Assigned bookings don't limit other bookings that day, only a second one on the same slot
-        const [existing] = await tx
-          .select({ id: bookings.id })
-          .from(bookings)
-          .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
-          .limit(1);
-
-        if (existing) throw new ConflictException('You already booked this training');
-
-        const [inserted] = await tx
-          .insert(bookings)
-          .values({ memberId, slotId, status: 'ACTIVE', paymentStatus: 'PENDING' })
-          .returning({ id: bookings.id });
-
-        orderId = newOrderId(inserted.id);
-
-        await tx.insert(payments).values({
-          bookingId: inserted.id,
-          orderId,
-          amount: PRICE_UAH,
-          currency: 'UAH',
-          status: 'PENDING',
-        });
-
-        await tx
-          .update(trainingSlots)
-          .set({ bookedCount: sql`${trainingSlots.bookedCount} + 1` })
-          .where(eq(trainingSlots.id, slotId));
-      });
-    } catch (err: unknown) {
-      if ((err as { code?: string })?.code === '23505') {
-        throw new ConflictException('You already booked this training');
-      }
-      throw err;
-    }
-
-    this.logger.log(`Checkout: member=${memberId} slot=${slotId} — new booking, order=${orderId}`);
-    return this.buildCheckout(orderId);
+    this.logger.log(`Checkout: member=${memberId} purchase=${purchaseId} — new order=${orderId}`);
+    return this.buildCheckout(orderId, purchase.totalUah, description);
   }
 
-  // Returns a fresh order id for the member's PENDING booking on this slot, 'PAID' if LiqPay says
-  // the previous attempt actually succeeded, or null when there is nothing to resume.
-  // 'PAID' is already a string; kept in the type to document the special value
+  // Returns a fresh order id for the purchase's PENDING payment, 'PAID' if LiqPay says the previous attempt
+  // actually succeeded, 'FAILED' if it failed (the purchase is over), or null when there is nothing to resume.
+  // 'PAID' / 'FAILED' are already strings; kept in the type to document the special values
   // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
-  private async resumePendingCheckout(slotId: string, memberId: string): Promise<string | 'PAID' | null> {
+  private async resumePendingCheckout(purchaseId: string, amount: number): Promise<string | 'PAID' | 'FAILED' | null> {
     const [pending] = await this.database.db
-      .select({ id: payments.id, bookingId: payments.bookingId, orderId: payments.orderId })
+      .select({ id: payments.id, purchaseId: payments.purchaseId, orderId: payments.orderId })
       .from(payments)
-      .innerJoin(bookings, eq(bookings.id, payments.bookingId))
-      .where(
-        and(
-          eq(bookings.memberId, memberId),
-          eq(bookings.slotId, slotId),
-          eq(bookings.status, 'ACTIVE'),
-          eq(payments.status, 'PENDING'),
-        ),
-      )
+      .where(and(eq(payments.purchaseId, purchaseId), eq(payments.status, 'PENDING')))
       .limit(1);
 
     if (!pending) return null;
@@ -176,48 +117,40 @@ export class PaymentService {
       const applied = await this.applyLiqpayStatus(pending, remote);
       if (applied === 'PAID') return 'PAID';
       if (applied === 'FAILED') {
-        this.logger.log(`Checkout: previous order=${pending.orderId} failed — creating a fresh booking`);
-        return null; // booking cancelled, seat freed — caller creates a fresh one
+        this.logger.log(`Checkout: previous order=${pending.orderId} failed — purchase is over`);
+        return 'FAILED';
       }
     }
 
-    // LiqPay may refuse to reuse an order_id that already had an attempt, so issue a new one for the same booking
-    const orderId = newOrderId(pending.bookingId);
+    // LiqPay may refuse to reuse an order_id that already had an attempt, so issue a new one for the same purchase
+    const orderId = newOrderId(purchaseId);
     await this.database.db.transaction(async (tx) => {
       const replaced = await tx
         .update(payments)
         .set({ status: 'REPLACED', updatedAt: new Date() })
         .where(and(eq(payments.id, pending.id), eq(payments.status, 'PENDING')))
         .returning({ id: payments.id });
-      if (replaced.length === 0) throw new ConflictException('Payment status changed, refresh the schedule');
+      if (replaced.length === 0) throw new ConflictException('Payment status changed, refresh the page');
 
-      await tx.insert(payments).values({
-        bookingId: pending.bookingId,
-        orderId,
-        amount: PRICE_UAH,
-        currency: 'UAH',
-        status: 'PENDING',
-      });
+      await tx.insert(payments).values({ purchaseId, orderId, amount, currency: 'UAH', status: 'PENDING' });
     });
-    this.logger.log(
-      `Checkout: member=${memberId} slot=${slotId} — resumed booking=${pending.bookingId}, order ${pending.orderId} → REPLACED by ${orderId}`,
-    );
+    this.logger.log(`Checkout: purchase=${purchaseId} — order ${pending.orderId} → REPLACED by ${orderId}`);
     return orderId;
   }
 
-  private buildCheckout(orderId: string) {
+  private buildCheckout(orderId: string, amount: number, description: string) {
     const params = {
       version: 3,
       public_key: this.publicKey,
       action: 'pay',
-      amount: PRICE_UAH,
+      amount,
       currency: 'UAH',
-      description: 'Персональне тренування Motion Gym',
+      description,
       order_id: orderId,
       server_url: process.env.LIQPAY_SERVER_URL ?? '',
       result_url: `${process.env.FRONTEND_URL ?? ''}/payment/return?order=${orderId}`,
-      // LiqPay closes the order at the same moment our expiry releases the booking,
-      // so an old LiqPay tab can't be paid after the seat is gone. Format: UTC "YYYY-MM-DD HH:mm:ss"
+      // LiqPay closes the order at the same moment our expiry ends the purchase,
+      // so an old LiqPay tab can't be paid after it is gone. Format: UTC "YYYY-MM-DD HH:mm:ss"
       expired_date: new Date(Date.now() + this.expiryMs).toISOString().replace('T', ' ').slice(0, 19),
     };
 
@@ -241,6 +174,12 @@ export class PaymentService {
     const [payment] = await this.database.db.select().from(payments).where(eq(payments.orderId, orderId)).limit(1);
 
     if (!payment) return { ok: true };
+    // Old per-training payments (before purchases): nothing to activate any more, keep the evidence
+    if (!payment.purchaseId) {
+      this.logger.warn(`LiqPay callback: order=${orderId} is an old per-training payment — ignored`);
+      await this.saveRawCallback(payment.id, decoded);
+      return { ok: true };
+    }
     if (payment.status === 'PENDING') {
       await this.applyLiqpayStatus(payment, decoded);
       return { ok: true };
@@ -250,17 +189,11 @@ export class PaymentService {
       `LiqPay callback: order=${orderId} ignored as PENDING handler — payment is already ${payment.status}`,
     );
     if (SUCCESS_STATUSES.includes(decoded.status as string) && payment.status !== 'PAID') {
-      // Member paid in an old LiqPay tab after pressing "Оплатити" again — still valid while the booking awaits payment
-      if (payment.status === 'REPLACED' && (await this.isAwaitingPayment(payment.bookingId))) {
+      // Member paid in an old LiqPay tab after pressing "Оплатити" again — still valid while the purchase awaits payment
+      if (payment.status === 'REPLACED' && (await this.isAwaitingPayment(payment.purchaseId))) {
         await this.applyLiqpayStatus(payment, decoded);
       } else {
-        this.logger.error(`LiqPay: order=${orderId} paid after it was ${payment.status} — needs manual handling`);
-        // Keep the evidence (payment_id for a refund) in the DB — runtime logs expire in ~30 min.
-        // Status stays as is; find these with: status <> 'PAID' AND raw_callback->>'status' IN ('success','sandbox')
-        await this.database.db
-          .update(payments)
-          .set({ rawCallback: decoded, updatedAt: new Date() })
-          .where(eq(payments.id, payment.id));
+        await this.needsManualHandling(payment, decoded);
       }
     }
     return { ok: true };
@@ -269,7 +202,7 @@ export class PaymentService {
   // Used by /payment/return. Asks LiqPay directly while still PENDING, so the page
   // shows the real result even if the callback is late or lost.
   // errCode is set when LiqPay rejected an attempt but the order is still open (status=try_again);
-  // expiresAt — when a still PENDING booking will be released
+  // expiresAt — when a still PENDING purchase will expire
   async getStatus(
     orderId: string,
     memberId: string,
@@ -277,13 +210,13 @@ export class PaymentService {
     const [payment] = await this.database.db
       .select({
         id: payments.id,
-        bookingId: payments.bookingId,
+        purchaseId: payments.purchaseId,
         status: payments.status,
         createdAt: payments.createdAt,
       })
       .from(payments)
-      .innerJoin(bookings, eq(bookings.id, payments.bookingId))
-      .where(and(eq(payments.orderId, orderId), eq(bookings.memberId, memberId)))
+      .innerJoin(purchases, eq(purchases.id, payments.purchaseId))
+      .where(and(eq(payments.orderId, orderId), eq(purchases.memberId, memberId)))
       .limit(1);
 
     if (!payment) throw new NotFoundException('Payment not found');
@@ -314,9 +247,9 @@ export class PaymentService {
   async expireStale() {
     const cutoff = new Date(Date.now() - this.expiryMs);
     const stale = await this.database.db
-      .select({ id: payments.id, bookingId: payments.bookingId, orderId: payments.orderId })
+      .select({ id: payments.id, purchaseId: payments.purchaseId, orderId: payments.orderId })
       .from(payments)
-      .where(and(eq(payments.status, 'PENDING'), lt(payments.createdAt, cutoff)))
+      .where(and(eq(payments.status, 'PENDING'), lt(payments.createdAt, cutoff), isNotNull(payments.purchaseId)))
       .limit(EXPIRE_BATCH);
 
     // In parallel: runs on every schedule load, so a slow LiqPay costs one timeout, not one per payment
@@ -326,12 +259,12 @@ export class PaymentService {
   }
 
   // true when this call cancelled the payment
-  private async expireOne(p: { id: string; bookingId: string; orderId: string }): Promise<boolean> {
+  private async expireOne(p: { id: string; purchaseId: string | null; orderId: string }): Promise<boolean> {
     // Reconcile before cancelling — the callback may have been lost while the member actually paid
     const remote = await this.fetchLiqpayStatus(p.orderId);
     if (!remote) {
       this.logger.warn(`Expire: order=${p.orderId} skipped — LiqPay unreachable, retry next run`);
-      return false; // retry next run rather than cancel a possibly paid booking
+      return false; // retry next run rather than cancel a possibly paid purchase
     }
     if (remote.result === 'ok' && SUCCESS_STATUSES.includes(remote.status as string)) {
       this.logger.warn(`Expire: order=${p.orderId} was actually paid (lost callback) → PAID`);
@@ -339,45 +272,60 @@ export class PaymentService {
       return false;
     }
     if (await this.cancelPayment(p, 'EXPIRED')) {
-      this.logger.log(`Expire: order=${p.orderId} → EXPIRED, booking=${p.bookingId} cancelled`);
+      this.logger.log(`Expire: order=${p.orderId} → EXPIRED, purchase=${p.purchaseId} expired`);
       return true;
     }
     this.logger.log(`Expire: order=${p.orderId} skipped — already handled by another request`);
     return false;
   }
 
-  // Single place that maps a LiqPay status onto our payment + booking.
+  // Single place that maps a LiqPay status onto our payment + purchase.
   // Non-final statuses (processing, *_verify, …) leave the payment PENDING.
   // Every transition is compare-and-set (UPDATE … WHERE status = expected RETURNING): concurrent requests
   // (callback retries, several clients triggering expireStale at once) can't apply the same transition twice.
   private async applyLiqpayStatus(
-    payment: { id: string; bookingId: string },
+    payment: { id: string; purchaseId: string | null },
     liqpay: Record<string, unknown>,
   ): Promise<PaymentStatus> {
+    const purchaseId = payment.purchaseId;
+    if (!purchaseId) return 'PENDING'; // old per-training payment: nothing to apply
     const status = liqpay.status as string;
 
     if (SUCCESS_STATUSES.includes(status)) {
       // LiqPay sends payment_id as a number
       // eslint-disable-next-line @typescript-eslint/no-base-to-string
       const liqpayPaymentId = liqpay.payment_id ? String(liqpay.payment_id) : null;
-      const claimed = await this.database.db.transaction(async (tx) => {
-        // REPLACED is allowed: the member may pay an old LiqPay tab (caller checks the booking still awaits payment)
-        const [won] = await tx
-          .update(payments)
-          .set({ status: 'PAID', liqpayPaymentId, rawCallback: liqpay, updatedAt: new Date() })
-          .where(and(eq(payments.id, payment.id), inArray(payments.status, ['PENDING', 'REPLACED'])))
-          .returning({ id: payments.id });
-        if (!won) return false;
-        await tx.update(bookings).set({ paymentStatus: 'PAID' }).where(eq(bookings.id, payment.bookingId));
-        // Other open attempts for this booking must not expire it later
-        await tx
-          .update(payments)
-          .set({ status: 'REPLACED', updatedAt: new Date() })
-          .where(
-            and(eq(payments.bookingId, payment.bookingId), eq(payments.status, 'PENDING'), ne(payments.id, payment.id)),
-          );
-        return true;
-      });
+      let claimed: boolean;
+      try {
+        claimed = await this.database.db.transaction(async (tx) => {
+          // REPLACED is allowed: the member may pay an old LiqPay tab (caller checks the purchase still awaits payment)
+          const [won] = await tx
+            .update(payments)
+            .set({ status: 'PAID', liqpayPaymentId, rawCallback: liqpay, updatedAt: new Date() })
+            .where(and(eq(payments.id, payment.id), inArray(payments.status, ['PENDING', 'REPLACED'])))
+            .returning({ id: payments.id });
+          if (!won) return false;
+          const [paid] = await tx
+            .update(purchases)
+            .set({ status: 'PAID', decidedAt: new Date() })
+            .where(and(eq(purchases.id, purchaseId), eq(purchases.status, 'PENDING')))
+            .returning({ id: purchases.id });
+          if (!paid) throw new PurchaseNotAwaitingPayment();
+          await this.entitlements.activate(tx, purchaseId);
+          // Other open attempts for this purchase must not expire it later
+          await tx
+            .update(payments)
+            .set({ status: 'REPLACED', updatedAt: new Date() })
+            .where(
+              and(eq(payments.purchaseId, purchaseId), eq(payments.status, 'PENDING'), ne(payments.id, payment.id)),
+            );
+          return true;
+        });
+      } catch (err) {
+        if (!(err instanceof PurchaseNotAwaitingPayment)) throw err;
+        await this.needsManualHandling({ id: payment.id, status: 'PENDING' }, liqpay);
+        return this.currentStatus(payment.id);
+      }
       return claimed ? 'PAID' : this.currentStatus(payment.id);
     }
 
@@ -398,19 +346,36 @@ export class PaymentService {
     return (row?.status ?? 'PENDING') as PaymentStatus;
   }
 
-  private async isAwaitingPayment(bookingId: string) {
-    const [booking] = await this.database.db
-      .select({ status: bookings.status, paymentStatus: bookings.paymentStatus })
-      .from(bookings)
-      .where(eq(bookings.id, bookingId))
+  private async isAwaitingPayment(purchaseId: string) {
+    const [purchase] = await this.database.db
+      .select({ status: purchases.status })
+      .from(purchases)
+      .where(eq(purchases.id, purchaseId))
       .limit(1);
-    return booking?.status === 'ACTIVE' && booking.paymentStatus === 'PENDING';
+    return purchase?.status === 'PENDING';
+  }
+
+  // Money arrived for a payment we can no longer apply (purchase cancelled / expired / already paid)
+  private async needsManualHandling(payment: { id: string; status: string }, liqpay: Record<string, unknown>) {
+    this.logger.error(
+      `LiqPay: order=${String(liqpay.order_id)} paid after it was ${payment.status} — needs manual handling`,
+    );
+    // Keep the evidence (payment_id for a refund) in the DB — runtime logs expire in ~30 min.
+    // Status stays as is; find these with: status <> 'PAID' AND raw_callback->>'status' IN ('success','sandbox')
+    await this.saveRawCallback(payment.id, liqpay);
+  }
+
+  private async saveRawCallback(paymentId: string, liqpay: Record<string, unknown>) {
+    await this.database.db
+      .update(payments)
+      .set({ rawCallback: liqpay, updatedAt: new Date() })
+      .where(eq(payments.id, paymentId));
   }
 
   // Returns false when the payment was no longer PENDING (another request got there first) — then nothing changes.
-  // The seat is released only if this call actually cancelled the booking, so bookedCount can't drop twice.
+  // The purchase ends only if it still awaited payment, so it can't be ended twice.
   private async cancelPayment(
-    payment: { id: string; bookingId: string },
+    payment: { id: string; purchaseId: string | null },
     status: 'FAILED' | 'EXPIRED',
     rawCallback?: Record<string, unknown>,
   ): Promise<boolean> {
@@ -422,16 +387,11 @@ export class PaymentService {
         .returning({ id: payments.id });
       if (!won) return false;
 
-      const [cancelled] = await tx
-        .update(bookings)
-        .set({ status: 'CANCELLED', cancelledAt: new Date() })
-        .where(and(eq(bookings.id, payment.bookingId), eq(bookings.status, 'ACTIVE')))
-        .returning({ slotId: bookings.slotId });
-      if (cancelled?.slotId) {
+      if (payment.purchaseId) {
         await tx
-          .update(trainingSlots)
-          .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - 1, 0)` })
-          .where(eq(trainingSlots.id, cancelled.slotId));
+          .update(purchases)
+          .set({ status, decidedAt: new Date() })
+          .where(and(eq(purchases.id, payment.purchaseId), eq(purchases.status, 'PENDING')));
       }
       return true;
     });

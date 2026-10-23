@@ -259,21 +259,23 @@ export const payments = pgTable(
   'payments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    bookingId: uuid('booking_id')
-      .notNull()
-      .references(() => bookings.id),
+    // Old per-training payments (removed 2026-10-23) point at a booking; everything since pays a purchase
+    bookingId: uuid('booking_id').references(() => bookings.id),
     purchaseId: uuid('purchase_id').references((): AnyPgColumn => purchases.id),
     // Constraint name as it already exists in the DB (created by a one-off SQL script)
     orderId: text('order_id').notNull().unique('payments_order_id_key'),
     amount: integer('amount').notNull(),
     currency: text('currency').notNull().default('UAH'),
-    status: text('status').notNull().default('PENDING'), // PENDING | PAID | FAILED | EXPIRED
+    status: text('status').notNull().default('PENDING'), // PENDING | PAID | FAILED | EXPIRED | REPLACED
     liqpayPaymentId: text('liqpay_payment_id'),
     rawCallback: jsonb('raw_callback'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  () => [oneOf('payments_status_check', 'status', ['PENDING', 'PAID', 'FAILED', 'EXPIRED', 'REPLACED'])],
+  () => [
+    oneOf('payments_status_check', 'status', ['PENDING', 'PAID', 'FAILED', 'EXPIRED', 'REPLACED']),
+    check('payments_owner_check', sql`booking_id IS NOT NULL OR purchase_id IS NOT NULL`),
+  ],
 );
 
 // Gym price list, one row per option ("Повний день · 3 місяці"). Shared by all trainers; a trainer changes
@@ -282,7 +284,7 @@ export const priceItems = pgTable(
   'price_items',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    // Stable key of the option (seed upserts by it; later payments will reference it)
+    // Stable key of the option (the seed upserts by it)
     code: text('code').notNull().unique(),
     section: text('section').notNull(), // club_card | assigned | group
     title: text('title').notNull(),
