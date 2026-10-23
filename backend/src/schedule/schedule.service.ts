@@ -90,6 +90,7 @@ export class ScheduleService {
         bookingCloseAt: null,
         slots: [],
         assignedSlots,
+        groupPassLeft: 0,
         serverTime: now.toUTC().toISO(),
         announcement: null,
       };
@@ -118,14 +119,9 @@ export class ScheduleService {
     let myBookingSlotId: string | null = null;
     const myVacancyAlertSlotIds = new Set<string>();
 
-    let myPaymentStatus: string | null = null;
-
     if (memberId && slots.length > 0) {
       const [mine] = await this.database.db
-        .select({
-          slotId: bookings.slotId,
-          paymentStatus: bookings.paymentStatus,
-        })
+        .select({ slotId: bookings.slotId })
         .from(bookings)
         .where(
           and(
@@ -139,7 +135,6 @@ export class ScheduleService {
         )
         .limit(1);
       myBookingSlotId = mine?.slotId ?? null;
-      myPaymentStatus = mine?.paymentStatus ?? null;
 
       const slotIds = slots.map((s) => s.id);
       if (slotIds.length > 0) {
@@ -182,10 +177,11 @@ export class ScheduleService {
         capacity: s.capacity,
         bookedCount: s.bookedCount,
         isMyBooking: s.id === myBookingSlotId,
-        myPaymentStatus: s.id === myBookingSlotId ? myPaymentStatus : null,
         isMyVacancyAlert: myVacancyAlertSlotIds.has(s.id),
       })),
       assignedSlots,
+      // Group trainings are paid: 0 → «Записатися» offers to buy a pass
+      groupPassLeft: memberId ? await this.entitlements.groupPassLeft(memberId, targetDay.localDate) : 0,
       serverTime: now.toUTC().toISO(),
       announcement,
     };

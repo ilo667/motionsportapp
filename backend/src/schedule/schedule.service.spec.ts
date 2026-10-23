@@ -53,15 +53,33 @@ const HAS_GROUP = [{ dayId: 'day-1' }];
 const publishedAnnouncement = { text: 'Записуйтесь сьогодні! 💪', publishedAt: new Date() };
 const unpublishedAnnouncement = { text: 'Записуйтесь сьогодні! 💪', publishedAt: null };
 
-function makeService(db: any, now: DateTime, packages: unknown[] = []) {
+function makeService(db: any, now: DateTime, packages: unknown[] = [], groupPassLeft = 0) {
   const mockClock = { now: () => now };
   const mockPaymentService = { expireStale: jest.fn().mockResolvedValue(undefined) };
-  const mockEntitlements = { packagesOf: jest.fn().mockResolvedValue(packages) };
+  const mockEntitlements = {
+    packagesOf: jest.fn().mockResolvedValue(packages),
+    groupPassLeft: jest.fn().mockResolvedValue(groupPassLeft),
+  };
   const service = new ScheduleService({ db } as any, mockClock, mockPaymentService as any, mockEntitlements as any);
   // Default Mon/Wed/Fri group slots are tested separately
   jest.spyOn(service, 'ensureDefaultGroupSlots').mockResolvedValue(undefined);
   return service;
 }
+
+describe('ScheduleService — group pass', () => {
+  it('tells the member how many group trainings their pass has for that day', async () => {
+    // No assigned trainings, then the usual group-day reads (the member's booking, alerts, announcement)
+    const { db } = makeDb([[], [{ trainerId: 'trainer-1' }], [trainingDay], HAS_GROUP, slots, [], [], []]);
+    const result = await makeService(db, kyivAt(15), [], 7).getNext('member-1');
+    expect(result.groupPassLeft).toBe(7);
+  });
+
+  it('a visitor has none', async () => {
+    const { db } = makeDb([TRAINER, [trainingDay], HAS_GROUP, slots, [publishedAnnouncement]]);
+    const result = await makeService(db, kyivAt(15), [], 7).getNext();
+    expect(result.groupPassLeft).toBe(0);
+  });
+});
 
 describe('ScheduleService — announcement visibility', () => {
   it('shows announcement when window is open and ann is published', async () => {
