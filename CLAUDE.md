@@ -101,7 +101,10 @@ Auth endpoints:
 
 - A member always writes a reason when cancelling or moving 19:00 ↔ 20:00 (`bookings.cancellation_reason`). The time shown is `cancelled_at` (server clock); the client sends no time (the old phone-side `cancellation_reason_at` was removed). A **move** also sets `bookings.switched_to_slot_id` on the old booking; reason without it = plain cancel. System cancellations (expired payment, trainer cancelled the slot) have no reason and are never shown as the member's.
 - The trainer sees reasons in four places: today page (block «Скасували» under each slot, «з 19:00» next to a moved participant), calendar event modal, clients page (count for 30 days, red from 3, expandable history), and a push to the trainer (`MEMBER_CANCELLED`, sent from `BookingService`; a failed push never fails the member's action).
-- Trainer push subscriptions live in **`admin_push_subscriptions`**, separate from members' `push_subscriptions`, so member-wide sends (BOOKING_OPEN) never reach the trainer. `POST /push/subscriptions` routes by session type. The frontend re-sends an existing browser subscription on load (`syncSubscription`), because the same browser may have subscribed under the other role.
+- Trainer push subscriptions live in **`admin_push_subscriptions`**, separate from members' `push_subscriptions`, so member-wide sends (BOOKING_OPEN) never reach the trainer. `POST /push/subscriptions` routes by session type. **One browser = one role**: a push subscription (one per browser) belongs to whoever is signed in there now.
+  - Subscribing under one role switches the same endpoint off in the other table (`upsert` / `upsertAdmin`), so a phone signed in as a member never gets trainer pushes.
+  - **Logged out = no pushes**: `api.logout()` first calls `DELETE /push/subscriptions` (while the session still says whose it is), then logs out. Only the server row is switched off; the browser keeps its subscription.
+  - On load, `/admin` (`PushSubscribeButton`) and `/` (`resyncExistingSubscription`) re-send an existing browser subscription, so signing in again turns pushes back on without a new permission prompt.
 - Raw SQL subqueries: write table names explicitly. In a single-table select drizzle drops table names, so `${members.id}` inside a subquery on `bookings` renders as `"id"` and binds to `bookings.id`.
 
 ### Training types — rules

@@ -7,6 +7,7 @@ import { PageLayout } from "@/components/PageLayout";
 import { SlotCard } from "@/components/SlotCard";
 import { AssignedSlotCard } from "@/components/AssignedSlotCard";
 import { noopSubscribe } from "@/lib/clientStore";
+import { resyncExistingSubscription } from "@/lib/pushUtils";
 
 function formatLocalDate(localDate: string): string {
   const date = new Date(localDate + "T12:00:00");
@@ -106,6 +107,8 @@ export default function SchedulePage() {
       authedRef.current = true;
       setAuthed(true);
       setLoading(false);
+      // Signed in: this browser's pushes belong to this member again (logout switched them off)
+      resyncExistingSubscription();
     }).catch(() => stopPolling());
 
     const onVisibility = () => {

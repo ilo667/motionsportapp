@@ -18,6 +18,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (text ? JSON.parse(text) : null) as T;
 }
 
+// This browser's push subscription, if any. getRegistration(), not serviceWorker.ready: ready never
+// resolves when no service worker is registered
+async function currentPushEndpoint(): Promise<string | null> {
+  try {
+    if (!("serviceWorker" in navigator)) return null;
+    const reg = await navigator.serviceWorker.getRegistration();
+    return (await reg?.pushManager?.getSubscription())?.endpoint ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export type TrainingType = "групові" | "персональні" | "спліт";
 
 // Natural order for names: "Member 2" before "Member 10", Ukrainian alphabet (є, і, ї in place)
@@ -213,9 +225,13 @@ export const api = {
     }),
 
   // Clears the mg_authed flag for every logout (member and trainer), even if the request fails,
-  // so `/` doesn't call the API with a dead session (401 in the console)
-  logout: () => {
+  // so `/` doesn't call the API with a dead session (401 in the console).
+  // Logged out = no pushes: this browser's subscription is switched off on the server first, while the
+  // session still says whose it is. The browser keeps it, so signing in again turns pushes back on
+  logout: async () => {
     try { localStorage.removeItem("mg_authed"); } catch {}
+    const endpoint = await currentPushEndpoint();
+    if (endpoint) await api.unsubscribePush(endpoint).catch(() => {});
     return request<{ ok: boolean }>("/auth/logout", { method: "POST" });
   },
 

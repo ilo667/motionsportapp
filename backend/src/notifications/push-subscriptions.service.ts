@@ -7,14 +7,22 @@ import { pushSubscriptions, adminPushSubscriptions, members } from '../database/
 export class PushSubscriptionsService {
   constructor(private readonly database: DatabaseService) {}
 
+  // One browser = one role: whoever subscribes last gets its pushes, so the same browser's trainer
+  // subscription is switched off (a phone signed in as a member must not get trainer pushes)
   async upsert(memberId: string, endpoint: string, p256dh: string, auth: string) {
-    await this.database.db
-      .insert(pushSubscriptions)
-      .values({ memberId, endpoint, p256dh, auth })
-      .onConflictDoUpdate({
-        target: pushSubscriptions.endpoint,
-        set: { memberId, p256dh, auth, disabledAt: null },
-      });
+    await this.database.db.transaction(async (tx) => {
+      await tx
+        .insert(pushSubscriptions)
+        .values({ memberId, endpoint, p256dh, auth })
+        .onConflictDoUpdate({
+          target: pushSubscriptions.endpoint,
+          set: { memberId, p256dh, auth, disabledAt: null },
+        });
+      await tx
+        .update(adminPushSubscriptions)
+        .set({ disabledAt: new Date() })
+        .where(and(eq(adminPushSubscriptions.endpoint, endpoint), isNull(adminPushSubscriptions.disabledAt)));
+    });
   }
 
   async remove(memberId: string, endpoint: string) {
@@ -57,14 +65,21 @@ export class PushSubscriptionsService {
   }
 
   // Trainer's devices live in their own table, so member-wide sends (BOOKING_OPEN) never reach them
+  // Same rule the other way: the browser's member subscription is switched off
   async upsertAdmin(adminId: string, endpoint: string, p256dh: string, auth: string) {
-    await this.database.db
-      .insert(adminPushSubscriptions)
-      .values({ adminId, endpoint, p256dh, auth })
-      .onConflictDoUpdate({
-        target: adminPushSubscriptions.endpoint,
-        set: { adminId, p256dh, auth, disabledAt: null },
-      });
+    await this.database.db.transaction(async (tx) => {
+      await tx
+        .insert(adminPushSubscriptions)
+        .values({ adminId, endpoint, p256dh, auth })
+        .onConflictDoUpdate({
+          target: adminPushSubscriptions.endpoint,
+          set: { adminId, p256dh, auth, disabledAt: null },
+        });
+      await tx
+        .update(pushSubscriptions)
+        .set({ disabledAt: new Date() })
+        .where(and(eq(pushSubscriptions.endpoint, endpoint), isNull(pushSubscriptions.disabledAt)));
+    });
   }
 
   async removeAdmin(adminId: string, endpoint: string) {

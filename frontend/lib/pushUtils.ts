@@ -13,6 +13,19 @@ export async function syncSubscription(sub: PushSubscription) {
   await api.subscribePush({ endpoint: json.endpoint, p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" });
 }
 
+// On page load: if this browser is already subscribed, register it for whoever is signed in now
+// (after logout the server switched it off; signing in again turns pushes back on without a new prompt)
+export async function resyncExistingSubscription() {
+  try {
+    if (!("serviceWorker" in navigator)) return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    const existing = await reg?.pushManager?.getSubscription();
+    if (existing) await syncSubscription(existing);
+  } catch {
+    // no push support or offline: nothing to sync
+  }
+}
+
 export async function ensurePushSubscribed(): Promise<boolean> {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
   if (Notification.permission === "denied") return false;
