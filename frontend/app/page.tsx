@@ -171,9 +171,14 @@ export default function SchedulePage() {
   }
 
   const scheduleAction = (
-    <button onClick={handleLogout} className="text-muted text-sm hover:text-body transition-colors">
-      Вийти
-    </button>
+    <div className="flex items-center space-x-4">
+      <Link href="/purchases" className="text-sm text-accent hover:underline">
+        Мої покупки
+      </Link>
+      <button onClick={handleLogout} className="text-muted text-sm hover:text-body transition-colors">
+        Вийти
+      </button>
+    </div>
   );
 
   if (!loading && !schedule) {
@@ -258,7 +263,6 @@ export default function SchedulePage() {
                     key={slot.id}
                     slot={slot}
                     onMutate={handleMutate}
-                    onRefresh={fetchSchedule}
                   />
                 ))}
               </div>

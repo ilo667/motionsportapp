@@ -8,7 +8,7 @@ import { PageLayout } from "./PageLayout";
 const POLL_INTERVAL_MS = 2000;
 const MAX_ATTEMPTS = 5;
 
-// REJECTED: LiqPay declined an attempt (try_again) but the order is still open, so the booking is kept
+// REJECTED: LiqPay declined an attempt (try_again) but the order is still open, so the purchase still awaits payment
 type ResultState = PaymentStatus | "UNKNOWN" | "REJECTED";
 
 const REJECT_REASONS: Record<string, string> = {
@@ -21,31 +21,31 @@ const CONTENT: Record<Exclude<ResultState, "PENDING" | "REJECTED">, { icon: stri
     icon: "✓",
     iconClass: "text-accent",
     title: "Платіж прийнято",
-    text: "Ваш запис підтверджено.",
+    text: "Клубна карта й тренування вже у «Мої покупки».",
   },
   FAILED: {
     icon: "✕",
     iconClass: "text-danger",
     title: "Оплата не пройшла",
-    text: "Кошти не списано, запис скасовано. Можете спробувати ще раз з розкладу.",
+    text: "Кошти не списано. Можете оформити покупку ще раз у «Мої покупки».",
   },
   EXPIRED: {
     icon: "✕",
     iconClass: "text-danger",
     title: "Час оплати минув",
-    text: "Запис скасовано. Можете записатись ще раз з розкладу.",
+    text: "Покупку скасовано. Можете оформити її ще раз у «Мої покупки».",
   },
   REPLACED: {
     icon: "?",
     iconClass: "text-muted",
     title: "Оплату перезапущено",
-    text: "Ви почали нову спробу оплати. Статус запису видно в розкладі.",
+    text: "Ви почали нову спробу оплати. Статус видно у «Мої покупки».",
   },
   UNKNOWN: {
     icon: "?",
     iconClass: "text-muted",
     title: "Не вдалося перевірити оплату",
-    text: "Статус запису видно в розкладі.",
+    text: "Статус видно у «Мої покупки».",
   },
 };
 
@@ -100,14 +100,14 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
           icon: "✕",
           iconClass: "text-danger",
           title: "Оплата не пройшла",
-          text: `${REJECT_REASONS[errCode ?? ""] ?? "Банк відхилив платіж."} Спробуйте ще раз або іншою карткою. Місце за вами ${holdUntil(expiresAt)}.`,
+          text: `${REJECT_REASONS[errCode ?? ""] ?? "Банк відхилив платіж."} Спробуйте ще раз або іншою карткою. Покупка чекає оплати ${holdUntil(expiresAt)}.`,
         }
       : state === "PENDING"
         ? {
             icon: "…",
             iconClass: "text-amber-400",
             title: "Оплату не завершено",
-            text: `Місце за вами ${holdUntil(expiresAt)}, далі запис скасується автоматично.`,
+            text: `Покупка чекає оплати ${holdUntil(expiresAt)}, далі скасується автоматично.`,
           }
         : CONTENT[state];
 
@@ -117,8 +117,11 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
       <h1 className="font-geologica font-semibold text-title text-heading mb-2 uppercase">{title}</h1>
       <p className="text-muted text-sm">{text}</p>
       <div className="flex flex-col w-full max-w-xs mx-auto mt-10">
-        <Link href="/" className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center">
-          {state === "REJECTED" ? "Спробувати ще раз" : "До розкладу"}
+        <Link
+          href="/purchases"
+          className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors text-center"
+        >
+          {state === "REJECTED" ? "Спробувати ще раз" : "До моїх покупок"}
         </Link>
       </div>
     </PageLayout>

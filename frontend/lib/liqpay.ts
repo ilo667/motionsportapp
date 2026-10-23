@@ -1,14 +1,9 @@
-import { api } from "./api";
+import type { LiqPayCheckout } from "./api";
 
 const LIQPAY_URL = "https://www.liqpay.ua/api/3/checkout";
-// Same hard-coded price as PRICE_UAH in backend/src/payment/payment.service.ts: change both together
-export const PRICE_UAH = 700;
 
-// Returns false when no redirect happened (booking turned out to be already paid)
-export async function redirectToLiqPay(slotId: string): Promise<boolean> {
-  const checkout = await api.createCheckout(slotId);
-  if ("status" in checkout) return false;
-  const { data, signature } = checkout;
+// Hands the browser over to the LiqPay page (a form POST, as LiqPay expects)
+export function submitLiqPay({ data, signature }: LiqPayCheckout) {
   const form = document.createElement("form");
   form.method = "POST";
   form.action = LIQPAY_URL;
@@ -22,5 +17,4 @@ export async function redirectToLiqPay(slotId: string): Promise<boolean> {
   });
   document.body.appendChild(form);
   form.submit();
-  return true;
 }

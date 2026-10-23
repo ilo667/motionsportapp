@@ -73,6 +73,64 @@ export interface PriceChange {
   changedAt: string;
 }
 
+// ── Purchases: club cards and trainer packages ──────────────────────────────
+
+export type PurchaseMethod = "LIQPAY" | "CASH";
+export type AssignedType = Exclude<TrainingType, "групові">;
+
+export interface LiqPayCheckout {
+  data: string;
+  signature: string;
+}
+
+export interface CatalogItem {
+  id: string;
+  title: string;
+  optionLabel: string | null;
+  amountUah: number;
+  durationMonths: number | null; // club card: months from payment (0 = that day only)
+  trainingType: AssignedType | null; // trainer service
+  trainingCount: number | null;
+}
+
+export interface ClubCard {
+  id: string;
+  label: string;
+  validUntil: string;
+}
+
+export interface TrainingPackage {
+  id: string;
+  trainingType: AssignedType;
+  title: string;
+  total: number;
+  left: number;
+  createdAt: string;
+}
+
+export interface PurchaseLine {
+  title: string;
+  optionLabel: string | null;
+  amountUah: number;
+}
+
+export interface Purchase {
+  id: string;
+  method: PurchaseMethod;
+  status: "PENDING" | "PAID" | "REJECTED" | "FAILED" | "EXPIRED" | "CANCELLED";
+  totalUah: number;
+  createdAt: string;
+  lines: PurchaseLine[];
+}
+
+export interface MyPurchases {
+  catalog: { clubCards: CatalogItem[]; services: CatalogItem[] };
+  card: ClubCard | null;
+  packages: TrainingPackage[];
+  pending: Purchase | null;
+  canPayCash: boolean; // cash goes to the member's trainer
+}
+
 // A booking the member cancelled or moved themselves, with the reason they wrote
 export interface Cancellation {
   bookingId: string;
@@ -118,7 +176,7 @@ export interface AssignedSlotView {
   capacity: number;
   bookedCount: number;
   isMyBooking: boolean;
-  myPaymentStatus: "PENDING" | "PAID" | null;
+  packageLeft: number; // trainings left in the member's packages of this type (0 = none: «Оплатити»)
   started: boolean;
 }
 
@@ -287,12 +345,23 @@ export const api = {
       body: JSON.stringify({ status: "CANCELLED" }),
     }),
 
-  createCheckout: (slotId: string) =>
-    // { status: "PAID" } — a previous attempt for this booking already succeeded, no redirect needed
-    request<{ data: string; signature: string } | { status: "PAID" }>("/payments/checkout", {
+  // Continue paying a pending LiqPay purchase. { status: "PAID" } — a previous attempt already succeeded
+  checkoutPurchase: (purchaseId: string) =>
+    request<LiqPayCheckout | { status: "PAID" }>("/payments/checkout", {
       method: "POST",
-      body: JSON.stringify({ slotId }),
+      body: JSON.stringify({ purchaseId }),
     }),
+
+  getPurchases: () => request<MyPurchases>("/purchases"),
+
+  createPurchase: (priceItemIds: string[], method: PurchaseMethod) =>
+    request<{ purchaseId: string; checkout?: LiqPayCheckout | { status: "PAID" } }>("/purchases", {
+      method: "POST",
+      body: JSON.stringify({ priceItemIds, method }),
+    }),
+
+  cancelPurchase: (purchaseId: string) =>
+    request<{ ok: boolean }>(`/purchases/${purchaseId}/cancel`, { method: "POST" }),
 
   getPaymentStatus: (orderId: string) =>
     request<{ status: PaymentStatus; errCode?: string; expiresAt?: string }>(`/payments/status?order=${encodeURIComponent(orderId)}`),
