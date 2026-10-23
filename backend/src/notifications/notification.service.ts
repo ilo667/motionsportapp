@@ -64,10 +64,10 @@ export class NotificationService {
 
   private async sendOpening(payload: Record<string, unknown>) {
     const localDate = payload.localDate as string;
-    const coachIds = payload.coachIds as string[] | undefined;
-    // Older events have no coachIds: everyone, as before
-    const subscriptions = coachIds
-      ? await this.subs.findForCoaches(coachIds, payload.includeUnassigned === true)
+    const trainerIds = payload.trainerIds as string[] | undefined;
+    // Older events have no trainerIds: everyone, as before
+    const subscriptions = trainerIds
+      ? await this.subs.findForTrainers(trainerIds, payload.includeUnassigned === true)
       : await this.subs.findAll();
     await this.sendToSubs(subscriptions, {
       title: 'Запис відкрито! 🏋️',
@@ -107,20 +107,20 @@ export class NotificationService {
     await this.vacancyAlerts.deactivateBySlot(slotId);
   }
 
-  // To the coach: a member cancelled or moved a booking, with the reason they wrote
+  // To the trainer: a member cancelled or moved a booking, with the reason they wrote
   private async sendMemberCancelled(payload: Record<string, unknown>) {
     const displayName = payload.displayName as string;
     const slotTime = payload.slotTime as string;
     const localDate = payload.localDate as string;
     const reason = payload.reason as string;
     const switchedToTime = payload.switchedToTime as string | null;
-    const coachId = payload.coachId as string | null | undefined;
+    const trainerId = payload.trainerId as string | null | undefined;
 
     const title = switchedToTime
       ? `Перенесення ${slotTime} → ${switchedToTime}, ${this.fmtDate(localDate)}`
       : `Скасування ${slotTime}, ${this.fmtDate(localDate)}`;
-    // The coach whose training it is (older events without coachId go to every coach)
-    const subscriptions = coachId ? await this.subs.findAdminByAdminId(coachId) : await this.subs.findAllAdmin();
+    // The trainer whose training it is (older events without trainerId go to every trainer)
+    const subscriptions = trainerId ? await this.subs.findAdminByAdminId(trainerId) : await this.subs.findAllAdmin();
     for (const sub of subscriptions) {
       const result = await this.push.send(sub, { title, body: `${displayName}: ${reason}`, icon: ICON, url: '/admin' });
       if (result === 'expired') await this.subs.disableAdminByEndpoint(sub.endpoint);

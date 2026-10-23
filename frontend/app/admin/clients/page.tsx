@@ -1,7 +1,7 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, AdminMember, Coach, MemberCancellation } from "@/lib/api";
+import { api, AdminMember, Trainer, MemberCancellation } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { AdminMenu } from "@/components/admin/AdminMenu";
@@ -97,28 +97,28 @@ function NoteCell({ member, onSaved }: { member: AdminMember; onSaved: (note: st
   );
 }
 
-// Under the client's name: hand the client to another coach, or claim an unassigned one
-function CoachPicker({
+// Under the client's name: hand the client to another trainer, or claim an unassigned one
+function TrainerPicker({
   member,
-  coaches,
+  trainers,
   myId,
   onAssigned,
 }: {
   member: AdminMember;
-  coaches: Coach[];
+  trainers: Trainer[];
   myId: string;
-  onAssigned: (coachId: string) => void;
+  onAssigned: (trainerId: string) => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const assign = async (coachId: string) => {
-    if (!coachId || coachId === member.coachId) return;
+  const assign = async (trainerId: string) => {
+    if (!trainerId || trainerId === member.trainerId) return;
     setSaving(true);
     setError("");
     try {
-      await api.assignCoach(member.id, coachId);
-      onAssigned(coachId);
+      await api.assignTrainer(member.id, trainerId);
+      onAssigned(trainerId);
     } catch {
       setError("Не вдалося змінити тренера");
     } finally {
@@ -128,7 +128,7 @@ function CoachPicker({
 
   return (
     <div className="flex flex-col items-start space-y-1 mt-2">
-      {!member.coachId && (
+      {!member.trainerId && (
         <button
           onClick={() => assign(myId)}
           disabled={saving}
@@ -141,13 +141,13 @@ function CoachPicker({
         <span>Тренер:</span>
         <select
           aria-label={`Тренер для ${member.displayName}`}
-          value={member.coachId ?? ""}
+          value={member.trainerId ?? ""}
           disabled={saving}
           onChange={(e) => assign(e.target.value)}
           className="bg-transparent text-body border-b border-line focus:outline-none focus:border-accent"
         >
-          {!member.coachId && <option value="">не вибрано</option>}
-          {coaches.map((c) => (
+          {!member.trainerId && <option value="">не вибрано</option>}
+          {trainers.map((c) => (
             <option key={c.id} value={c.id}>{c.id === myId ? `${c.username} (я)` : c.username}</option>
           ))}
         </select>
@@ -160,16 +160,16 @@ function CoachPicker({
 export default function ClientsPage() {
   const router = useRouter();
   const [members, setMembers] = useState<AdminMember[] | null>(null);
-  const [coaches, setCoaches] = useState<Coach[]>([]);
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [myId, setMyId] = useState("");
   const [loadError, setLoadError] = useState(false);
   const [openHistory, setOpenHistory] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api.getMembers(), api.getCoaches(), api.me()])
-      .then(([memberList, coachList, me]) => {
+    Promise.all([api.getMembers(), api.getTrainers(), api.me()])
+      .then(([memberList, trainerList, me]) => {
         setMembers(memberList);
-        setCoaches(coachList);
+        setTrainers(trainerList);
         setMyId(me.id);
       })
       .catch((err: unknown) => {
@@ -182,16 +182,16 @@ export default function ClientsPage() {
   const updateNote = (id: string, trainerNote: string | null) =>
     setMembers((prev) => prev?.map((m) => (m.id === id ? { ...m, trainerNote } : m)) ?? null);
 
-  // Given to another coach: the client leaves this coach's list
-  const updateCoach = (id: string, coachId: string) =>
+  // Given to another trainer: the client leaves this trainer's list
+  const updateTrainer = (id: string, trainerId: string) =>
     setMembers((prev) =>
-      (coachId === myId
-        ? prev?.map((m) => (m.id === id ? { ...m, coachId } : m))
+      (trainerId === myId
+        ? prev?.map((m) => (m.id === id ? { ...m, trainerId } : m))
         : prev?.filter((m) => m.id !== id)) ?? null,
     );
 
-  const mine = members?.filter((m) => m.coachId) ?? [];
-  const unassigned = members?.filter((m) => !m.coachId) ?? [];
+  const mine = members?.filter((m) => m.trainerId) ?? [];
+  const unassigned = members?.filter((m) => !m.trainerId) ?? [];
 
   const renderTable = (rows: AdminMember[]) => (
     <table className="w-full text-sm">
@@ -209,7 +209,7 @@ export default function ClientsPage() {
               <td className="py-3 pr-3">
                 <div className="text-heading">{m.displayName}</div>
                 <div className="text-muted text-xs">{m.memberCode}</div>
-                <CoachPicker member={m} coaches={coaches} myId={myId} onAssigned={(coachId) => updateCoach(m.id, coachId)} />
+                <TrainerPicker member={m} trainers={trainers} myId={myId} onAssigned={(trainerId) => updateTrainer(m.id, trainerId)} />
               </td>
               <td className="py-3 pr-3">
                 <NoteCell member={m} onSaved={(note) => updateNote(m.id, note)} />

@@ -4,7 +4,7 @@ import { drizzle } from 'drizzle-orm/neon-serverless';
 import { priceItems } from '../src/database/schema';
 import { DEFAULT_PRICE_LIST } from '../src/prices/price-list';
 
-// Adds missing price list rows. Existing rows (and amounts coaches changed) are left alone, so it is safe to rerun
+// Adds missing price list rows. Existing rows (and amounts trainers changed) are left alone, so it is safe to rerun
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = drizzle({ client: pool });

@@ -175,7 +175,7 @@ describe('PaymentService — createCheckout', () => {
     trainingDayId: 'day-1',
   };
 
-  it('hides an assigned slot from a member the coach did not assign (404)', async () => {
+  it('hides an assigned slot from a member the trainer did not assign (404)', async () => {
     const { db } = makeDb([[assigned], []]);
     await expect(makeService(db).createCheckout('slot-1', 'member-2')).rejects.toThrow(NotFoundException);
     expect(db.insert).not.toHaveBeenCalled();

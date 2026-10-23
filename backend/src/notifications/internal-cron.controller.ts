@@ -9,7 +9,7 @@ import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { trainingDays, trainingSlots, bookings, attendance, admins } from '../database/schema';
 import { GROUP_TYPE, KY_ZONE } from '../schedule/training-types';
-import { getDefaultCoachId } from '../schedule/default-coach';
+import { getDefaultTrainerId } from '../schedule/default-trainer';
 
 // Vercel Cron invokes paths with GET and sends `Authorization: Bearer $CRON_SECRET`.
 // Manual run: curl -H "Authorization: Bearer $CRON_SECRET" https://<backend>/internal/cron/<job>
@@ -36,9 +36,9 @@ export class InternalCronController {
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
     }
-    // Only clients of coaches who have group trainings today get the push
-    const coachIds = await this.groupCoachIds(day.id);
-    if (coachIds.length === 0) {
+    // Only clients of trainers who have group trainings today get the push
+    const trainerIds = await this.groupTrainerIds(day.id);
+    if (trainerIds.length === 0) {
       return { ok: true, skipped: 'no group trainings today' };
     }
 
@@ -53,9 +53,9 @@ export class InternalCronController {
     const dedupeKey = `booking-open:${today}`;
     await this.notifications.enqueueAndProcess('BOOKING_OPEN', dedupeKey, {
       localDate: today,
-      coachIds,
-      // members without a coach see the first coach's group trainings
-      includeUnassigned: coachIds.includes((await getDefaultCoachId(this.database.db)) ?? ''),
+      trainerIds,
+      // members without a trainer see the first trainer's group trainings
+      includeUnassigned: trainerIds.includes((await getDefaultTrainerId(this.database.db)) ?? ''),
     });
 
     return { ok: true, localDate: today };
@@ -77,7 +77,7 @@ export class InternalCronController {
       return { ok: true, skipped: 'no scheduled day today' };
     }
     // The announcement is shown with group slots only
-    if ((await this.groupCoachIds(day.id)).length === 0) {
+    if ((await this.groupTrainerIds(day.id)).length === 0) {
       return { ok: true, skipped: 'no group trainings today' };
     }
 
@@ -139,10 +139,10 @@ export class InternalCronController {
     return this.paymentService.expireStale();
   }
 
-  // Coaches with an active group training on that day
-  private async groupCoachIds(dayId: string) {
+  // Trainers with an active group training on that day
+  private async groupTrainerIds(dayId: string) {
     const rows = await this.database.db
-      .selectDistinct({ coachId: trainingSlots.coachId })
+      .selectDistinct({ trainerId: trainingSlots.trainerId })
       .from(trainingSlots)
       .where(
         and(
@@ -151,7 +151,7 @@ export class InternalCronController {
           eq(trainingSlots.status, 'ACTIVE'),
         ),
       );
-    return rows.map((r) => r.coachId);
+    return rows.map((r) => r.trainerId);
   }
 
   private verifyCronSecret(auth: string | undefined) {

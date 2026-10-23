@@ -48,20 +48,20 @@ describe('Prices', () => {
   it('changes the amount and logs who changed it', async () => {
     const { db, sets, inserts } = makeDb([[{ id: 'p1', amountUah: 650 }], []]);
     await expect(
-      makeService(db).updatePrice('coach-1', 'p1', { amountUah: 650, expectedAmountUah: 600 }),
+      makeService(db).updatePrice('trainer-1', 'p1', { amountUah: 650, expectedAmountUah: 600 }),
     ).resolves.toEqual({ id: 'p1', amountUah: 650 });
 
-    expect(sets).toEqual([{ amountUah: 650, updatedBy: 'coach-1', updatedAt: NOW.toJSDate() }]);
+    expect(sets).toEqual([{ amountUah: 650, updatedBy: 'trainer-1', updatedAt: NOW.toJSDate() }]);
     expect(inserts).toEqual([
-      { priceItemId: 'p1', oldAmountUah: 600, newAmountUah: 650, changedBy: 'coach-1', changedAt: NOW.toJSDate() },
+      { priceItemId: 'p1', oldAmountUah: 600, newAmountUah: 650, changedBy: 'trainer-1', changedAt: NOW.toJSDate() },
     ]);
   });
 
-  it('answers 409 with the current amount when another coach changed it meanwhile', async () => {
+  it('answers 409 with the current amount when another trainer changed it meanwhile', async () => {
     // compare-and-set updates nothing, then the current row is read
     const { db, inserts } = makeDb([[], [{ amountUah: 700, updatedBy: 'demo' }]]);
     const err = await makeService(db)
-      .updatePrice('coach-1', 'p1', { amountUah: 650, expectedAmountUah: 600 })
+      .updatePrice('trainer-1', 'p1', { amountUah: 650, expectedAmountUah: 600 })
       .catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(ConflictException);
@@ -72,14 +72,14 @@ describe('Prices', () => {
   it('answers 404 for an unknown price', async () => {
     const { db } = makeDb([[], []]);
     await expect(
-      makeService(db).updatePrice('coach-1', 'missing', { amountUah: 650, expectedAmountUah: 600 }),
+      makeService(db).updatePrice('trainer-1', 'missing', { amountUah: 650, expectedAmountUah: 600 }),
     ).rejects.toThrow(NotFoundException);
   });
 
   it('saving the same amount writes nothing', async () => {
     const { db, sets, inserts } = makeDb([[{ amountUah: 600, updatedBy: null }]]);
     await expect(
-      makeService(db).updatePrice('coach-1', 'p1', { amountUah: 600, expectedAmountUah: 600 }),
+      makeService(db).updatePrice('trainer-1', 'p1', { amountUah: 600, expectedAmountUah: 600 }),
     ).resolves.toEqual({ id: 'p1', amountUah: 600 });
     expect(sets).toEqual([]);
     expect(inserts).toEqual([]);

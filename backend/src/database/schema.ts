@@ -21,10 +21,10 @@ export const members = pgTable('members', {
   recoveryHash: text('recovery_hash').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   disabledAt: timestamp('disabled_at', { withTimezone: true }),
-  // Coach-only note ("ходить через раз", "це Катюха"); never returned by member-facing APIs
+  // Trainer-only note ("ходить через раз", "це Катюха"); never returned by member-facing APIs
   trainerNote: text('trainer_note'),
-  // The member's coach; null = not assigned yet (every coach sees them under «Без тренера»)
-  coachId: uuid('coach_id').references((): AnyPgColumn => admins.id),
+  // The member's trainer; null = not assigned yet (every trainer sees them under «Без тренера»)
+  trainerId: uuid('trainer_id').references((): AnyPgColumn => admins.id),
 });
 
 export const admins = pgTable('admins', {
@@ -65,13 +65,15 @@ export const trainingSlots = pgTable(
     capacity: integer('capacity').notNull().default(8),
     bookedCount: integer('booked_count').notNull().default(0),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
-    // Whose training it is: the coach sees only own slots in calendar, today page and history
-    coachId: uuid('coach_id')
+    // Whose training it is: the trainer sees only own slots in calendar, today page and history
+    trainerId: uuid('trainer_id')
       .notNull()
       .references((): AnyPgColumn => admins.id),
   },
-  // Many halls: coaches work in parallel, so one training per time per coach
-  (table) => [uniqueIndex('training_slots_day_time_coach_idx').on(table.trainingDayId, table.slotTime, table.coachId)],
+  // Many halls: trainers work in parallel, so one training per time per trainer
+  (table) => [
+    uniqueIndex('training_slots_day_time_trainer_idx').on(table.trainingDayId, table.slotTime, table.trainerId),
+  ],
 );
 
 // Who may see and book an assigned slot (персональні: 1 member, спліт: 1–3). Групові have no rows here
@@ -139,7 +141,7 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   disabledAt: timestamp('disabled_at', { withTimezone: true }),
 });
 
-// Coach's devices: push when a member cancels or moves a booking. Separate from members' subscriptions
+// Trainer's devices: push when a member cancels or moves a booking. Separate from members' subscriptions
 export const adminPushSubscriptions = pgTable('admin_push_subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   adminId: uuid('admin_id')
@@ -230,7 +232,7 @@ export const payments = pgTable('payments', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Gym price list, one row per option ("Повний день · 3 місяці"). Shared by all coaches; a coach changes
+// Gym price list, one row per option ("Повний день · 3 місяці"). Shared by all trainers; a trainer changes
 // amounts only, rows come from `npm run seed:prices`. Shown in the admin only: payments don't read it yet
 // (LiqPay still charges PRICE_UAH in payment.service.ts)
 export const priceItems = pgTable('price_items', {

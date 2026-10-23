@@ -12,7 +12,7 @@ const LINKS = [
   { href: "/admin/prices", label: "Ціни" },
 ];
 
-// Coach navigation in the header: the same burger on phone and desktop
+// Trainer navigation in the header: the same burger on phone and desktop
 export function AdminMenu() {
   const router = useRouter();
   const pathname = usePathname();

@@ -13,7 +13,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       body,
     });
   }
-  // NestJS sends an empty body for a null result (e.g. a coach with no upcoming trainings)
+  // NestJS sends an empty body for a null result (e.g. a trainer with no upcoming trainings)
   const text = await res.text();
   return (text ? JSON.parse(text) : null) as T;
 }
@@ -28,17 +28,17 @@ export interface AdminMember {
   memberCode: string;
   displayName: string;
   trainerNote: string | null;
-  coachId: string | null; // null = not assigned (shown to every coach under «Без тренера»)
+  trainerId: string | null; // null = not assigned (shown to every trainer under «Без тренера»)
   createdAt: string;
   recentCancellations: number; // member's own cancellations in the last 30 days (moves not counted)
 }
 
-export interface Coach {
+export interface Trainer {
   id: string;
   username: string;
 }
 
-// Price list shared by all coaches (admin only for now; payments don't use it yet)
+// Price list shared by all trainers (admin only for now; payments don't use it yet)
 export type PriceSection = "club_card" | "assigned" | "group";
 
 export interface PriceItem {
@@ -47,7 +47,7 @@ export interface PriceItem {
   title: string;
   optionLabel: string | null; // "3 місяці", "6 тренувань"; null for a single-option item
   amountUah: number;
-  updatedBy: string | null; // coach username; null = never changed since the seed
+  updatedBy: string | null; // trainer username; null = never changed since the seed
   updatedAt: string | null;
 }
 
@@ -97,7 +97,7 @@ export interface SlotView {
   isMyVacancyAlert?: boolean;
 }
 
-// Personal / split the coach assigned to this member (any day, any time); paid, bookable until the start
+// Personal / split the trainer assigned to this member (any day, any time); paid, bookable until the start
 export interface AssignedSlotView {
   id: string;
   localDate: string;
@@ -179,7 +179,7 @@ export interface AdminSchedule {
   serverTime: string;
 }
 
-// A past training day in the coach's history; slots carry the same data as the today page
+// A past training day in the trainer's history; slots carry the same data as the today page
 export interface HistoryDay {
   localDate: string;
   status: "SCHEDULED" | "CANCELLED";
@@ -282,12 +282,12 @@ export const api = {
       list.sort((a, b) => nameCollator.compare(a.displayName, b.displayName)),
     ),
 
-  getCoaches: () => request<Coach[]>("/admin/coaches"),
+  getTrainers: () => request<Trainer[]>("/admin/trainers"),
 
-  assignCoach: (memberId: string, coachId: string) =>
-    request<{ id: string; coachId: string }>(`/admin/members/${memberId}/coach`, {
+  assignTrainer: (memberId: string, trainerId: string) =>
+    request<{ id: string; trainerId: string }>(`/admin/members/${memberId}/trainer`, {
       method: "PATCH",
-      body: JSON.stringify({ coachId }),
+      body: JSON.stringify({ trainerId }),
     }),
 
   getMemberCancellations: (memberId: string) =>
@@ -304,7 +304,7 @@ export const api = {
 
   getPrices: () => request<{ items: PriceItem[]; changes: PriceChange[] }>("/admin/prices"),
 
-  // 409 when another coach changed it meanwhile: error.body has the current amountUah and updatedBy
+  // 409 when another trainer changed it meanwhile: error.body has the current amountUah and updatedBy
   updatePrice: (id: string, amountUah: number, expectedAmountUah: number) =>
     request<{ id: string; amountUah: number }>(`/admin/prices/${id}`, {
       method: "PATCH",

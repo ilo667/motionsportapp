@@ -166,7 +166,7 @@ export default function PricesPage() {
       const { status, body } = err as { status?: number; body?: { amountUah?: number; updatedBy?: string | null } };
       setConfirm(null);
       if (status === 409 && body?.amountUah !== undefined) {
-        // Another coach got there first: show their amount and let this coach decide again
+        // Another trainer got there first: show their amount and let this trainer decide again
         setError(`Ціну щойно змінив ${body.updatedBy ?? "інший тренер"}: ${formatUah(body.amountUah)}.`);
         await load();
       } else {

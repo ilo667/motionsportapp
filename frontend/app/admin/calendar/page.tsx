@@ -238,7 +238,7 @@ export default function CalendarPage() {
   const modalDate = modal ? (modal.mode === "add" ? modal.date : modal.slot.localDate) : "";
   const editing = modal?.mode === "edit" ? modal.slot : null;
   const assigned = selectedType !== "групові";
-  // The coach's own and unassigned clients, plus anyone already on this training (another coach's client
+  // The trainer's own and unassigned clients, plus anyone already on this training (another trainer's client
   // must not silently disappear from the picker and be dropped on save)
   const pickerMembers: { id: string; displayName: string; memberCode?: string }[] = [
     ...members,

@@ -48,13 +48,13 @@ export class PricesService {
       .limit(CHANGES_LIMIT);
 
     return {
-      // updatedAt only once a coach changed it: the seeded value has no author
+      // updatedAt only once a trainer changed it: the seeded value has no author
       items: items.map((i) => ({ ...i, updatedAt: i.updatedBy ? i.updatedAt.toISOString() : null })),
       changes: changes.map((c) => ({ ...c, changedAt: c.changedAt.toISOString() })),
     };
   }
 
-  // Compare-and-set: the amount changes only if it is still what the coach saw, so two coaches editing
+  // Compare-and-set: the amount changes only if it is still what the trainer saw, so two trainers editing
   // at once can't silently overwrite each other. Every change is logged in price_changes
   async updatePrice(adminId: string, id: string, dto: UpdatePriceDto) {
     if (dto.amountUah === dto.expectedAmountUah) {
@@ -94,11 +94,11 @@ export class PricesService {
     return item;
   }
 
-  // 409 with the current amount and who set it, so the page can tell the coach
+  // 409 with the current amount and who set it, so the page can tell the trainer
   private changedMeanwhile(current: { amountUah: number; updatedBy: string | null }) {
     return new ConflictException({
       statusCode: 409,
-      message: 'Price was changed by another coach',
+      message: 'Price was changed by another trainer',
       amountUah: current.amountUah,
       updatedBy: current.updatedBy,
     });

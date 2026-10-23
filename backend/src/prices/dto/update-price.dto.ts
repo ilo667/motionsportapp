@@ -8,7 +8,7 @@ export class UpdatePriceDto {
   @Max(MAX_PRICE_UAH)
   amountUah: number;
 
-  // The amount the coach saw on the page: the change applies only if nobody changed it meanwhile
+  // The amount the trainer saw on the page: the change applies only if nobody changed it meanwhile
   @IsInt()
   expectedAmountUah: number;
 }

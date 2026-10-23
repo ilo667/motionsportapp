@@ -1,6 +1,6 @@
 import { IsUUID } from 'class-validator';
 
-export class AssignCoachDto {
+export class AssignTrainerDto {
   @IsUUID('all')
-  coachId: string;
+  trainerId: string;
 }

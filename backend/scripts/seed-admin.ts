@@ -19,11 +19,7 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  const [existing] = await db
-    .select()
-    .from(admins)
-    .where(eq(admins.username, username))
-    .limit(1);
+  const [existing] = await db.select().from(admins).where(eq(admins.username, username)).limit(1);
 
   if (existing) {
     await db.update(admins).set({ passwordHash }).where(eq(admins.id, existing.id));

@@ -31,7 +31,7 @@ npm run build      # rm -rf dist && nest build
 npm run test       # Jest, matches *.spec.ts in src/
 npm run test:cov
 npm run db:push    # apply src/database/schema.ts to the DB (drizzle-kit push)
-npm run seed:admin # create a coach account (ADMIN_USERNAME / ADMIN_PASSWORD)
+npm run seed:admin # create a trainer account (ADMIN_USERNAME / ADMIN_PASSWORD)
 npm run seed:prices # add missing price list rows (src/prices/price-list.ts); never overwrites amounts
 npm run lint       # check only, does not change files
 npm run format     # prettier (printWidth 120); the local pre-commit hook rejects unformatted backend files
@@ -52,7 +52,7 @@ Auth endpoints:
 - `POST /auth/member/login` — memberCode + PIN
 - `POST /auth/member/forgot` — memberCode + recoveryCode + newPin → new recoveryCode
 - `POST /auth/admin/login` — username + password
-- `POST /auth/admin/setup` — creates the first coach account; 409 once any admin exists (normally use `npm run seed:admin`)
+- `POST /auth/admin/setup` — creates the first trainer account; 409 once any admin exists (normally use `npm run seed:admin`)
 - `POST /auth/logout`
 - `GET /auth/me`
 
@@ -65,10 +65,10 @@ Auth endpoints:
 - `AdminModule` — admin schedule management, slot cancellation, attendance, clients list (`GET /admin/members`, `PATCH /admin/members/:id/note`)
   - group slots: `PUT /admin/training-days/:date/slots/:slotTime` (19:00 / 20:00 only); assigned: `POST /admin/training-days/:date/assigned-slots` `{slotTime, trainingType, memberIds}`, `PUT /admin/slots/:id/members`
   - cancellation reasons: `GET /admin/slots/:id/cancellations`, `GET /admin/members/:id/cancellations`; `GET /admin/schedule` slots carry `cancellations` and participants' `switchedFromTime`; `GET /admin/members` has `recentCancellations` (30 days, moves not counted)
-  - coaches: `GET /admin/coaches` (id + username), `PATCH /admin/members/:id/coach` `{coachId}`
-  - history: `GET /admin/history?before=YYYY-MM-DD` — past training days (before today), newest first, 14 per page, `nextBefore` cursor; slots built by the same `buildSlotViews` as `GET /admin/schedule` (participants + attendance, «з 19:00», cancellations). Each coach sees only own trainings
+  - trainers: `GET /admin/trainers` (id + username), `PATCH /admin/members/:id/trainer` `{trainerId}`
+  - history: `GET /admin/history?before=YYYY-MM-DD` — past training days (before today), newest first, 14 per page, `nextBefore` cursor; slots built by the same `buildSlotViews` as `GET /admin/schedule` (participants + attendance, «з 19:00», cancellations). Each trainer sees only own trainings
   - attendance is **editable at any time** (today page and history) via `PATCH /admin/bookings/:id/attendance`; "Підтвердити всіх" no longer locks the marks
-  - `members.trainer_note` is a **coach-only** note (max 300). Member-facing code must select explicit columns and never return it (SessionGuard and `/auth/me` already do)
+  - `members.trainer_note` is a **trainer-only** note (max 300). Member-facing code must select explicit columns and never return it (SessionGuard and `/auth/me` already do)
 - `NotificationsModule` — push subscriptions, vacancy alerts, internal cron. Every push goes through `notification_events` (`enqueueAndProcess`): sent once, right away; `dedupe_key` stops the same event being sent twice (e.g. the booking-open cron runs twice a day). A failed event stays `FAILED` and is logged; there are **no retries**
   - `/internal/cron/*` routes must be **`@Get`** — Vercel Cron invokes with GET (`vercel-cron/1.0`); a POST route answers 404 and the job silently never runs. Protected by `CRON_SECRET` (`Authorization: Bearer …`, sent by Vercel automatically); missing secret in production → 403. Trigger manually: `vercel crons run /internal/cron/<job>`. Hobby plan: once per day, any minute within the scheduled hour
 - `AiModule` — AI announcement generation (Gemini). The gym's weekly programme lives in the **system instruction** (`SYSTEM_INSTRUCTION` in `announcement-generator.service.ts`): понеділок: ноги, середа: кругове тренування, пʼятниця: руки. Each request passes the training date (weekday) so the model picks the topic; `announcements.topic`, when set for a day, overrides it. Change the programme there and bump `PROMPT_VERSION` (stored in `ai_generations.prompt_version`)
@@ -78,43 +78,43 @@ Auth endpoints:
   - `POST /payments/liqpay/callback` — public server-to-server callback; verifies SHA1 signature; activates/cancels booking
   - `GET /payments/status?order=` — member's own order; while PENDING asks LiqPay status API directly (used by `/payment/return`)
   - Expiry: lazily on `GET /schedule/next` (`expireStale()`), PENDING older than `PAYMENT_EXPIRY_MINUTES` — reconciles with LiqPay status API first (lost callback → PAID, LiqPay unreachable → skip). Up to 10 per run, checked in parallel, so a slow LiqPay delays the schedule by one timeout at most. This is the fallback: LiqPay's `expired_date` callback normally cancels the booking first
-- `PricesModule` — the gym's price list, **one for all coaches** (`GET /admin/prices`, `PATCH /admin/prices/:id` `{amountUah, expectedAmountUah}`), page `/admin/prices` («Ціни» in the menu):
-  - `price_items`: one row per option (`section` club_card | assigned | group, `title`, `option_label`, `code`); rows come from `npm run seed:prices`, a coach changes **amounts only** (no adding / removing). `assigned` = «Послуги тренера» (персональні + спліт), same sense as `ASSIGNED_TYPES`
-  - every change goes to `price_changes` (who, when, old → new), append-only, shown under the list. The page warns that the price changes for every coach before saving
-  - the update is compare-and-set on `expectedAmountUah`; if another coach changed it meanwhile → 409 with the current `amountUah` and `updatedBy`
+- `PricesModule` — the gym's price list, **one for all trainers** (`GET /admin/prices`, `PATCH /admin/prices/:id` `{amountUah, expectedAmountUah}`), page `/admin/prices` («Ціни» in the menu):
+  - `price_items`: one row per option (`section` club_card | assigned | group, `title`, `option_label`, `code`); rows come from `npm run seed:prices`, a trainer changes **amounts only** (no adding / removing). `assigned` = «Послуги тренера» (персональні + спліт), same sense as `ASSIGNED_TYPES`
+  - every change goes to `price_changes` (who, when, old → new), append-only, shown under the list. The page warns that the price changes for every trainer before saving
+  - the update is compare-and-set on `expectedAmountUah`; if another trainer changed it meanwhile → 409 with the current `amountUah` and `updatedBy`
   - **payments don't read it yet**: LiqPay still charges `PRICE_UAH` (700) for персональні / спліт, group trainings stay free. Members don't see the price list yet
 - `HealthModule` — `GET /health`
 
-### Coaches — rules
+### Trainers — rules
 
-- A coach **is** an `admins` account (e.g. `admin`, `demo`); there is no separate coach entity. All coaches are equal (no head coach yet).
-- **Everything a coach sees in the admin is their own**: trainings (`training_slots.coach_id`, NOT NULL), clients (`members.coach_id`), today page, calendar, history. Another coach's slot, booking or client answers **404** like a missing one (`ownSlot()` / `visibleTo()` in `AdminScheduleService`). **A member sees and books only their coach's group trainings** (`getMemberCoachId()`: `members.coach_id`, or the first coach for members without one and for visitors); booking or switching to another coach's group slot answers 404. The booking-open push goes only to clients of coaches with group trainings that day.
-- **Many halls: coaches work in parallel.** `training_slots` is UNIQUE (day, time, coach): two coaches can both have Wednesday 19:00; one coach can't have two trainings at the same time. The calendar shows only the coach's own trainings.
-- The daily announcement is still one per day (`announcements.training_day_id` UNIQUE), shared by all coaches.
-- **Default group trainings appear by themselves**: `ScheduleService.ensureDefaultGroupSlots()` (on `GET /schedule/next`, once per day per instance) adds 19:00 and 20:00 to every Mon/Wed/Fri for 3 weeks ahead, owned by the first coach account (`getDefaultCoachId()` = oldest `admins` row). They are real rows, so they show in the calendar and the coach edits or cancels them like any training. It never overwrites: a time already taken (even by a cancelled slot) is left alone and CANCELLED days are skipped.
+- A trainer **is** an `admins` account (e.g. `admin`, `demo`); there is no separate trainer entity. All trainers are equal (no head trainer yet).
+- **Everything a trainer sees in the admin is their own**: trainings (`training_slots.trainer_id`, NOT NULL), clients (`members.trainer_id`), today page, calendar, history. Another trainer's slot, booking or client answers **404** like a missing one (`ownSlot()` / `visibleTo()` in `AdminScheduleService`). **A member sees and books only their trainer's group trainings** (`getMemberTrainerId()`: `members.trainer_id`, or the first trainer for members without one and for visitors); booking or switching to another trainer's group slot answers 404. The booking-open push goes only to clients of trainers with group trainings that day.
+- **Many halls: trainers work in parallel.** `training_slots` is UNIQUE (day, time, trainer): two trainers can both have Wednesday 19:00; one trainer can't have two trainings at the same time. The calendar shows only the trainer's own trainings.
+- The daily announcement is still one per day (`announcements.training_day_id` UNIQUE), shared by all trainers.
+- **Default group trainings appear by themselves**: `ScheduleService.ensureDefaultGroupSlots()` (on `GET /schedule/next`, once per day per instance) adds 19:00 and 20:00 to every Mon/Wed/Fri for 3 weeks ahead, owned by the first trainer account (`getDefaultTrainerId()` = oldest `admins` row). They are real rows, so they show in the calendar and the trainer edits or cancels them like any training. It never overwrites: a time already taken (even by a cancelled slot) is left alone and CANCELLED days are skipped.
 - With no group training ahead, `GET /schedule/next` returns `localDate: null` and empty `slots`, but still the member's `assignedSlots`.
-- «Скасувати мої тренування цього дня» cancels only this coach's slots; the day becomes CANCELLED only when no active slot is left on it.
-- Clients: a coach sees **own + unassigned** clients («Без тренера», «Забрати собі»), reassigns under the client's name; the trainer note moves with the client. Assigned trainings can only be given to own/unassigned clients (members already on the slot may stay).
-- Coach push (`MEMBER_CANCELLED`) goes to the coach **whose training** it is.
-- Add a coach: `ADMIN_USERNAME=… ADMIN_PASSWORD=… npm run seed:admin` (in `backend/`).
+- «Скасувати мої тренування цього дня» cancels only this trainer's slots; the day becomes CANCELLED only when no active slot is left on it.
+- Clients: a trainer sees **own + unassigned** clients («Без тренера», «Забрати собі»), reassigns under the client's name; the trainer note moves with the client. Assigned trainings can only be given to own/unassigned clients (members already on the slot may stay).
+- Trainer push (`MEMBER_CANCELLED`) goes to the trainer **whose training** it is.
+- Add a trainer: `ADMIN_USERNAME=… ADMIN_PASSWORD=… npm run seed:admin` (in `backend/`).
 
 ### Cancellation reasons — rules
 
-- A member always writes a reason when cancelling or moving 19:00 ↔ 20:00 (`bookings.cancellation_reason`). The time shown is `cancelled_at` (server clock); the client sends no time (the old phone-side `cancellation_reason_at` was removed). A **move** also sets `bookings.switched_to_slot_id` on the old booking; reason without it = plain cancel. System cancellations (expired payment, coach cancelled the slot) have no reason and are never shown as the member's.
-- The coach sees reasons in four places: today page (block «Скасували» under each slot, «з 19:00» next to a moved participant), calendar event modal, clients page (count for 30 days, red from 3, expandable history), and a push to the coach (`MEMBER_CANCELLED`, sent from `BookingService`; a failed push never fails the member's action).
-- Coach push subscriptions live in **`admin_push_subscriptions`**, separate from members' `push_subscriptions`, so member-wide sends (BOOKING_OPEN) never reach the coach. `POST /push/subscriptions` routes by session type. The frontend re-sends an existing browser subscription on load (`syncSubscription`), because the same browser may have subscribed under the other role.
+- A member always writes a reason when cancelling or moving 19:00 ↔ 20:00 (`bookings.cancellation_reason`). The time shown is `cancelled_at` (server clock); the client sends no time (the old phone-side `cancellation_reason_at` was removed). A **move** also sets `bookings.switched_to_slot_id` on the old booking; reason without it = plain cancel. System cancellations (expired payment, trainer cancelled the slot) have no reason and are never shown as the member's.
+- The trainer sees reasons in four places: today page (block «Скасували» under each slot, «з 19:00» next to a moved participant), calendar event modal, clients page (count for 30 days, red from 3, expandable history), and a push to the trainer (`MEMBER_CANCELLED`, sent from `BookingService`; a failed push never fails the member's action).
+- Trainer push subscriptions live in **`admin_push_subscriptions`**, separate from members' `push_subscriptions`, so member-wide sends (BOOKING_OPEN) never reach the trainer. `POST /push/subscriptions` routes by session type. The frontend re-sends an existing browser subscription on load (`syncSubscription`), because the same browser may have subscribed under the other role.
 - Raw SQL subqueries: write table names explicitly. In a single-table select drizzle drops table names, so `${members.id}` inside a subquery on `bookings` renders as `"id"` and binds to `bookings.id`.
 
 ### Training types — rules
 
-Types (DB value = UI word): `групові`, `персональні` (one person, formerly `індивідуальні`), `спліт`. In code, an **assigned slot** (`ASSIGNED_TYPES`, `isAssignedType`, `assignedSlots`, `AssignedSlotCard`) means `персональні` **or** `спліт`: the coach assigns its members. Never call that umbrella "personal" (that is the `персональні` type). On the member page assigned slots are listed under «Мої тренування».
+Types (DB value = UI word): `групові`, `персональні` (one person, formerly `індивідуальні`), `спліт`. In code, an **assigned slot** (`ASSIGNED_TYPES`, `isAssignedType`, `assignedSlots`, `AssignedSlotCard`) means `персональні` **or** `спліт`: the trainer assigns its members. Never call that umbrella "personal" (that is the `персональні` type). On the member page assigned slots are listed under «Мої тренування».
 
 Constants and helpers live in `backend/src/schedule/training-types.ts`.
 - **Групові**: 19:00 and 20:00, capacity 8, free, visible to everyone, booking window 14:00–21:00 of that day. **One group booking per member per day** (switch between 19:00 and 20:00), checked in `BookingService` under a `SELECT … FOR UPDATE` on the member row.
-- **Персональні / спліт** (assigned): any time in 15-minute steps, on any day. The coach assigns members in `slot_members` (персональні exactly 1, спліт 1–3); `capacity` is fixed: персональні 1, спліт 3. Only assigned members see the slot (`GET /schedule/next` → `assignedSlots`) and can pay (`createCheckout` returns 404 for anyone else). Paid via LiqPay; payment and cancellation allowed until the slot starts; shown until one hour after the start. No vacancy alerts.
+- **Персональні / спліт** (assigned): any time in 15-minute steps, on any day. The trainer assigns members in `slot_members` (персональні exactly 1, спліт 1–3); `capacity` is fixed: персональні 1, спліт 3. Only assigned members see the slot (`GET /schedule/next` → `assignedSlots`) and can pay (`createCheckout` returns 404 for anyone else). Paid via LiqPay; payment and cancellation allowed until the slot starts; shown until one hour after the start. No vacancy alerts.
 - Assigned bookings **don't count** toward the one-per-day rule: a member can have a group booking plus several assigned ones on the same day. DB index: `bookings_member_slot_active_idx` UNIQUE (member_id, slot_id) WHERE ACTIVE.
-- `training_slots` is UNIQUE (day, slot_time, coach_id): a coach can't have two trainings at the same time. A **cancelled** slot at that time is reused (`ON CONFLICT … DO UPDATE … WHERE status = 'CANCELLED'`); the group upsert never takes over an active assigned slot.
-- The coach can't remove a member who already booked an assigned slot (409).
+- `training_slots` is UNIQUE (day, slot_time, trainer_id): a trainer can't have two trainings at the same time. A **cancelled** slot at that time is reused (`ON CONFLICT … DO UPDATE … WHERE status = 'CANCELLED'`); the group upsert never takes over an active assigned slot.
+- The trainer can't remove a member who already booked an assigned slot (409).
 - "Наступне тренування" on the member page is the next day **with group slots**; days with only assigned trainings are skipped. The booking-open push and the AI announcement cron skip such days too.
 
 ### LiqPay — rules (verified on sandbox 2026-10-22)

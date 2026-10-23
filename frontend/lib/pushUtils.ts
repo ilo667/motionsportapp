@@ -7,7 +7,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
-// Registers the browser's subscription for whoever is signed in (member or coach); the server upserts by endpoint
+// Registers the browser's subscription for whoever is signed in (member or trainer); the server upserts by endpoint
 export async function syncSubscription(sub: PushSubscription) {
   const json = sub.toJSON() as { endpoint: string; keys?: { p256dh?: string; auth?: string } };
   await api.subscribePush({ endpoint: json.endpoint, p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" });
@@ -20,7 +20,7 @@ export async function ensurePushSubscribed(): Promise<boolean> {
   try {
     const reg = await navigator.serviceWorker.ready;
     const existing = await reg.pushManager.getSubscription();
-    // The browser may be subscribed under the other role (coach testing as a member), so register it again
+    // The browser may be subscribed under the other role (trainer testing as a member), so register it again
     if (existing) {
       await syncSubscription(existing);
       return true;

@@ -55,7 +55,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                       <span className="ml-2 text-xs text-amber-400">з {p.switchedFromTime}</span>
                     )}
                   </span>
-                  {/* Editable after "Підтвердити всіх" too: the coach can fix a mistake */}
+                  {/* Editable after "Підтвердити всіх" too: the trainer can fix a mistake */}
                   <AttendanceButton
                     status={p.attendanceStatus}
                     name={p.displayName}

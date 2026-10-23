@@ -38,7 +38,7 @@ export default function AdminPage() {
       const data = await api.getAdminSchedule();
       setSchedule(data);
       setLoadFailed(false);
-      // null: this coach has no upcoming trainings
+      // null: this trainer has no upcoming trainings
       if (!data) return;
       const [ann, exs] = await Promise.all([
         api.getAnnouncement(data.localDate).catch(() => null),

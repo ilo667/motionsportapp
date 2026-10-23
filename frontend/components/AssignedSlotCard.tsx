@@ -24,7 +24,7 @@ interface AssignedSlotCardProps {
   onRefresh: () => void;
 }
 
-// Personal / split the coach assigned to this member. Paid via LiqPay; payment and cancel until the start
+// Personal / split the trainer assigned to this member. Paid via LiqPay; payment and cancel until the start
 export function AssignedSlotCard({ slot, onMutate, onRefresh }: AssignedSlotCardProps) {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState("");

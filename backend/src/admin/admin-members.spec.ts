@@ -39,24 +39,24 @@ describe('Admin members — trainer note', () => {
       },
     ];
     const { db } = makeDb(rows);
-    await expect(makeService(db).getMembers('coach-1')).resolves.toEqual(rows);
+    await expect(makeService(db).getMembers('trainer-1')).resolves.toEqual(rows);
   });
 
   it('saves a trimmed note', async () => {
     const { db, sets } = makeDb([{ id: 'm1', trainerNote: 'це Катюха' }]);
-    await makeService(db).updateMemberNote('coach-1', 'm1', { note: '  це Катюха  ' });
+    await makeService(db).updateMemberNote('trainer-1', 'm1', { note: '  це Катюха  ' });
     expect(sets).toEqual([{ trainerNote: 'це Катюха' }]);
   });
 
   it('clears the note when empty text is sent', async () => {
     const { db, sets } = makeDb([{ id: 'm1', trainerNote: null }]);
-    await makeService(db).updateMemberNote('coach-1', 'm1', { note: '   ' });
+    await makeService(db).updateMemberNote('trainer-1', 'm1', { note: '   ' });
     expect(sets).toEqual([{ trainerNote: null }]);
   });
 
   it('throws NotFoundException for an unknown member', async () => {
     const { db } = makeDb([]);
-    await expect(makeService(db).updateMemberNote('coach-1', 'missing', { note: 'x' })).rejects.toThrow(
+    await expect(makeService(db).updateMemberNote('trainer-1', 'missing', { note: 'x' })).rejects.toThrow(
       NotFoundException,
     );
   });

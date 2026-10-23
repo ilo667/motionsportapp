@@ -28,11 +28,11 @@ export class PushSubscriptionsService {
     return this.database.db.select().from(pushSubscriptions).where(isNull(pushSubscriptions.disabledAt));
   }
 
-  // Members whose coach is one of these (and members without a coach, when asked)
-  async findForCoaches(coachIds: string[], includeUnassigned: boolean) {
-    const ofCoaches = coachIds.length > 0 ? inArray(members.coachId, coachIds) : undefined;
-    const unassigned = includeUnassigned ? isNull(members.coachId) : undefined;
-    const who = ofCoaches && unassigned ? or(ofCoaches, unassigned) : (ofCoaches ?? unassigned);
+  // Members whose trainer is one of these (and members without a trainer, when asked)
+  async findForTrainers(trainerIds: string[], includeUnassigned: boolean) {
+    const ofTrainers = trainerIds.length > 0 ? inArray(members.trainerId, trainerIds) : undefined;
+    const unassigned = includeUnassigned ? isNull(members.trainerId) : undefined;
+    const who = ofTrainers && unassigned ? or(ofTrainers, unassigned) : (ofTrainers ?? unassigned);
     if (!who) return [];
     return this.database.db
       .select({ endpoint: pushSubscriptions.endpoint, p256dh: pushSubscriptions.p256dh, auth: pushSubscriptions.auth })
@@ -56,7 +56,7 @@ export class PushSubscriptionsService {
       .where(eq(pushSubscriptions.endpoint, endpoint));
   }
 
-  // Coach's devices live in their own table, so member-wide sends (BOOKING_OPEN) never reach them
+  // Trainer's devices live in their own table, so member-wide sends (BOOKING_OPEN) never reach them
   async upsertAdmin(adminId: string, endpoint: string, p256dh: string, auth: string) {
     await this.database.db
       .insert(adminPushSubscriptions)

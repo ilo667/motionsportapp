@@ -70,7 +70,7 @@ export class PaymentService {
       throw new BadRequestException('This slot does not require payment');
     }
 
-    // Assigned slots are visible and payable only for the members the coach assigned
+    // Assigned slots are visible and payable only for the members the trainer assigned
     const [assigned] = await this.database.db
       .select({ memberId: slotMembers.memberId })
       .from(slotMembers)

@@ -23,7 +23,7 @@ interface CancellationListProps {
   withDate?: boolean;
 }
 
-// Who cancelled or moved and why. Used on the coach's today page, in the calendar modal and in client history
+// Who cancelled or moved and why. Used on the trainer's today page, in the calendar modal and in client history
 export function CancellationList({ title, items, withDate = false }: CancellationListProps) {
   if (items.length === 0) return null;
 

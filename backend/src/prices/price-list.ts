@@ -1,5 +1,5 @@
 // The gym's price list as of 2026-10-23. Used only by `npm run seed:prices` to fill an empty table;
-// after that the amounts live in the DB and coaches change them on the «Ціни» page
+// after that the amounts live in the DB and trainers change them on the «Ціни» page
 export const PRICE_SECTIONS = ['club_card', 'assigned', 'group'] as const;
 export type PriceSection = (typeof PRICE_SECTIONS)[number];
 

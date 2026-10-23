@@ -5,7 +5,7 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UpdatePriceDto } from './dto/update-price.dto';
 
-// One price list for all coaches (members don't see it yet)
+// One price list for all trainers (members don't see it yet)
 @Controller('admin/prices')
 @UseGuards(SessionGuard, AdminGuard)
 export class PricesController {

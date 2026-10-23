@@ -13,14 +13,14 @@ import {
   ASSIGNED_TYPES,
   slotStartsAt,
 } from './training-types';
-import { getDefaultCoachId, getMemberCoachId } from './default-coach';
+import { getDefaultTrainerId, getMemberTrainerId } from './default-trainer';
 
 // An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
 const ASSIGNED_SHOWN_FOR_MINUTES = 60;
 
 type DayRow = typeof trainingDays.$inferSelect;
 
-// Group trainings appear by themselves on these weekdays, so they exist even if the coach forgets
+// Group trainings appear by themselves on these weekdays, so they exist even if the trainer forgets
 const DEFAULT_HORIZON_DAYS = 21;
 
 @Injectable()
@@ -44,11 +44,11 @@ export class ScheduleService {
     const assignedSlots = memberId ? await this.getAssignedSlots(memberId, now) : [];
 
     // "Наступне тренування" is the next group day; days with only assigned trainings are skipped
-    // Group trainings of the member's coach only (the first coach for members without one and for visitors)
-    const coachId = await getMemberCoachId(this.database.db, memberId);
+    // Group trainings of the member's trainer only (the first trainer for members without one and for visitors)
+    const trainerId = await getMemberTrainerId(this.database.db, memberId);
 
     const upcoming = await this.withGroupSlots(
-      coachId,
+      trainerId,
       await this.database.db
         .select()
         .from(trainingDays)
@@ -64,7 +64,7 @@ export class ScheduleService {
       return now < closeAt;
     });
 
-    // No group day ahead (e.g. the coach cancelled them): the member still gets their assigned trainings
+    // No group day ahead (e.g. the trainer cancelled them): the member still gets their assigned trainings
     if (!targetDay) {
       return {
         localDate: null,
@@ -94,7 +94,7 @@ export class ScheduleService {
         and(
           eq(trainingSlots.trainingDayId, targetDay.id),
           eq(trainingSlots.trainingType, GROUP_TYPE),
-          eq(trainingSlots.coachId, coachId!),
+          eq(trainingSlots.trainerId, trainerId!),
         ),
       )
       .orderBy(trainingSlots.slotTime);
@@ -175,9 +175,9 @@ export class ScheduleService {
     };
   }
 
-  // Days with group slots of this coach (any status: a cancelled group slot is still shown as "Скасовано")
-  private async withGroupSlots(coachId: string | null, days: DayRow[]) {
-    if (days.length === 0 || !coachId) return [];
+  // Days with group slots of this trainer (any status: a cancelled group slot is still shown as "Скасовано")
+  private async withGroupSlots(trainerId: string | null, days: DayRow[]) {
+    if (days.length === 0 || !trainerId) return [];
     const rows = await this.database.db
       .selectDistinct({ dayId: trainingSlots.trainingDayId })
       .from(trainingSlots)
@@ -188,14 +188,14 @@ export class ScheduleService {
             days.map((d) => d.id),
           ),
           eq(trainingSlots.trainingType, GROUP_TYPE),
-          eq(trainingSlots.coachId, coachId),
+          eq(trainingSlots.trainerId, trainerId),
         ),
       );
     const withGroup = new Set(rows.map((r) => r.dayId));
     return days.filter((d) => withGroup.has(d.id));
   }
 
-  // Upcoming assigned trainings the coach assigned to this member, on any day
+  // Upcoming assigned trainings the trainer assigned to this member, on any day
   private async getAssignedSlots(memberId: string, now: DateTime) {
     const rows = await this.database.db
       .select({
@@ -257,9 +257,9 @@ export class ScheduleService {
     });
   }
 
-  // Mon/Wed/Fri 19:00 and 20:00 group slots for the next 3 weeks, owned by the first coach. Idempotent:
-  // a time already taken (by any training, even a cancelled one) is left alone, and days the coach
-  // cancelled are skipped, so the coach's changes are never undone
+  // Mon/Wed/Fri 19:00 and 20:00 group slots for the next 3 weeks, owned by the first trainer. Idempotent:
+  // a time already taken (by any training, even a cancelled one) is left alone, and days the trainer
+  // cancelled are skipped, so the trainer's changes are never undone
   async ensureDefaultGroupSlots() {
     const now = this.clock.now();
     // Runs on every schedule load (polled every 5 s in the booking window): once per day per instance is enough,
@@ -274,8 +274,8 @@ export class ScheduleService {
     }
     if (dates.length === 0) return;
 
-    const coachId = await getDefaultCoachId(this.database.db);
-    if (!coachId) return; // no coach account yet
+    const trainerId = await getDefaultTrainerId(this.database.db);
+    if (!trainerId) return; // no trainer account yet
 
     await this.database.db
       .insert(trainingDays)
@@ -303,7 +303,7 @@ export class ScheduleService {
               trainingType: GROUP_TYPE,
               capacity: 8,
               bookedCount: 0,
-              coachId,
+              trainerId,
             })),
           ),
         )

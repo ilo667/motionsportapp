@@ -20,7 +20,7 @@ import {
   slotStartsAt,
 } from '../schedule/training-types';
 
-// Member-initiated cancellations / moves shown to the coach (with the reason they wrote)
+// Member-initiated cancellations / moves shown to the trainer (with the reason they wrote)
 const CANCELLATION_STATS_DAYS = 30;
 const MEMBER_HISTORY_LIMIT = 20;
 // Training days per history page («Показати ще» loads the next page)
@@ -55,7 +55,7 @@ export class AdminScheduleService {
     private readonly clock: ClockService,
   ) {}
 
-  // The coach's next training day with their own slots
+  // The trainer's next training day with their own slots
   async getSchedule(adminId: string) {
     const now = this.clock.now();
     const today = now.toISODate()!;
@@ -82,7 +82,7 @@ export class AdminScheduleService {
     const slots = await this.database.db
       .select()
       .from(trainingSlots)
-      .where(and(eq(trainingSlots.trainingDayId, targetDay.id), eq(trainingSlots.coachId, adminId)))
+      .where(and(eq(trainingSlots.trainingDayId, targetDay.id), eq(trainingSlots.trainerId, adminId)))
       .orderBy(trainingSlots.slotTime);
 
     return {
@@ -96,7 +96,7 @@ export class AdminScheduleService {
     };
   }
 
-  // Past training days, newest first, for the coach's history (attendance stays editable there).
+  // Past training days, newest first, for the trainer's history (attendance stays editable there).
   // Cursor pagination: pass the last returned localDate as `before` to get older days
   async getHistory(adminId: string, before?: string) {
     const today = this.clock.now().toISODate()!;
@@ -121,7 +121,7 @@ export class AdminScheduleService {
                   trainingSlots.trainingDayId,
                   page.map((d) => d.id),
                 ),
-                eq(trainingSlots.coachId, adminId),
+                eq(trainingSlots.trainerId, adminId),
               ),
             )
             .orderBy(trainingSlots.slotTime)
@@ -138,16 +138,16 @@ export class AdminScheduleService {
     };
   }
 
-  // Days with at least one slot of this coach. Raw, fully qualified SQL (see the drizzle note in CLAUDE.md)
+  // Days with at least one slot of this trainer. Raw, fully qualified SQL (see the drizzle note in CLAUDE.md)
   private hasSlotsOf(adminId: string) {
-    return sql`exists (select 1 from training_slots ts where ts.training_day_id = "training_days"."id" and ts.coach_id = ${adminId})`;
+    return sql`exists (select 1 from training_slots ts where ts.training_day_id = "training_days"."id" and ts.trainer_id = ${adminId})`;
   }
 
-  // The slot if it belongs to this coach; another coach's slot answers 404 like a missing one
+  // The slot if it belongs to this trainer; another trainer's slot answers 404 like a missing one
   private async ownSlot(adminId: string, slotId: string, db: Db | Tx = this.database.db, lock = false) {
     const query = db.select().from(trainingSlots).where(eq(trainingSlots.id, slotId));
     const [slot] = await (lock ? query.for('update').limit(1) : query.limit(1));
-    if (!slot || slot.coachId !== adminId) throw new NotFoundException('Slot not found');
+    if (!slot || slot.trainerId !== adminId) throw new NotFoundException('Slot not found');
     return slot;
   }
 
@@ -197,7 +197,7 @@ export class AdminScheduleService {
     }));
   }
 
-  // Only this coach's trainings (coaches work in parallel in different halls)
+  // Only this trainer's trainings (trainers work in parallel in different halls)
   async getCalendar(adminId: string, month: string) {
     const start = `${month}-01`;
     const [year, m] = month.split('-').map(Number);
@@ -222,7 +222,7 @@ export class AdminScheduleService {
           gte(trainingDays.localDate, start),
           lte(trainingDays.localDate, end),
           eq(trainingSlots.status, 'ACTIVE'),
-          eq(trainingSlots.coachId, adminId),
+          eq(trainingSlots.trainerId, adminId),
           eq(trainingDays.status, 'SCHEDULED'),
         ),
       )
@@ -238,7 +238,7 @@ export class AdminScheduleService {
             .where(inArray(slotMembers.slotId, assignedIds))
             .orderBy(slotMembers.createdAt)
         : [];
-    // Per-member payment state: the coach needs who paid, not a count
+    // Per-member payment state: the trainer needs who paid, not a count
     const booked =
       assignedIds.length > 0
         ? await this.database.db
@@ -280,12 +280,12 @@ export class AdminScheduleService {
           trainingType: GROUP_TYPE,
           capacity: 8,
           bookedCount: 0,
-          coachId: adminId,
+          trainerId: adminId,
         })
         .onConflictDoUpdate({
-          target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.coachId],
+          target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.trainerId],
           set: { trainingType: GROUP_TYPE, status: 'ACTIVE', capacity: 8, cancelledAt: null },
-          // this coach's slot at that time: a cancelled one is re-used, an active group one stays as is;
+          // this trainer's slot at that time: a cancelled one is re-used, an active group one stays as is;
           // their own active assigned training there is not taken over
           setWhere: or(eq(trainingSlots.status, 'CANCELLED'), eq(trainingSlots.trainingType, GROUP_TYPE)),
         })
@@ -320,10 +320,10 @@ export class AdminScheduleService {
           trainingType: dto.trainingType,
           capacity,
           bookedCount: 0,
-          coachId: adminId,
+          trainerId: adminId,
         })
         .onConflictDoUpdate({
-          target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.coachId],
+          target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.trainerId],
           set: { trainingType: dto.trainingType, status: 'ACTIVE', capacity, bookedCount: 0, cancelledAt: null },
           // Only a cancelled slot may be re-used (its bookings are all cancelled)
           setWhere: eq(trainingSlots.status, 'CANCELLED'),
@@ -364,7 +364,7 @@ export class AdminScheduleService {
     return { ok: true };
   }
 
-  // Members must be the coach's own or unassigned clients; on an existing slot, members already on it may stay
+  // Members must be the trainer's own or unassigned clients; on an existing slot, members already on it may stay
   private async validateSlotMembers(
     adminId: string,
     trainingType: string,
@@ -404,8 +404,8 @@ export class AdminScheduleService {
     return day.id;
   }
 
-  // SCHEDULED: adds this coach's group slots (19:00 / 20:00, times taken by others are skipped).
-  // CANCELLED: cancels only this coach's slots; the day itself is cancelled when nothing active is left on it
+  // SCHEDULED: adds this trainer's group slots (19:00 / 20:00, times taken by others are skipped).
+  // CANCELLED: cancels only this trainer's slots; the day itself is cancelled when nothing active is left on it
   async upsertTrainingDay(adminId: string, date: string, dto: UpsertTrainingDayDto) {
     if (dto.status === 'SCHEDULED') {
       await this.database.db.transaction(async (tx) => {
@@ -419,7 +419,7 @@ export class AdminScheduleService {
               status: 'ACTIVE' as const,
               capacity: 8,
               bookedCount: 0,
-              coachId: adminId,
+              trainerId: adminId,
             })),
           )
           .onConflictDoNothing();
@@ -436,7 +436,7 @@ export class AdminScheduleService {
       .where(
         and(
           eq(trainingSlots.trainingDayId, day.id),
-          eq(trainingSlots.coachId, adminId),
+          eq(trainingSlots.trainerId, adminId),
           eq(trainingSlots.status, 'ACTIVE'),
         ),
       );
@@ -461,7 +461,7 @@ export class AdminScheduleService {
           .set({ status: 'CANCELLED', bookedCount: 0, cancelledAt: new Date() })
           .where(inArray(trainingSlots.id, mySlotIds));
       }
-      // Other coaches' trainings that day keep the day scheduled
+      // Other trainers' trainings that day keep the day scheduled
       await tx
         .update(trainingDays)
         .set({ status: 'CANCELLED', updatedAt: new Date() })
@@ -561,12 +561,12 @@ export class AdminScheduleService {
   }
 
   async updateBookingAttendance(bookingId: string, dto: UpdateAttendanceDto, adminId: string) {
-    // Only bookings on this coach's own trainings
+    // Only bookings on this trainer's own trainings
     const [booking] = await this.database.db
       .select({ id: bookings.id })
       .from(bookings)
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
-      .where(and(eq(bookings.id, bookingId), eq(trainingSlots.coachId, adminId)))
+      .where(and(eq(bookings.id, bookingId), eq(trainingSlots.trainerId, adminId)))
       .limit(1);
 
     if (!booking) throw new NotFoundException('Booking not found');
@@ -587,12 +587,12 @@ export class AdminScheduleService {
     return { ok: true };
   }
 
-  // A coach works with their own clients plus unassigned ones (to claim them); other coaches' clients are hidden
+  // A trainer works with their own clients plus unassigned ones (to claim them); other trainers' clients are hidden
   private visibleTo(adminId: string) {
-    return or(eq(members.coachId, adminId), isNull(members.coachId))!;
+    return or(eq(members.trainerId, adminId), isNull(members.trainerId))!;
   }
 
-  // Coach's client list. trainerNote is admin-only — keep it out of member-facing queries
+  // Trainer's client list. trainerNote is admin-only — keep it out of member-facing queries
   async getMembers(adminId: string) {
     const since = new Date(Date.now() - CANCELLATION_STATS_DAYS * 24 * 60 * 60 * 1000);
     // Cancellations only (a move to another slot isn't a missed training)
@@ -612,7 +612,7 @@ export class AdminScheduleService {
         memberCode: members.memberCode,
         displayName: members.displayName,
         trainerNote: members.trainerNote,
-        coachId: members.coachId,
+        trainerId: members.trainerId,
         createdAt: members.createdAt,
         recentCancellations: cancelledCount,
       })
@@ -622,27 +622,27 @@ export class AdminScheduleService {
   }
 
   // For the reassign picker. Usernames only, never password hashes
-  async getCoaches() {
+  async getTrainers() {
     return this.database.db
       .select({ id: admins.id, username: admins.username })
       .from(admins)
       .orderBy(asc(admins.username));
   }
 
-  // Hand a client to a coach (or claim an unassigned one). Only the current coach can do it
-  async assignCoach(adminId: string, memberId: string, coachId: string) {
-    const [coach] = await this.database.db
+  // Hand a client to a trainer (or claim an unassigned one). Only the current trainer can do it
+  async assignTrainer(adminId: string, memberId: string, trainerId: string) {
+    const [trainer] = await this.database.db
       .select({ id: admins.id })
       .from(admins)
-      .where(eq(admins.id, coachId))
+      .where(eq(admins.id, trainerId))
       .limit(1);
-    if (!coach) throw new NotFoundException('Coach not found');
+    if (!trainer) throw new NotFoundException('Trainer not found');
 
     const [updated] = await this.database.db
       .update(members)
-      .set({ coachId })
+      .set({ trainerId })
       .where(and(eq(members.id, memberId), this.visibleTo(adminId)))
-      .returning({ id: members.id, coachId: members.coachId });
+      .returning({ id: members.id, trainerId: members.trainerId });
     if (!updated) throw new NotFoundException('Member not found');
     return updated;
   }
@@ -667,7 +667,7 @@ export class AdminScheduleService {
   }
 
   // Bookings the member cancelled or moved themselves (they always write a reason). System cancellations
-  // (expired payment, coach cancelled the slot) have no reason and are left out
+  // (expired payment, trainer cancelled the slot) have no reason and are left out
   private async memberCancellations(filter: SQL, limit?: number) {
     const target = alias(trainingSlots, 'target_slot');
     const query = this.database.db

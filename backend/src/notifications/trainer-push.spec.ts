@@ -10,14 +10,14 @@ function makeNotifications() {
     findAdminByAdminId: jest.fn().mockResolvedValue([adminSub]),
     disableAdminByEndpoint: jest.fn(),
     findAll: jest.fn().mockResolvedValue([]),
-    findForCoaches: jest.fn().mockResolvedValue([]),
+    findForTrainers: jest.fn().mockResolvedValue([]),
   };
   const svc = new NotificationService({} as any, push as any, subs as any, {} as any);
   return { svc, push, subs };
 }
 
-describe('Coach push — member cancelled / moved', () => {
-  it('sends the reason to the coach devices only', async () => {
+describe('Trainer push — member cancelled / moved', () => {
+  it('sends the reason to the trainer devices only', async () => {
     const { svc, push, subs } = makeNotifications();
     await (svc as any).sendMemberCancelled({
       displayName: 'Оля',
@@ -52,7 +52,7 @@ describe('Coach push — member cancelled / moved', () => {
     );
   });
 
-  it("goes only to the member's coach when the member has one", async () => {
+  it("goes only to the member's trainer when the member has one", async () => {
     const { svc, subs } = makeNotifications();
     await (svc as any).sendMemberCancelled({
       displayName: 'Оля',
@@ -60,13 +60,13 @@ describe('Coach push — member cancelled / moved', () => {
       localDate: '2026-10-22',
       reason: 'x',
       switchedToTime: null,
-      coachId: 'coach-2',
+      trainerId: 'trainer-2',
     });
-    expect(subs.findAdminByAdminId).toHaveBeenCalledWith('coach-2');
+    expect(subs.findAdminByAdminId).toHaveBeenCalledWith('trainer-2');
     expect(subs.findAllAdmin).not.toHaveBeenCalled();
   });
 
-  it('goes to every coach for an unassigned member', async () => {
+  it('goes to every trainer for an unassigned member', async () => {
     const { svc, subs } = makeNotifications();
     await (svc as any).sendMemberCancelled({
       displayName: 'Оля',
@@ -74,13 +74,13 @@ describe('Coach push — member cancelled / moved', () => {
       localDate: '2026-10-22',
       reason: 'x',
       switchedToTime: null,
-      coachId: null,
+      trainerId: null,
     });
     expect(subs.findAllAdmin).toHaveBeenCalled();
     expect(subs.findAdminByAdminId).not.toHaveBeenCalled();
   });
 
-  it('disables an expired coach subscription', async () => {
+  it('disables an expired trainer subscription', async () => {
     const { svc, push, subs } = makeNotifications();
     push.send.mockResolvedValue('expired');
     await (svc as any).sendMemberCancelled({
@@ -95,10 +95,10 @@ describe('Coach push — member cancelled / moved', () => {
 });
 
 describe('Booking-open push', () => {
-  it('goes only to clients of coaches with group trainings today (and unassigned ones when asked)', async () => {
+  it('goes only to clients of trainers with group trainings today (and unassigned ones when asked)', async () => {
     const { svc, subs } = makeNotifications();
-    await (svc as any).sendOpening({ localDate: '2026-10-26', coachIds: ['coach-1'], includeUnassigned: true });
-    expect(subs.findForCoaches).toHaveBeenCalledWith(['coach-1'], true);
+    await (svc as any).sendOpening({ localDate: '2026-10-26', trainerIds: ['trainer-1'], includeUnassigned: true });
+    expect(subs.findForTrainers).toHaveBeenCalledWith(['trainer-1'], true);
     expect(subs.findAll).not.toHaveBeenCalled();
   });
 });
@@ -107,7 +107,7 @@ describe('Push subscriptions — admin vs member', () => {
   const dto = { endpoint: 'https://push/1', p256dh: 'k', auth: 'a' };
   const makeSvc = () => ({ upsert: jest.fn(), upsertAdmin: jest.fn(), remove: jest.fn(), removeAdmin: jest.fn() });
 
-  it('stores the coach device in the admin table', async () => {
+  it('stores the trainer device in the admin table', async () => {
     const svc = makeSvc();
     await new PushSubscriptionsController(svc as any).subscribe(dto, { user: { type: 'admin', id: 'admin-1' } });
     expect(svc.upsertAdmin).toHaveBeenCalledWith('admin-1', dto.endpoint, dto.p256dh, dto.auth);

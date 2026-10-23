@@ -22,7 +22,7 @@ import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { SlotMembersDto } from './dto/update-slot-members.dto';
-import { AssignCoachDto } from './dto/assign-coach.dto';
+import { AssignTrainerDto } from './dto/assign-trainer.dto';
 
 @Controller('admin')
 @UseGuards(SessionGuard, AdminGuard)
@@ -47,18 +47,18 @@ export class AdminScheduleController {
     return this.adminScheduleService.getMembers(user.id);
   }
 
-  @Get('coaches')
-  getCoaches() {
-    return this.adminScheduleService.getCoaches();
+  @Get('trainers')
+  getTrainers() {
+    return this.adminScheduleService.getTrainers();
   }
 
-  @Patch('members/:memberId/coach')
-  assignCoach(
+  @Patch('members/:memberId/trainer')
+  assignTrainer(
     @Param('memberId', ParseUUIDPipe) memberId: string,
-    @Body() dto: AssignCoachDto,
+    @Body() dto: AssignTrainerDto,
     @CurrentUser() user: SessionUser,
   ) {
-    return this.adminScheduleService.assignCoach(user.id, memberId, dto.coachId);
+    return this.adminScheduleService.assignTrainer(user.id, memberId, dto.trainerId);
   }
 
   @Get('members/:memberId/cancellations')
