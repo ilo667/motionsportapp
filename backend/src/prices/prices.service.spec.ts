@@ -8,7 +8,7 @@ import { PricesController } from './prices.controller';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { UpdatePriceDto } from './dto/update-price.dto';
 import { DEFAULT_PRICE_LIST, PRICE_SECTIONS } from './price-list';
-import { KY_ZONE } from '../schedule/training-types';
+import { KY_ZONE, ASSIGNED_TYPES } from '../schedule/training-types';
 
 const NOW = DateTime.fromISO('2026-10-23T12:00:00', { zone: KY_ZONE });
 
@@ -119,5 +119,27 @@ describe('Prices', () => {
       expect(PRICE_SECTIONS).toContain(p.section);
       expect(Number.isInteger(p.amountUah) && p.amountUah > 0).toBe(true);
     }
+  });
+
+  // What a purchase gives: a club card lasts durationMonths (0 = that day only), a trainer package holds trainingCount
+  it('seed price list: club cards have a duration, trainer services a type and a count, group items neither', () => {
+    for (const p of DEFAULT_PRICE_LIST) {
+      if (p.section === 'club_card') {
+        expect(Number.isInteger(p.durationMonths) && p.durationMonths! >= 0).toBe(true);
+        expect(p.trainingType).toBeUndefined();
+      } else if (p.section === 'assigned') {
+        expect(ASSIGNED_TYPES).toContain(p.trainingType);
+        expect([1, 6, 8, 12]).toContain(p.trainingCount);
+        expect(p.durationMonths).toBeUndefined();
+      } else {
+        expect(p.trainingType).toBeUndefined();
+        expect(p.durationMonths).toBeUndefined();
+      }
+    }
+    expect(DEFAULT_PRICE_LIST.find((p) => p.code === 'club_single')?.durationMonths).toBe(0);
+    expect(DEFAULT_PRICE_LIST.find((p) => p.code === 'personal_8')).toMatchObject({
+      trainingType: 'персональні',
+      trainingCount: 8,
+    });
   });
 });

@@ -155,6 +155,8 @@ Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts` i
 
 Deliberate copies (kept in sync by code, checked consistent on 2026-10-23): `training_slots.booked_count` (seat counter, updated under the slot row lock), `bookings.payment_status` (mirror of the latest payment), `price_items.updated_by/updated_at` (latest `price_changes` row).
 
+`db:push` often re-creates the `slot_members` primary key (`DROP CONSTRAINT … ADD CONSTRAINT … PRIMARY KEY("slot_id","member_id")`): a drizzle-kit bug with composite keys on this Postgres. Harmless (same key, same data); pinning the key's name made it happen on every run, so leave it.
+
 `db:push` needs a real terminal for its questions. **Never answer "truncate"** to a question about adding a unique constraint: it means a constraint name in the DB differs from the schema. Look the name up in `pg_constraint` and pin it in the schema (`.unique('payments_order_id_key')`), as done for `payments` and `admin_push_subscriptions`.
 
 ### Frontend conventions

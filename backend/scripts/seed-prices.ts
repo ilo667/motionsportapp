@@ -1,21 +1,36 @@
 import 'dotenv/config';
 import { Pool } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
+import { sql } from 'drizzle-orm';
 import { priceItems } from '../src/database/schema';
 import { DEFAULT_PRICE_LIST } from '../src/prices/price-list';
 
-// Adds missing price list rows. Existing rows (and amounts trainers changed) are left alone, so it is safe to rerun
+// Adds missing price list rows and refreshes the others' metadata. Amounts trainers changed are kept, so it is safe to rerun
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = drizzle({ client: pool });
 
-  const inserted = await db
+  // Existing rows get the list's names, order and what they give; amounts are never touched
+  const rows = await db
     .insert(priceItems)
     .values(DEFAULT_PRICE_LIST.map((item, i) => ({ ...item, sortOrder: (i + 1) * 10 })))
-    .onConflictDoNothing({ target: priceItems.code })
-    .returning({ code: priceItems.code });
+    .onConflictDoUpdate({
+      target: priceItems.code,
+      set: {
+        section: sql`excluded.section`,
+        title: sql`excluded.title`,
+        optionLabel: sql`excluded.option_label`,
+        sortOrder: sql`excluded.sort_order`,
+        durationMonths: sql`excluded.duration_months`,
+        trainingType: sql`excluded.training_type`,
+        trainingCount: sql`excluded.training_count`,
+      },
+    })
+    // xmax = 0 only for a freshly inserted row
+    .returning({ inserted: sql<boolean>`(xmax = 0)` });
 
-  console.log(`Price list: ${inserted.length} added, ${DEFAULT_PRICE_LIST.length - inserted.length} already there.`);
+  const added = rows.filter((r) => r.inserted).length;
+  console.log(`Price list: ${added} added, ${rows.length - added} updated.`);
   await pool.end();
 }
 

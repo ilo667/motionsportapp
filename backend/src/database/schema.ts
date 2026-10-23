@@ -262,6 +262,7 @@ export const payments = pgTable(
     bookingId: uuid('booking_id')
       .notNull()
       .references(() => bookings.id),
+    purchaseId: uuid('purchase_id').references((): AnyPgColumn => purchases.id),
     // Constraint name as it already exists in the DB (created by a one-off SQL script)
     orderId: text('order_id').notNull().unique('payments_order_id_key'),
     amount: integer('amount').notNull(),
@@ -276,8 +277,7 @@ export const payments = pgTable(
 );
 
 // Gym price list, one row per option ("Повний день · 3 місяці"). Shared by all trainers; a trainer changes
-// amounts only, rows come from `npm run seed:prices`. Shown in the admin only: payments don't read it yet
-// (LiqPay still charges PRICE_UAH in payment.service.ts)
+// amounts only, rows come from `npm run seed:prices`. A purchase copies the amount at the moment it is made
 export const priceItems = pgTable(
   'price_items',
   {
@@ -289,6 +289,11 @@ export const priceItems = pgTable(
     optionLabel: text('option_label'), // "3 місяці", "6 тренувань"; null for a single-option item
     amountUah: integer('amount_uah').notNull(),
     sortOrder: integer('sort_order').notNull(),
+    // What buying it gives. Club card: months from the day it is paid (0 = that day only).
+    // Trainer service: a package of trainingCount trainings for slots of trainingType
+    durationMonths: integer('duration_months'),
+    trainingType: text('training_type'),
+    trainingCount: integer('training_count'),
     // Who changed the amount last; null = still the seeded value
     updatedBy: uuid('updated_by').references(() => admins.id),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -296,6 +301,7 @@ export const priceItems = pgTable(
   () => [
     oneOf('price_items_section_check', 'section', PRICE_SECTIONS),
     check('price_items_amount_check', sql`amount_uah > 0`),
+    oneOf('price_items_training_type_check', 'training_type', ASSIGNED_TYPES),
   ],
 );
 
@@ -311,4 +317,91 @@ export const priceChanges = pgTable('price_changes', {
     .notNull()
     .references(() => admins.id),
   changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// A member's order: one trainer service, plus a club card when they had no valid one. Paid by LiqPay
+// (activated by the callback / status API) or in cash (activated when their trainer confirms)
+export const purchases = pgTable(
+  'purchases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id),
+    // The member's trainer when the purchase was made: the one who confirms cash
+    trainerId: uuid('trainer_id').references(() => admins.id),
+    method: text('method').notNull(),
+    status: text('status').notNull().default('PENDING'),
+    totalUah: integer('total_uah').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    // Trainer who confirmed or rejected cash
+    decidedBy: uuid('decided_by').references(() => admins.id),
+  },
+  () => [
+    oneOf('purchases_method_check', 'method', ['LIQPAY', 'CASH']),
+    oneOf('purchases_status_check', 'status', ['PENDING', 'PAID', 'REJECTED', 'FAILED', 'EXPIRED', 'CANCELLED']),
+    check('purchases_total_check', sql`total_uah > 0`),
+  ],
+);
+
+// Lines of a purchase, with the price list values copied at purchase time (later price changes don't apply)
+export const purchaseItems = pgTable('purchase_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  purchaseId: uuid('purchase_id')
+    .notNull()
+    .references(() => purchases.id),
+  priceItemId: uuid('price_item_id')
+    .notNull()
+    .references(() => priceItems.id),
+  title: text('title').notNull(),
+  optionLabel: text('option_label'),
+  amountUah: integer('amount_uah').notNull(),
+});
+
+// Access to the gym. From a paid purchase, or added by the trainer (bought at the reception)
+export const clubCards = pgTable('club_cards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  memberId: uuid('member_id')
+    .notNull()
+    .references(() => members.id),
+  purchaseItemId: uuid('purchase_item_id').references(() => purchaseItems.id), // null = added by the trainer
+  label: text('label').notNull(),
+  validFrom: date('valid_from').notNull(),
+  validUntil: date('valid_until').notNull(),
+  addedBy: uuid('added_by').references(() => admins.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Trainings with the trainer, bought in a pack. Left = total minus its spends; the oldest pack is spent first
+export const packages = pgTable(
+  'packages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id),
+    purchaseItemId: uuid('purchase_item_id')
+      .notNull()
+      .references(() => purchaseItems.id),
+    trainingType: text('training_type').notNull(),
+    total: integer('total').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [
+    oneOf('packages_training_type_check', 'training_type', ASSIGNED_TYPES),
+    check('packages_total_check', sql`total > 0`),
+  ],
+);
+
+// One training spent from a package: the trainer marked the booking (✓ or ✗). «—» deletes the row,
+// which gives the training back to the same package
+export const packageSpends = pgTable('package_spends', {
+  bookingId: uuid('booking_id')
+    .primaryKey()
+    .references(() => bookings.id),
+  packageId: uuid('package_id')
+    .notNull()
+    .references(() => packages.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
