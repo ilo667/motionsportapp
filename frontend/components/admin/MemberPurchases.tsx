@@ -192,7 +192,7 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
             <p className="text-muted text-xs">
               {new Date(p.createdAt).toLocaleDateString("uk-UA", { day: "numeric", month: "short", timeZone: "Europe/Kyiv" })}
               {" · "}
-              {p.method === "CASH" ? "готівка" : "карткою"} · {STATUS[p.status]}
+              {p.method === "CASH" ? "готівка" : "онлайн"} · {STATUS[p.status]}
               {p.decidedBy && ` · ${p.decidedBy}`}
             </p>
           </div>

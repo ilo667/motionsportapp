@@ -154,7 +154,7 @@ export function PurchaseFlow({
             disabled={busy}
             className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors disabled:opacity-60"
           >
-            {busy ? "Завантаження..." : "Оплатити карткою"}
+            {busy ? "Завантаження..." : "Оплатити онлайн"}
           </button>
           {data.canPayCash && (
             <button
