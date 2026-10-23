@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { api, CardState, MemberPurchases as MemberPurchasesData, PassState, PriceItem, Purchase } from "@/lib/api";
+import { api, MemberPurchases as MemberPurchasesData, PriceItem, Purchase } from "@/lib/api";
 import { formatUah, lineName } from "@/components/PurchaseFlow";
 
 const formatDate = (isoDate: string) => {
@@ -11,25 +11,33 @@ const formatDate = (isoDate: string) => {
 type Card = MemberPurchasesData["cards"][number];
 type Pack = MemberPurchasesData["packages"][number];
 
+// Only the current state's dates exist (a waiting card has no valid_from yet), so build that one label only
 const cardDates = (c: Card): string => {
-  const labels: Record<CardState, string> = {
-    waiting: `чекає активації, до ${formatDate(c.activateBy)}`,
-    active: `${formatDate(c.validFrom!)} – ${formatDate(c.validUntil!)}`,
-    expired: `закінчилась ${formatDate(c.validUntil!)}`,
-    burned: "не активована, згоріла",
-  };
-  return labels[c.state];
+  switch (c.state) {
+    case "waiting":
+      return `чекає активації, до ${formatDate(c.activateBy)}`;
+    case "active":
+      return `${formatDate(c.validFrom!)} – ${formatDate(c.validUntil!)}`;
+    case "expired":
+      return `закінчилась ${formatDate(c.validUntil!)}`;
+    case "burned":
+      return "не активована, згоріла";
+  }
 };
 
 const packDates = (p: Pack): string => {
-  const labels: Record<PassState, string> = {
-    waiting: `не почато, до ${formatDate(p.activateBy)}`,
-    active: `до ${formatDate(p.validUntil!)}`,
-    expired: `закінчився ${formatDate(p.validUntil!)}`,
-    burned: "не почато, згорів",
-    used: "використано",
-  };
-  return labels[p.state];
+  switch (p.state) {
+    case "waiting":
+      return `не почато, до ${formatDate(p.activateBy)}`;
+    case "active":
+      return `до ${formatDate(p.validUntil!)}`;
+    case "expired":
+      return `закінчився ${formatDate(p.validUntil!)}`;
+    case "burned":
+      return "не почато, згорів";
+    case "used":
+      return "використано";
+  }
 };
 
 const STATUS: Record<Purchase["status"], string> = {
