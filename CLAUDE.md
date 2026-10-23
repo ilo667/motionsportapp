@@ -32,7 +32,8 @@ npm run test       # Jest, matches *.spec.ts in src/
 npm run test:cov
 npm run db:push    # apply src/database/schema.ts to the DB (drizzle-kit push)
 npm run seed:admin # create a coach account (ADMIN_USERNAME / ADMIN_PASSWORD)
-npm run lint
+npm run lint       # check only, does not change files
+npm run format     # prettier (printWidth 120); the local pre-commit hook rejects unformatted backend files
 ```
 
 ## Architecture
