@@ -37,6 +37,7 @@ function makeService(db: any) {
     activate: jest.fn().mockResolvedValue(undefined),
     addManualCard: jest.fn(),
     activateCard: jest.fn(),
+    usableCard: jest.fn().mockResolvedValue(null),
   };
   const svc = new PurchasesService({ db } as any, { now: () => NOW }, entitlements as any, {} as any, {} as any);
   return { svc, entitlements };
@@ -99,6 +100,14 @@ describe('Trainer — client purchases', () => {
     const { svc, entitlements } = makeService(db);
     await svc.addCard('trainer-1', 'm1', 'price-card', false);
     expect(entitlements.addManualCard).toHaveBeenCalledWith(db, 'm1', 'trainer-1', 'price-card', false);
+  });
+
+  it('409 when the client already has a club card (active or waiting), nothing added', async () => {
+    const { db } = makeDb([[{ id: 'm1' }]]);
+    const { svc, entitlements } = makeService(db);
+    entitlements.usableCard.mockResolvedValue({ id: 'c1', state: 'waiting' });
+    await expect(svc.addCard('trainer-1', 'm1', 'price-card', false)).rejects.toThrow(ConflictException);
+    expect(entitlements.addManualCard).not.toHaveBeenCalled();
   });
 
   it('«Додати й активувати з сьогодні» passes activate on', async () => {

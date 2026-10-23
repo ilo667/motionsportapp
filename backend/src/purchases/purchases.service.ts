@@ -319,6 +319,8 @@ export class PurchasesService {
   // «Додати карту вручну»: a card bought at the reception, waiting or (activate) active from today
   async addCard(trainerId: string, memberId: string, priceItemId: string, activate: boolean) {
     await this.visibleMember(trainerId, memberId);
+    // One club card at a time: a new one only once the current card has ended or burned
+    if (await this.entitlements.usableCard(memberId)) throw new ConflictException('Member already has a club card');
     await this.entitlements.addManualCard(this.database.db, memberId, trainerId, priceItemId, activate);
     return { ok: true };
   }

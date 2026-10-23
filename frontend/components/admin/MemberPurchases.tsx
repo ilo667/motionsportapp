@@ -190,9 +190,12 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
             </button>
           </div>
         ) : (
-          <button onClick={openAddCard} className="text-accent text-xs hover:underline mt-2">
-            + Додати клубну карту з рецепції
-          </button>
+          // Only when the client has no club card now (none, ended or burned)
+          !data.card && (
+            <button onClick={openAddCard} className="text-accent text-xs hover:underline mt-2">
+              + Додати клубну карту з рецепції
+            </button>
+          )
         )}
       </section>
 
