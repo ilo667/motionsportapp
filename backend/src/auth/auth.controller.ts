@@ -7,7 +7,6 @@ import { RegisterMemberDto } from './dto/register-member.dto';
 import { LoginMemberDto } from './dto/login-member.dto';
 import { RecoverMemberDto } from './dto/recover-member.dto';
 import { LoginAdminDto } from './dto/login-admin.dto';
-import { SetupAdminDto } from './dto/setup-admin.dto';
 
 const COOKIE_NAME = 'session';
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
@@ -47,13 +46,6 @@ export class AuthController {
     const { memberCode, recoveryCode, sessionToken } = await this.authService.recoverMember(dto);
     setSessionCookie(res, sessionToken);
     return { memberCode, recoveryCode };
-  }
-
-  @Post('admin/setup')
-  async setupAdmin(@Body() dto: SetupAdminDto, @Res({ passthrough: true }) res: Response) {
-    const { username, sessionToken } = await this.authService.setupAdmin(dto);
-    setSessionCookie(res, sessionToken);
-    return { username };
   }
 
   @Post('admin/login')

@@ -52,7 +52,6 @@ Auth endpoints:
 - `POST /auth/member/login` — memberCode + PIN
 - `POST /auth/member/forgot` — memberCode + recoveryCode + newPin → new recoveryCode
 - `POST /auth/admin/login` — username + password
-- `POST /auth/admin/setup` — creates the first trainer account; 409 once any admin exists (normally use `npm run seed:admin`)
 - `POST /auth/logout`
 - `GET /auth/me`
 

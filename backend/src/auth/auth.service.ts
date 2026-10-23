@@ -1,14 +1,13 @@
-import { Injectable, UnauthorizedException, InternalServerErrorException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, InternalServerErrorException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
-import { eq, and, isNull, gt, sql } from 'drizzle-orm';
+import { eq, and, isNull, gt } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { members, admins, sessions } from '../database/schema';
 import type { RegisterMemberDto } from './dto/register-member.dto';
 import type { LoginMemberDto } from './dto/login-member.dto';
 import type { RecoverMemberDto } from './dto/recover-member.dto';
 import type { LoginAdminDto } from './dto/login-admin.dto';
-import type { SetupAdminDto } from './dto/setup-admin.dto';
 
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const BCRYPT_ROUNDS = 12;
@@ -76,18 +75,6 @@ export class AuthService {
 
     const sessionToken = await this.createSession('member', member.id);
     return { memberCode: member.memberCode, recoveryCode: newRawRecovery, sessionToken };
-  }
-
-  async setupAdmin(dto: SetupAdminDto) {
-    const [{ count }] = await this.database.db.select({ count: sql<number>`count(*)::int` }).from(admins);
-
-    if (count > 0) throw new ConflictException('Admin account already exists');
-
-    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-    const [admin] = await this.database.db.insert(admins).values({ username: dto.username, passwordHash }).returning();
-
-    const sessionToken = await this.createSession('admin', admin.id);
-    return { username: admin.username, sessionToken };
   }
 
   async loginAdmin(dto: LoginAdminDto) {
