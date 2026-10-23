@@ -1,8 +1,20 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException, Logger } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { ClockService } from '../clock/clock.service';
-import { admins, clubCards, members, payments, priceItems, purchaseItems, purchases } from '../database/schema';
+import {
+  admins,
+  attendance,
+  bookings,
+  clubCards,
+  members,
+  packageSpends,
+  payments,
+  priceItems,
+  purchaseItems,
+  purchases,
+  trainingSlots,
+} from '../database/schema';
 import { EntitlementsService } from './entitlements.service';
 import { PaymentService } from '../payment/payment.service';
 import { NotificationService } from '../notifications/notification.service';
@@ -262,9 +274,25 @@ export class PurchasesService {
     return { ok: true };
   }
 
-  // The member never paid
+  // The member never paid. Cash for a group training booked the seat at once: that booking goes too (no pay,
+  // no seat), with any mark on it. A system cancellation, so no reason is shown as the member's
   async rejectCash(trainerId: string, purchaseId: string) {
-    await this.database.db.transaction((tx) => this.decideCash(tx, trainerId, purchaseId, 'REJECTED'));
+    await this.database.db.transaction(async (tx) => {
+      const { bookingId } = await this.decideCash(tx, trainerId, purchaseId, 'REJECTED');
+      if (!bookingId) return;
+      await tx.delete(packageSpends).where(eq(packageSpends.bookingId, bookingId));
+      await tx.delete(attendance).where(eq(attendance.bookingId, bookingId));
+      const [cancelled] = await tx
+        .update(bookings)
+        .set({ status: 'CANCELLED', cancelledAt: this.clock.now().toJSDate() })
+        .where(and(eq(bookings.id, bookingId), eq(bookings.status, 'ACTIVE')))
+        .returning({ slotId: bookings.slotId });
+      if (!cancelled) return; // the member already cancelled it
+      await tx
+        .update(trainingSlots)
+        .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - 1, 0)` })
+        .where(eq(trainingSlots.id, cancelled.slotId));
+    });
     return { ok: true };
   }
 
@@ -276,8 +304,8 @@ export class PurchasesService {
       .update(purchases)
       .set({ status, decidedBy: trainerId, decidedAt: this.clock.now().toJSDate() })
       .where(and(mine, eq(purchases.status, 'PENDING')))
-      .returning({ id: purchases.id });
-    if (decided) return;
+      .returning({ id: purchases.id, bookingId: purchases.bookingId });
+    if (decided) return decided;
     const [exists] = await tx.select({ status: purchases.status }).from(purchases).where(mine).limit(1);
     if (!exists) throw new NotFoundException('Purchase not found');
     throw new ConflictException('Purchase was already decided');

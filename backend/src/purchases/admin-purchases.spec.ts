@@ -131,11 +131,21 @@ describe('Trainer — client purchases', () => {
     expect(entitlements.activateCard).not.toHaveBeenCalled();
   });
 
-  it('rejecting cash for a group pass leaves the booking alone', async () => {
+  it('rejecting cash for a group pass cancels the booking it made and frees the seat', async () => {
+    // The purchase answers with its booking; the booking with its slot
+    const { db, sets } = makeDb([], () => [{ id: 'purchase-1', bookingId: 'b1', slotId: 's1' }]);
+    db.delete = jest.fn(() => ({ where: () => Promise.resolve() }));
+    const { svc } = makeService(db);
+    await svc.rejectCash('trainer-1', 'purchase-1');
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED', cancelledAt: expect.any(Date) }));
+    expect(sets).toContainEqual({ bookedCount: expect.anything() });
+    expect(db.delete).toHaveBeenCalled(); // a mark on it goes too
+  });
+
+  it('rejecting cash with no booking (bought in «Мої покупки») touches only the purchase', async () => {
     const { db } = makeDb([]);
     const { svc } = makeService(db);
     await svc.rejectCash('trainer-1', 'purchase-1');
-    // Only the purchase row is updated
     expect(db.update).toHaveBeenCalledTimes(1);
   });
 
