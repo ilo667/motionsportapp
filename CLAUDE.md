@@ -151,6 +151,10 @@ The LiqPay docs are incomplete. These rules come from prod logs, so do not "fix"
 
 Drizzle ORM over Neon (PostgreSQL). Schema in `backend/src/database/schema.ts` is the source of truth; `npm run db:push` (drizzle-kit) applies it to the DB. One-off migration scripts are deleted once run (all data is test data during development).
 
+**CHECK constraints on every status-like text column** (`oneOf()` in `schema.ts`: statuses, `training_type`, `payment_status`, `principal_type`, `section`, `source`) plus `0 ≤ booked_count ≤ capacity` and `amount_uah > 0`. **Adding a new value in code (e.g. a payment status) means adding it to the schema's `oneOf` list and running `db:push`**, otherwise the DB rejects the write. Training types and price sections come from the code constants (`GROUP_TYPE`, `ASSIGNED_TYPES`, `PRICE_SECTIONS`).
+
+Deliberate copies (kept in sync by code, checked consistent on 2026-10-23): `training_slots.booked_count` (seat counter, updated under the slot row lock), `bookings.payment_status` (mirror of the latest payment), `price_items.updated_by/updated_at` (latest `price_changes` row).
+
 `db:push` needs a real terminal for its questions. **Never answer "truncate"** to a question about adding a unique constraint: it means a constraint name in the DB differs from the schema. Look the name up in `pg_constraint` and pin it in the schema (`.unique('payments_order_id_key')`), as done for `payments` and `admin_push_subscriptions`.
 
 ### Frontend conventions

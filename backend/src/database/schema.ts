@@ -9,9 +9,18 @@ import {
   jsonb,
   uniqueIndex,
   primaryKey,
+  check,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { GROUP_TYPE, ASSIGNED_TYPES } from '../schedule/training-types';
+import { PRICE_SECTIONS } from '../prices/price-list';
+
+// CHECK that a text column holds one of the known values (NULL passes, so nullable columns stay optional).
+// A typo in code then fails loudly instead of quietly writing 'ACTVE'
+function oneOf(name: string, column: string, values: readonly string[]) {
+  return check(name, sql.raw(`${column} IN (${values.map((v) => `'${v}'`).join(', ')})`));
+}
 
 export const members = pgTable('members', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -34,23 +43,31 @@ export const admins = pgTable('admins', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const sessions = pgTable('sessions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  principalType: text('principal_type').notNull(),
-  principalId: uuid('principal_id').notNull(),
-  tokenHash: text('token_hash').notNull(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  revokedAt: timestamp('revoked_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    principalType: text('principal_type').notNull(),
+    principalId: uuid('principal_id').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [oneOf('sessions_principal_type_check', 'principal_type', ['member', 'admin'])],
+);
 
-export const trainingDays = pgTable('training_days', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  localDate: date('local_date').notNull().unique(),
-  status: text('status').notNull().default('SCHEDULED'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const trainingDays = pgTable(
+  'training_days',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    localDate: date('local_date').notNull().unique(),
+    status: text('status').notNull().default('SCHEDULED'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [oneOf('training_days_status_check', 'status', ['SCHEDULED', 'CANCELLED'])],
+);
 
 export const trainingSlots = pgTable(
   'training_slots',
@@ -73,6 +90,10 @@ export const trainingSlots = pgTable(
   // Many halls: trainers work in parallel, so one training per time per trainer
   (table) => [
     uniqueIndex('training_slots_day_time_trainer_idx').on(table.trainingDayId, table.slotTime, table.trainerId),
+    oneOf('training_slots_status_check', 'status', ['ACTIVE', 'CANCELLED']),
+    oneOf('training_slots_training_type_check', 'training_type', [GROUP_TYPE, ...ASSIGNED_TYPES]),
+    // Safety net for the seat counter: never below zero, never more people than seats
+    check('training_slots_booked_count_check', sql`booked_count >= 0 AND booked_count <= capacity AND capacity > 0`),
   ],
 );
 
@@ -115,19 +136,25 @@ export const bookings = pgTable(
     uniqueIndex('bookings_member_slot_active_idx')
       .on(table.memberId, table.slotId)
       .where(sql`${table.status} = 'ACTIVE'`),
+    oneOf('bookings_status_check', 'status', ['ACTIVE', 'CANCELLED']),
+    oneOf('bookings_payment_status_check', 'payment_status', ['PENDING', 'PAID']),
   ],
 );
 
-export const attendance = pgTable('attendance', {
-  bookingId: uuid('booking_id')
-    .primaryKey()
-    .references(() => bookings.id),
-  status: text('status').notNull(),
-  markedAt: timestamp('marked_at', { withTimezone: true }).notNull().defaultNow(),
-  markedByAdminId: uuid('marked_by_admin_id')
-    .notNull()
-    .references(() => admins.id),
-});
+export const attendance = pgTable(
+  'attendance',
+  {
+    bookingId: uuid('booking_id')
+      .primaryKey()
+      .references(() => bookings.id),
+    status: text('status').notNull(), // no row = not marked yet
+    markedAt: timestamp('marked_at', { withTimezone: true }).notNull().defaultNow(),
+    markedByAdminId: uuid('marked_by_admin_id')
+      .notNull()
+      .references(() => admins.id),
+  },
+  () => [oneOf('attendance_status_check', 'status', ['PRESENT', 'ABSENT'])],
+);
 
 export const pushSubscriptions = pgTable('push_subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -171,15 +198,19 @@ export const vacancyAlerts = pgTable(
   (table) => [uniqueIndex('vacancy_alerts_member_slot_idx').on(table.memberId, table.slotId)],
 );
 
-export const notificationEvents = pgTable('notification_events', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  eventType: text('event_type').notNull(),
-  dedupeKey: text('dedupe_key').notNull().unique(),
-  payload: jsonb('payload').notNull(),
-  status: text('status').notNull().default('PENDING'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  sentAt: timestamp('sent_at', { withTimezone: true }),
-});
+export const notificationEvents = pgTable(
+  'notification_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventType: text('event_type').notNull(),
+    dedupeKey: text('dedupe_key').notNull().unique(),
+    payload: jsonb('payload').notNull(),
+    status: text('status').notNull().default('PENDING'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+  },
+  () => [oneOf('notification_events_status_check', 'status', ['PENDING', 'SENT', 'FAILED'])],
+);
 
 export const announcementExamples = pgTable('announcement_examples', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -188,66 +219,85 @@ export const announcementExamples = pgTable('announcement_examples', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const announcements = pgTable('announcements', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  trainingDayId: uuid('training_day_id')
-    .notNull()
-    .unique()
-    .references(() => trainingDays.id),
-  topic: text('topic'),
-  text: text('text'),
-  source: text('source'),
-  publishedAt: timestamp('published_at', { withTimezone: true }),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const announcements = pgTable(
+  'announcements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    trainingDayId: uuid('training_day_id')
+      .notNull()
+      .unique()
+      .references(() => trainingDays.id),
+    topic: text('topic'),
+    text: text('text'),
+    source: text('source'),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [oneOf('announcements_source_check', 'source', ['ai', 'fallback', 'manual'])],
+);
 
-export const aiGenerations = pgTable('ai_generations', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  announcementId: uuid('announcement_id')
-    .notNull()
-    .references(() => announcements.id),
-  provider: text('provider').notNull(),
-  model: text('model').notNull(),
-  promptVersion: text('prompt_version').notNull(),
-  latencyMs: integer('latency_ms'),
-  tokenUsage: integer('token_usage'),
-  status: text('status').notNull(),
-  fallbackReason: text('fallback_reason'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const aiGenerations = pgTable(
+  'ai_generations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    announcementId: uuid('announcement_id')
+      .notNull()
+      .references(() => announcements.id),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    promptVersion: text('prompt_version').notNull(),
+    latencyMs: integer('latency_ms'),
+    tokenUsage: integer('token_usage'),
+    status: text('status').notNull(),
+    fallbackReason: text('fallback_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [oneOf('ai_generations_status_check', 'status', ['success', 'fallback'])],
+);
 
-export const payments = pgTable('payments', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  bookingId: uuid('booking_id')
-    .notNull()
-    .references(() => bookings.id),
-  // Constraint name as it already exists in the DB (created by a one-off SQL script)
-  orderId: text('order_id').notNull().unique('payments_order_id_key'),
-  amount: integer('amount').notNull(),
-  currency: text('currency').notNull().default('UAH'),
-  status: text('status').notNull().default('PENDING'), // PENDING | PAID | FAILED | EXPIRED
-  liqpayPaymentId: text('liqpay_payment_id'),
-  rawCallback: jsonb('raw_callback'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const payments = pgTable(
+  'payments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    bookingId: uuid('booking_id')
+      .notNull()
+      .references(() => bookings.id),
+    // Constraint name as it already exists in the DB (created by a one-off SQL script)
+    orderId: text('order_id').notNull().unique('payments_order_id_key'),
+    amount: integer('amount').notNull(),
+    currency: text('currency').notNull().default('UAH'),
+    status: text('status').notNull().default('PENDING'), // PENDING | PAID | FAILED | EXPIRED
+    liqpayPaymentId: text('liqpay_payment_id'),
+    rawCallback: jsonb('raw_callback'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [oneOf('payments_status_check', 'status', ['PENDING', 'PAID', 'FAILED', 'EXPIRED', 'REPLACED'])],
+);
 
 // Gym price list, one row per option ("Повний день · 3 місяці"). Shared by all trainers; a trainer changes
 // amounts only, rows come from `npm run seed:prices`. Shown in the admin only: payments don't read it yet
 // (LiqPay still charges PRICE_UAH in payment.service.ts)
-export const priceItems = pgTable('price_items', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  // Stable key of the option (seed upserts by it; later payments will reference it)
-  code: text('code').notNull().unique(),
-  section: text('section').notNull(), // club_card | assigned | group
-  title: text('title').notNull(),
-  optionLabel: text('option_label'), // "3 місяці", "6 тренувань"; null for a single-option item
-  amountUah: integer('amount_uah').notNull(),
-  sortOrder: integer('sort_order').notNull(),
-  // Who changed the amount last; null = still the seeded value
-  updatedBy: uuid('updated_by').references(() => admins.id),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const priceItems = pgTable(
+  'price_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Stable key of the option (seed upserts by it; later payments will reference it)
+    code: text('code').notNull().unique(),
+    section: text('section').notNull(), // club_card | assigned | group
+    title: text('title').notNull(),
+    optionLabel: text('option_label'), // "3 місяці", "6 тренувань"; null for a single-option item
+    amountUah: integer('amount_uah').notNull(),
+    sortOrder: integer('sort_order').notNull(),
+    // Who changed the amount last; null = still the seeded value
+    updatedBy: uuid('updated_by').references(() => admins.id),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [
+    oneOf('price_items_section_check', 'section', PRICE_SECTIONS),
+    check('price_items_amount_check', sql`amount_uah > 0`),
+  ],
+);
 
 // Every price change, append-only: who, when, from what to what
 export const priceChanges = pgTable('price_changes', {
