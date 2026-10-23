@@ -12,7 +12,8 @@ function makeDb(result: unknown[]) {
   const sets: Record<string, unknown>[] = [];
   function link(): any {
     const chain: any = { then: (r: (v: unknown) => void) => r(result) };
-    for (const m of ['from', 'where', 'orderBy', 'limit', 'returning']) chain[m] = jest.fn(() => link());
+    for (const m of ['from', 'where', 'orderBy', 'limit', 'returning', 'innerJoin', 'leftJoin'])
+      chain[m] = jest.fn(() => link());
     chain.set = jest.fn((v: Record<string, unknown>) => {
       sets.push(v);
       return link();
@@ -94,5 +95,47 @@ describe('Admin members — trainer note', () => {
   it('member endpoints are admin-only (AdminGuard on the controller)', () => {
     const guards = Reflect.getMetadata(GUARDS_METADATA, AdminScheduleController) as unknown[];
     expect(guards).toContain(AdminGuard);
+  });
+});
+
+describe('Admin members — client page', () => {
+  it('one client, the same row as in the list', async () => {
+    const { db } = makeDb([{ id: 'm1', displayName: 'Катя' }]);
+    await expect(makeService(db).getMember('trainer-1', 'm1')).resolves.toEqual({
+      id: 'm1',
+      displayName: 'Катя',
+      clubCard: null,
+      packagesLeft: [],
+    });
+  });
+
+  it("another trainer's client (or a missing one) answers 404", async () => {
+    const { db } = makeDb([]);
+    await expect(makeService(db).getMember('trainer-1', 'm9')).rejects.toThrow(NotFoundException);
+  });
+
+  it('visits: past and today trainings with the mark, newest first; unmarked ones are UNMARKED', async () => {
+    const rows = [
+      { bookingId: 'b2', localDate: '2026-10-22', slotTime: '19:00', trainingType: 'групові', status: null },
+      { bookingId: 'b1', localDate: '2026-10-20', slotTime: '18:00', trainingType: 'персональні', status: 'ABSENT' },
+    ];
+    // the visibility check, then the visits
+    const { db } = makeDb(rows);
+    const visits = await makeService(db).getMemberVisits('trainer-1', 'm1');
+    expect(visits).toEqual([
+      { bookingId: 'b2', localDate: '2026-10-22', slotTime: '19:00', trainingType: 'групові', attendance: 'UNMARKED' },
+      {
+        bookingId: 'b1',
+        localDate: '2026-10-20',
+        slotTime: '18:00',
+        trainingType: 'персональні',
+        attendance: 'ABSENT',
+      },
+    ]);
+  });
+
+  it("visits of another trainer's client answer 404", async () => {
+    const { db } = makeDb([]);
+    await expect(makeService(db).getMemberVisits('trainer-1', 'm9')).rejects.toThrow(NotFoundException);
   });
 });

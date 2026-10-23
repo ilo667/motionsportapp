@@ -675,7 +675,7 @@ export class AdminScheduleService {
   }
 
   // Trainer's client list. trainerNote is admin-only — keep it out of member-facing queries
-  async getMembers(adminId: string) {
+  async getMembers(adminId: string, onlyId?: string) {
     const since = new Date(Date.now() - CANCELLATION_STATS_DAYS * 24 * 60 * 60 * 1000);
     // Cancellations only (a move to another slot isn't a missed training)
     // Raw, fully qualified SQL: in a single-table select drizzle drops table names, and an unqualified
@@ -699,7 +699,7 @@ export class AdminScheduleService {
         recentCancellations: cancelledCount,
       })
       .from(members)
-      .where(this.visibleTo(adminId))
+      .where(onlyId ? and(this.visibleTo(adminId), eq(members.id, onlyId)) : this.visibleTo(adminId))
       .orderBy(asc(members.displayName));
 
     // «карта до DD.MM», «Перс. 5 · Спліт 2» under each client
@@ -743,6 +743,50 @@ export class AdminScheduleService {
       .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
     const rows = await this.memberCancellations(eq(bookings.slotId, slotId));
     return rows.filter((r) => !booked.some((b) => b.memberId === r.memberId)).map(toCancellationView);
+  }
+
+  // Client page: the same row as in the list
+  async getMember(adminId: string, memberId: string) {
+    const [member] = await this.getMembers(adminId, memberId);
+    if (!member) throw new NotFoundException('Member not found');
+    return member;
+  }
+
+  // Client page: trainings the member was booked on up to today, with the trainer's mark (newest first)
+  async getMemberVisits(adminId: string, memberId: string) {
+    const [member] = await this.database.db
+      .select({ id: members.id })
+      .from(members)
+      .where(and(eq(members.id, memberId), this.visibleTo(adminId)))
+      .limit(1);
+    if (!member) throw new NotFoundException('Member not found');
+
+    const rows = await this.database.db
+      .select({
+        bookingId: bookings.id,
+        localDate: trainingDays.localDate,
+        slotTime: trainingSlots.slotTime,
+        trainingType: trainingSlots.trainingType,
+        status: attendance.status,
+      })
+      .from(bookings)
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
+      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
+      .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
+      .where(
+        and(
+          eq(bookings.memberId, memberId),
+          eq(bookings.status, 'ACTIVE'),
+          eq(trainingSlots.status, 'ACTIVE'),
+          lte(trainingDays.localDate, sql`(now() at time zone 'Europe/Kyiv')::date`),
+        ),
+      )
+      .orderBy(desc(trainingDays.localDate), desc(trainingSlots.slotTime))
+      .limit(MEMBER_HISTORY_LIMIT);
+    return rows.map(({ status, ...r }) => ({
+      ...r,
+      attendance: (status ?? 'UNMARKED') as 'PRESENT' | 'ABSENT' | 'UNMARKED',
+    }));
   }
 
   // Clients page: one member's latest cancellations and moves

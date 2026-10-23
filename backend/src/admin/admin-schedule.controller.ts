@@ -47,6 +47,16 @@ export class AdminScheduleController {
     return this.adminScheduleService.getMembers(user.id);
   }
 
+  @Get('members/:memberId')
+  getMember(@Param('memberId', ParseUUIDPipe) memberId: string, @CurrentUser() user: SessionUser) {
+    return this.adminScheduleService.getMember(user.id, memberId);
+  }
+
+  @Get('members/:memberId/visits')
+  getMemberVisits(@Param('memberId', ParseUUIDPipe) memberId: string, @CurrentUser() user: SessionUser) {
+    return this.adminScheduleService.getMemberVisits(user.id, memberId);
+  }
+
   @Get('trainers')
   getTrainers() {
     return this.adminScheduleService.getTrainers();
