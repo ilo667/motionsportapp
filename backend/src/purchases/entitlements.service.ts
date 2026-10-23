@@ -171,14 +171,27 @@ export class EntitlementsService {
     }
     if (booking.spentFrom) return;
 
-    // Locked, so two marks at once can't both spend the last training of a package
+    // Lock first, count after: a mark waiting on the lock must see the other mark's spend. A count inside the
+    // locking statement would use that statement's snapshot, taken before the wait, and both could take the
+    // last training. The second statement gets a fresh snapshot (READ COMMITTED)
     const own = await tx
-      .select({ id: packages.id, total: packages.total, used: USED })
+      .select({ id: packages.id, total: packages.total })
       .from(packages)
       .where(and(eq(packages.memberId, booking.memberId), eq(packages.trainingType, booking.trainingType)))
       .orderBy(asc(packages.createdAt))
       .for('update');
-    const from = own.find((p) => p.used < p.total);
+    if (own.length === 0) return;
+    const spent = await tx
+      .select({ packageId: packageSpends.packageId, used: sql<number>`count(*)::int` })
+      .from(packageSpends)
+      .where(
+        inArray(
+          packageSpends.packageId,
+          own.map((p) => p.id),
+        ),
+      )
+      .groupBy(packageSpends.packageId);
+    const from = own.find((p) => (spent.find((x) => x.packageId === p.id)?.used ?? 0) < p.total);
     if (!from) return;
 
     await tx.insert(packageSpends).values({ bookingId, packageId: from.id }).onConflictDoNothing();

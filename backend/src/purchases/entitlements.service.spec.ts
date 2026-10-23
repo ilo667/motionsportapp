@@ -18,7 +18,17 @@ function makeDb(results: unknown[][]) {
       then: (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
         Promise.resolve(queue.shift() ?? []).then(resolve, reject),
     };
-    for (const m of ['from', 'where', 'orderBy', 'limit', 'innerJoin', 'leftJoin', 'for', 'onConflictDoNothing']) {
+    for (const m of [
+      'from',
+      'where',
+      'orderBy',
+      'limit',
+      'innerJoin',
+      'leftJoin',
+      'for',
+      'groupBy',
+      'onConflictDoNothing',
+    ]) {
       chain[m] = jest.fn(() => chain);
     }
     chain.values = jest.fn((v: unknown) => {
@@ -115,16 +125,33 @@ describe('Entitlements — spends', () => {
     ...over,
   });
 
+  // Reads: the booking, then the member's packages of that type locked (no counts: a count in the locking
+  // statement would use a snapshot from before the lock wait), then the spends counted in a fresh statement
   it('a mark spends from the oldest package that has trainings left', async () => {
     const { db, inserts } = makeDb([
       [booking({})],
       [
-        { id: 'old', total: 1, used: 1 },
-        { id: 'new', total: 8, used: 5 },
+        { id: 'old', total: 1 },
+        { id: 'new', total: 8 },
+      ],
+      [
+        { packageId: 'old', used: 1 },
+        { packageId: 'new', used: 5 },
       ],
     ]);
     await makeService(db).syncSpend(db, 'b1');
     expect(inserts).toEqual([{ table: packageSpends, values: { bookingId: 'b1', packageId: 'new' } }]);
+  });
+
+  it('counts spends only after the lock, in its own statement (two marks at once cannot both take the last one)', async () => {
+    const { db, inserts, selects } = makeDb([
+      [booking({})],
+      [{ id: 'only', total: 1 }],
+      [{ packageId: 'only', used: 1 }],
+    ]);
+    await makeService(db).syncSpend(db, 'b1');
+    expect(selects()).toBe(3);
+    expect(inserts).toEqual([]);
   });
 
   it('changing ✓ to ✗ keeps the single spend', async () => {
@@ -141,7 +168,7 @@ describe('Entitlements — spends', () => {
   });
 
   it('no package left: the mark stays, nothing is spent', async () => {
-    const { db, inserts } = makeDb([[booking({})], [{ id: 'old', total: 1, used: 1 }]]);
+    const { db, inserts } = makeDb([[booking({})], [{ id: 'old', total: 1 }], [{ packageId: 'old', used: 1 }]]);
     await expect(makeService(db).syncSpend(db, 'b1')).resolves.toBeUndefined();
     expect(inserts).toEqual([]);
   });
