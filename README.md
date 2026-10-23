@@ -1,6 +1,6 @@
 # Motion Gym
 
-Gym class-booking PWA. Clients book group trainings (Mon / Wed / Fri, 19:00 and 20:00) and pay for personal and split trainings through LiqPay; trainers manage their calendar, clients, attendance and history.
+Gym class-booking PWA. Clients book group trainings (Mon / Wed / Fri, 19:00 and 20:00) and buy club cards and trainer packages (LiqPay or cash to their trainer); trainers manage their calendar, clients, attendance and history.
 
 **Stack:** NestJS 11 · Next.js 16 App Router · PostgreSQL (Neon) + Drizzle ORM · Tailwind CSS v4 · Vercel
 
@@ -22,8 +22,8 @@ The frontend proxies `/api/*` to the backend (`BACKEND_URL`) via `next.config.ts
 
 ## Main features
 
-- **Clients:** sign up with a name and a 6-digit PIN (member code + recovery code); book a group training in the 14:00–21:00 window (one group booking per day), cancel or move between 19:00 and 20:00 with a reason, get push alerts when a seat frees up; see and pay for personal / split trainings the trainer assigned to them.
-- **Trainers** (each sees only their own data): calendar (group, personal, split), today's trainings with attendance, history with editable attendance, clients with notes and reassigning to another trainer, cancellation reasons, push when a client cancels.
+- **Clients:** sign up with a name and a 6-digit PIN (member code + recovery code); book a group training in the 14:00–21:00 window (one group booking per day), cancel or move between 19:00 and 20:00 with a reason, get push alerts when a seat frees up; see the personal / split trainings the trainer assigned to them; buy a club card and packages of trainings with the trainer («Мої покупки»), by LiqPay or cash.
+- **Trainers** (each sees only their own data): calendar (group, personal, split), today's trainings with attendance, history with editable attendance, clients with notes and reassigning to another trainer, cancellation reasons, push when a client cancels; confirm cash payments, see each client's card and trainings left; one shared price list («Ціни») with change history.
 - **Automatic:** group trainings on Mon / Wed / Fri appear by themselves three weeks ahead; AI writes the daily announcement using the weekly programme (Mon legs, Wed circuit, Fri arms).
 
 ---
@@ -38,7 +38,10 @@ The frontend proxies `/api/*` to the backend (`BACKEND_URL`) via `next.config.ts
 | `training_days` / `training_slots` | Training dates and their trainings (time, type, capacity, owner trainer) |
 | `slot_members` | Who a personal / split training is for |
 | `bookings` | Bookings, with cancellation reason and move target |
-| `payments` | LiqPay payments for personal / split trainings |
+| `price_items`, `price_changes` | Shared price list and who changed what |
+| `purchases`, `purchase_items` | A client's purchase (LiqPay or cash) and its lines with the prices of that moment |
+| `club_cards`, `packages`, `package_spends` | What a paid purchase gives: gym access dates, trainings with the trainer, trainings spent by attendance marks |
+| `payments` | LiqPay payments of purchases (older ones: of single trainings) |
 | `attendance` | Present / absent marks |
 | `announcements`, `announcement_examples`, `ai_generations` | Daily announcement, examples for the AI, generation log |
 | `push_subscriptions`, `admin_push_subscriptions`, `vacancy_alerts`, `notification_events` | Push notifications |
