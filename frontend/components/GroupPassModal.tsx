@@ -119,7 +119,7 @@ export function GroupPassModal({
                         disabled={busy}
                         className="btn-ghost w-full py-3 rounded-xl border text-sm transition-colors disabled:opacity-60"
                       >
-                        Оплата готівкою
+                        Оплатити готівкою
                       </button>
                     )}
                   </>

@@ -162,7 +162,7 @@ export function PurchaseFlow({
               disabled={busy}
               className="btn-ghost w-full py-4 rounded-lg border text-sm transition-colors disabled:opacity-60"
             >
-              Оплачу готівкою тренеру
+              Оплатити готівкою
             </button>
           )}
         </div>
