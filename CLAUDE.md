@@ -68,7 +68,7 @@ Auth endpoints:
 - `AuthModule` — member + admin auth, bcrypt PIN/password/recovery hashes, DB sessions, PIN recovery
 - `ScheduleModule` — `GET /schedule/next` — next training day with slots
 - `BookingModule` — book / cancel / switch slot (group slots; cancel takes `slotId`, since a member can hold several bookings a day)
-- `AdminModule` — admin schedule management, slot cancellation, attendance, clients list (`GET /admin/members`, `PATCH /admin/members/:id/note`)
+- `AdminModule` — admin schedule management, slot cancellation, attendance, clients list (`GET /admin/members`, `PATCH /admin/members/:id/note`), client page (`GET /admin/members/:id` — the same row; `GET /admin/members/:id/visits` — up to 20 trainings the client was booked on up to today, with the mark; own / unassigned clients only, else 404)
   - group slots: `PUT /admin/training-days/:date/slots/:slotTime` (19:00 / 20:00 only); assigned: `POST /admin/training-days/:date/assigned-slots` `{slotTime, trainingType, memberIds}`, `PUT /admin/slots/:id/members`
   - cancellation reasons: `GET /admin/slots/:id/cancellations`, `GET /admin/members/:id/cancellations`; `GET /admin/schedule` slots carry `cancellations` and participants' `switchedFromTime`; `GET /admin/members` has `recentCancellations` (30 days, moves not counted)
   - trainers: `GET /admin/trainers` (id + username), `PATCH /admin/members/:id/trainer` `{trainerId}`

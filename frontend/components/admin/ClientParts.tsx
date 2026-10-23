@@ -1,0 +1,182 @@
+"use client";
+import { useEffect, useState } from "react";
+import { api, AdminMember, Trainer, MemberCancellation } from "@/lib/api";
+import { CancellationList } from "@/components/admin/CancellationList";
+
+// Pieces of a client shared by the «Клієнти» list and the client page
+
+const NOTE_MAX = 300;
+// Highlight clients who cancel often (count over the last 30 days)
+export const FREQUENT_CANCELLATIONS = 3;
+
+const TYPE_SHORT: Record<AdminMember["packagesLeft"][number]["trainingType"], string> = {
+  групові: "Груп.",
+  персональні: "Перс.",
+  спліт: "Спліт",
+};
+
+const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+
+// Under the client's name: a badge for the club card («Клубна карта чекає активації»), then «Перс. 5 · Спліт 2»
+export function PurchaseSummary({ m }: { m: AdminMember }) {
+  const [text, className] = !m.clubCard
+    ? ["Без клубної карти", "text-subtle border-line"]
+    : m.clubCard.state === "active"
+      ? [`Клубна карта до ${ddmm(m.clubCard.until)}`, "text-accent bg-teal/10 border-teal/30"]
+      : ["Клубна карта чекає активації", "text-warn bg-warn-bg border-warn-line"];
+  const left = m.packagesLeft.map((p) => `${TYPE_SHORT[p.trainingType]} ${p.left}`).join(" · ");
+  return (
+    <>
+      <span className={`m-1 font-semibold border rounded-full px-2.5 py-1 ${className}`}>{text}</span>
+      {left && <span className="m-1 text-body">{left}</span>}
+    </>
+  );
+}
+
+export function trainingLabel(c: MemberCancellation) {
+  const day = new Date(c.localDate + "T12:00:00").toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+  return `${day}, ${c.slotTime}`;
+}
+
+// Latest cancellations and moves of one client
+export function CancellationHistory({ memberId }: { memberId: string }) {
+  const [items, setItems] = useState<MemberCancellation[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    api.getMemberCancellations(memberId).then(setItems).catch(() => setFailed(true));
+  }, [memberId]);
+
+  if (failed) return <p className="text-danger text-xs">Не вдалося завантажити історію</p>;
+  if (!items) return <p className="text-muted text-xs">Завантаження...</p>;
+  if (items.length === 0) return <p className="text-muted text-xs">Скасувань і перенесень не було</p>;
+  return (
+    <CancellationList
+      title="Історія скасувань"
+      items={items.map((c) => ({ ...c, label: trainingLabel(c) }))}
+      withDate
+    />
+  );
+}
+
+export function NoteCell({ member, onSaved }: { member: AdminMember; onSaved: (note: string | null) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(member.trainerNote ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (draft.trim() === (member.trainerNote ?? "")) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const { trainerNote } = await api.updateMemberNote(member.id, draft);
+      onSaved(trainerNote);
+      setEditing(false);
+    } catch {
+      setError("Не вдалося зберегти");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setDraft(member.trainerNote ?? ""); setEditing(true); }}
+        className="w-full text-left text-sm hover:text-heading transition-colors"
+      >
+        {member.trainerNote ? (
+          <span className="text-body whitespace-pre-wrap break-words">{member.trainerNote}</span>
+        ) : (
+          <span className="text-muted">+ нотатка</span>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col space-y-1">
+      <textarea
+        autoFocus
+        value={draft}
+        maxLength={NOTE_MAX}
+        rows={2}
+        disabled={saving}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); }
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="input-field w-full border rounded-lg px-3 py-2 text-sm focus:outline-none resize-none"
+        placeholder="Напр.: ходить через раз"
+      />
+      {error && <span className="text-danger text-xs">{error}</span>}
+    </div>
+  );
+}
+
+// Under the client's name: hand the client to another trainer, or claim an unassigned one
+export function TrainerPicker({
+  member,
+  trainers,
+  myId,
+  onAssigned,
+}: {
+  member: AdminMember;
+  trainers: Trainer[];
+  myId: string;
+  onAssigned: (trainerId: string) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const assign = async (trainerId: string) => {
+    if (!trainerId || trainerId === member.trainerId) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.assignTrainer(member.id, trainerId);
+      onAssigned(trainerId);
+    } catch {
+      setError("Не вдалося змінити тренера");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-start space-y-1 mt-2">
+      {!member.trainerId && (
+        <button
+          onClick={() => assign(myId)}
+          disabled={saving}
+          className="btn-secondary text-xs px-3 py-1 rounded-md border transition-colors disabled:opacity-60"
+        >
+          Забрати собі
+        </button>
+      )}
+      <label className="flex items-center space-x-1 text-xs text-muted">
+        <span>Тренер:</span>
+        <select
+          aria-label={`Тренер для ${member.displayName}`}
+          value={member.trainerId ?? ""}
+          disabled={saving}
+          onChange={(e) => assign(e.target.value)}
+          className="bg-transparent text-body border-b border-line focus:outline-none focus:border-accent"
+        >
+          {!member.trainerId && <option value="">не вибрано</option>}
+          {trainers.map((c) => (
+            <option key={c.id} value={c.id}>{c.id === myId ? `${c.username} (я)` : c.username}</option>
+          ))}
+        </select>
+      </label>
+      {error && <span className="text-danger text-xs">{error}</span>}
+    </div>
+  );
+}
+

@@ -48,6 +48,15 @@ export interface AdminMember {
   packagesLeft: { trainingType: TrainingType; left: number }[]; // usable packages only, types with trainings left
 }
 
+// A training the client was booked on (up to today) and the trainer's mark
+export interface MemberVisit {
+  bookingId: string;
+  localDate: string;
+  slotTime: string;
+  trainingType: TrainingType;
+  attendance: "PRESENT" | "ABSENT" | "UNMARKED";
+}
+
 export interface Trainer {
   id: string;
   username: string;
@@ -440,6 +449,10 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ trainerId }),
     }),
+
+  getMember: (memberId: string) => request<AdminMember>(`/admin/members/${memberId}`),
+
+  getMemberVisits: (memberId: string) => request<MemberVisit[]>(`/admin/members/${memberId}/visits`),
 
   getMemberCancellations: (memberId: string) =>
     request<MemberCancellation[]>(`/admin/members/${memberId}/cancellations`),
