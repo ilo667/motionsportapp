@@ -359,6 +359,10 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
               )}
             </>
           )}
+
+          <Link href="/prices" className="self-center text-muted text-sm hover:text-body transition-colors pt-3">
+            Усі ціни
+          </Link>
         </div>
       )}
     </PageLayout>

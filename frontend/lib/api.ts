@@ -75,6 +75,9 @@ export interface PriceItem {
   updatedAt: string | null;
 }
 
+// One option of the public price list (no trainer names)
+export type PriceListItem = Omit<PriceItem, "updatedBy" | "updatedAt">;
+
 export interface PriceChange {
   id: string;
   title: string;

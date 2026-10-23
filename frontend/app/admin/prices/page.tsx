@@ -1,15 +1,12 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, PriceChange, PriceItem, PriceSection } from "@/lib/api";
+import { api, PriceChange, PriceItem } from "@/lib/api";
+import { PriceList } from "@/components/PriceList";
+import { refreshPublicPrices } from "@/app/prices/actions";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 
-const SECTIONS: { key: PriceSection; title: string; note?: string }[] = [
-  { key: "club_card", title: "Клубні карти" },
-  { key: "assigned", title: "Послуги тренера", note: "Ціна без урахування вартості клубної карти" },
-  { key: "group", title: "Групові заняття" },
-];
 // Same limit as UpdatePriceDto on the backend
 const MAX_PRICE_UAH = 100_000;
 
@@ -24,17 +21,6 @@ const formatWhen = (iso: string) =>
     minute: "2-digit",
     timeZone: "Europe/Kyiv",
   });
-
-// Options of one section grouped under their title ("Повний день": 1 / 3 / 6 місяців), in page order
-function groupByTitle(items: PriceItem[]) {
-  const groups: { title: string; options: PriceItem[] }[] = [];
-  for (const item of items) {
-    const last = groups[groups.length - 1];
-    if (last?.title === item.title) last.options.push(item);
-    else groups.push({ title: item.title, options: [item] });
-  }
-  return groups;
-}
 
 function ConfirmModal({
   item,
@@ -165,6 +151,8 @@ export default function PricesPage() {
     setSaving(true);
     try {
       await api.updatePrice(confirm.item.id, confirm.amountUah, confirm.item.amountUah);
+      // Clients see the new price on /prices right away (best effort: the day-long cache catches up anyway)
+      refreshPublicPrices().catch(() => {});
       setConfirm(null);
       stopEdit();
       await load();
@@ -192,78 +180,64 @@ export default function PricesPage() {
 
       {items && (
         <div className="flex flex-col space-y-8">
-          {SECTIONS.map((section) => {
-            const groups = groupByTitle(items.filter((i) => i.section === section.key));
-            if (groups.length === 0) return null;
-            return (
-              <section key={section.key}>
-                <h2 className="font-geologica font-semibold text-heading uppercase mb-1">{section.title}</h2>
-                {section.note && <p className="text-muted text-xs mb-2">{section.note}</p>}
-                <div className="border-t border-line">
-                  {groups.map((group) => (
-                    <div key={group.title} className="py-3 border-b border-line">
-                      <div className="text-heading font-medium mb-1">{group.title}</div>
-                      {group.options.map((item) =>
-                        editingId === item.id ? (
-                          <div key={item.id} className="py-1">
-                            <div className="flex items-center justify-between space-x-3">
-                              <span className="text-body">{item.optionLabel}</span>
-                              <div className="flex items-center space-x-2">
-                                <input
-                                  autoFocus
-                                  inputMode="numeric"
-                                  aria-label={`Нова ціна: ${itemName(item)}, ₴`}
-                                  value={draft}
-                                  onChange={(e) => setDraft(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") askConfirm(item);
-                                    if (e.key === "Escape") stopEdit();
-                                  }}
-                                  className="input-field w-24 border rounded-lg px-2 py-1 text-right tabular-nums focus:outline-none"
-                                />
-                                <button
-                                  onClick={() => askConfirm(item)}
-                                  className="btn-primary px-3 py-1 rounded-lg text-xs font-medium transition-colors"
-                                >
-                                  Зберегти
-                                </button>
-                                <button
-                                  onClick={stopEdit}
-                                  aria-label="Скасувати"
-                                  className="btn-ghost px-2 py-1 rounded-lg border text-xs transition-colors"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            </div>
-                            {error && <p className="text-danger text-xs text-right mt-1">{error}</p>}
-                          </div>
-                        ) : (
-                          <div key={item.id} className="flex items-center justify-between space-x-3 py-0.5">
-                            <span className="text-body">
-                              {item.optionLabel}
-                              {item.updatedBy && item.updatedAt && (
-                                <span className="text-muted text-xs ml-2">
-                                  {item.updatedBy}, {formatWhen(item.updatedAt)}
-                                </span>
-                              )}
-                            </span>
-                            <button
-                              onClick={() => startEdit(item)}
-                              aria-label={`Змінити ціну: ${itemName(item)}`}
-                              className="font-geologica text-heading tabular-nums whitespace-nowrap rounded-lg border border-transparent px-2 py-1 -mr-2 hover:border-line hover:bg-surface transition-colors"
-                            >
-                              {formatUah(item.amountUah)}
-                            </button>
-                          </div>
-                        ),
-                      )}
+          <PriceList
+            items={items}
+            renderOption={(item) =>
+              editingId === item.id ? (
+                <div className="py-1">
+                  <div className="flex items-center justify-between space-x-3">
+                    <span className="text-body">{item.optionLabel}</span>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        autoFocus
+                        inputMode="numeric"
+                        aria-label={`Нова ціна: ${itemName(item)}, ₴`}
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") askConfirm(item);
+                          if (e.key === "Escape") stopEdit();
+                        }}
+                        className="input-field w-24 border rounded-lg px-2 py-1 text-right tabular-nums focus:outline-none"
+                      />
+                      <button
+                        onClick={() => askConfirm(item)}
+                        className="btn-primary px-3 py-1 rounded-lg text-xs font-medium transition-colors"
+                      >
+                        Зберегти
+                      </button>
+                      <button
+                        onClick={stopEdit}
+                        aria-label="Скасувати"
+                        className="btn-ghost px-2 py-1 rounded-lg border text-xs transition-colors"
+                      >
+                        ✕
+                      </button>
                     </div>
-                  ))}
+                  </div>
+                  {error && <p className="text-danger text-xs text-right mt-1">{error}</p>}
                 </div>
-              </section>
-            );
-          })}
+              ) : (
+                <div className="flex items-center justify-between space-x-3 py-0.5">
+                  <span className="text-body">
+                    {item.optionLabel}
+                    {item.updatedBy && item.updatedAt && (
+                      <span className="text-muted text-xs ml-2">
+                        {item.updatedBy}, {formatWhen(item.updatedAt)}
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    onClick={() => startEdit(item)}
+                    aria-label={`Змінити ціну: ${itemName(item)}`}
+                    className="font-geologica text-heading tabular-nums whitespace-nowrap rounded-lg border border-transparent px-2 py-1 -mr-2 hover:border-line hover:bg-surface transition-colors"
+                  >
+                    {formatUah(item.amountUah)}
+                  </button>
+                </div>
+              )
+            }
+          />
 
           <section>
             <h2 className="font-geologica font-semibold text-heading uppercase mb-2">Історія змін</h2>

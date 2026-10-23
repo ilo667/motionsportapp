@@ -4,7 +4,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { DateTime } from 'luxon';
 import { PricesService } from './prices.service';
-import { PricesController } from './prices.controller';
+import { PricesController, PublicPricesController } from './prices.controller';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { UpdatePriceDto } from './dto/update-price.dto';
 import { DEFAULT_PRICE_LIST, PRICE_SECTIONS } from './price-list';
@@ -105,6 +105,24 @@ describe('Prices', () => {
 
   it('accepts a whole amount within the limit', async () => {
     expect(await validate(plainToInstance(UpdatePriceDto, { amountUah: 100_000, expectedAmountUah: 600 }))).toEqual([]);
+  });
+
+  // Public «Ціни» page: amounts only, never who changed them
+  it('the public price list has no trainer names or change times', async () => {
+    const row = { id: 'p1', section: 'group', title: 'Разове відвідування', optionLabel: null, amountUah: 250 };
+    const { db } = makeDb([[row]]);
+    expect(await new PricesService({ db } as any, { now: () => NOW }).getPublicPrices()).toEqual([row]);
+    expect(db.select).toHaveBeenCalledWith({
+      id: expect.anything(),
+      section: expect.anything(),
+      title: expect.anything(),
+      optionLabel: expect.anything(),
+      amountUah: expect.anything(),
+    });
+  });
+
+  it('the public price list needs no sign-in (no guards)', () => {
+    expect(Reflect.getMetadata(GUARDS_METADATA, PublicPricesController)).toBeUndefined();
   });
 
   it('price endpoints are admin-only (AdminGuard on the controller)', () => {

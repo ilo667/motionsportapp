@@ -54,6 +54,20 @@ export class PricesService {
     };
   }
 
+  // For everyone (the «Ціни» page, no sign-in): what each option costs, in page order. No trainer names
+  async getPublicPrices() {
+    return this.database.db
+      .select({
+        id: priceItems.id,
+        section: priceItems.section,
+        title: priceItems.title,
+        optionLabel: priceItems.optionLabel,
+        amountUah: priceItems.amountUah,
+      })
+      .from(priceItems)
+      .orderBy(asc(priceItems.sortOrder));
+  }
+
   // Compare-and-set: the amount changes only if it is still what the trainer saw, so two trainers editing
   // at once can't silently overwrite each other. Every change is logged in price_changes
   async updatePrice(adminId: string, id: string, dto: UpdatePriceDto) {
