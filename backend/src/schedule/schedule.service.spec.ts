@@ -53,10 +53,11 @@ const HAS_GROUP = [{ dayId: 'day-1' }];
 const publishedAnnouncement = { text: 'Записуйтесь сьогодні! 💪', publishedAt: new Date() };
 const unpublishedAnnouncement = { text: 'Записуйтесь сьогодні! 💪', publishedAt: null };
 
-function makeService(db: any, now: DateTime) {
+function makeService(db: any, now: DateTime, packages: unknown[] = []) {
   const mockClock = { now: () => now };
   const mockPaymentService = { expireStale: jest.fn().mockResolvedValue(undefined) };
-  const service = new ScheduleService({ db } as any, mockClock, mockPaymentService as any);
+  const mockEntitlements = { packagesOf: jest.fn().mockResolvedValue(packages) };
+  const service = new ScheduleService({ db } as any, mockClock, mockPaymentService as any, mockEntitlements as any);
   // Default Mon/Wed/Fri group slots are tested separately
   jest.spyOn(service, 'ensureDefaultGroupSlots').mockResolvedValue(undefined);
   return service;
@@ -123,7 +124,7 @@ describe('ScheduleService — assigned trainings', () => {
     expect(result?.localDate).toBe('2026-10-21');
   });
 
-  it("lists the member's assigned assigned trainings until they end, with booking state", async () => {
+  it("lists the member's assigned trainings until they end, with booking state and trainings left", async () => {
     const assigned = [
       {
         id: 'p-morning',
@@ -137,7 +138,7 @@ describe('ScheduleService — assigned trainings', () => {
     ];
     const { db } = makeDb([
       assigned,
-      [{ slotId: 'p-evening', paymentStatus: 'PAID' }],
+      [{ slotId: 'p-evening' }],
       [{ trainerId: 'trainer-1' }], // the member's trainer
       [trainingDay],
       HAS_GROUP,
@@ -146,12 +147,18 @@ describe('ScheduleService — assigned trainings', () => {
       [],
       [],
     ]);
-    const result = await makeService(db, kyivAt(15)).getNext('member-1');
+    const packages = [
+      { trainingType: 'спліт', left: 3 },
+      { trainingType: 'спліт', left: 2 },
+      { trainingType: 'персональні', left: 4 },
+    ];
+    const result = await makeService(db, kyivAt(15), packages).getNext('member-1');
 
-    // 12:00 ended at 13:00, so only the evening split is shown
+    // 12:00 ended at 13:00, so only the evening split is shown; its trainings left = all split packages
     expect(result?.assignedSlots).toEqual([
-      expect.objectContaining({ id: 'p-evening', isMyBooking: true, myPaymentStatus: 'PAID', started: false }),
+      expect.objectContaining({ id: 'p-evening', isMyBooking: true, packageLeft: 5, started: false }),
     ]);
+    expect(result?.assignedSlots?.[0]).not.toHaveProperty('myPaymentStatus');
   });
 
   it('marks an assigned training as started (no payment) during its hour', async () => {
@@ -186,7 +193,7 @@ describe('ScheduleService — default Mon/Wed/Fri group slots', () => {
   // 2026-10-20 is a Tuesday → the next 21 days hold 9 Mon/Wed/Fri dates
   function makeRealService(db: any) {
     const clock = { now: () => kyivAt(10) };
-    return new ScheduleService({ db } as any, clock, {} as any);
+    return new ScheduleService({ db } as any, clock, {} as any, {} as any);
   }
 
   function recordInserts(db: any) {

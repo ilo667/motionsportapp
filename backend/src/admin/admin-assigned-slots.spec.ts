@@ -52,8 +52,8 @@ function makeDb(reads: unknown[][] = [], writeResult: () => unknown[] = () => [{
 const TRAINER = 'trainer-1';
 const now = DateTime.fromObject({ year: 2026, month: 10, day: 20, hour: 12 }, { zone: 'Europe/Kyiv' });
 
-function makeService(db: any) {
-  return new AdminScheduleService({ db } as any, {} as any, { now: () => now }, {} as any);
+function makeService(db: any, entitlements: any = { syncSpend: jest.fn() }) {
+  return new AdminScheduleService({ db } as any, {} as any, { now: () => now }, entitlements);
 }
 
 async function errorsOf(cls: any, body: object) {
@@ -94,10 +94,17 @@ describe('Assigned slots — createAssignedSlot', () => {
     });
 
     expect(result).toEqual({ ok: true, slotId: 'slot-new' });
-    expect(values).toContainEqual(expect.objectContaining({ slotTime: '10:30', trainingType: 'спліт', capacity: 3 }));
+    expect(values).toContainEqual(
+      expect.objectContaining({ slotTime: '10:30', trainingType: 'спліт', capacity: 3, bookedCount: 2 }),
+    );
     expect(values).toContainEqual([
       { slotId: 'slot-new', memberId: M1 },
       { slotId: 'slot-new', memberId: M2 },
+    ]);
+    // Assigning is booking: both are on the training right away, nothing to pay per training
+    expect(values).toContainEqual([
+      { memberId: M1, slotId: 'slot-new', status: 'ACTIVE' },
+      { memberId: M2, slotId: 'slot-new', status: 'ACTIVE' },
     ]);
   });
 
@@ -152,14 +159,64 @@ describe('Assigned slots — createAssignedSlot', () => {
 describe('Assigned slots — updateSlotMembers', () => {
   const split = { id: 'slot-1', trainingType: 'спліт', status: 'ACTIVE', trainerId: TRAINER };
 
-  it('cannot remove a member who already booked the training', async () => {
-    const { db } = makeDb([[split], [{ id: M2 }, { id: M3 }], [{ memberId: M1 }]]);
-    await expect(makeService(db).updateSlotMembers(TRAINER, 'slot-1', [M2, M3])).rejects.toThrow('already booked');
+  // Reads: the slot, the members check, who is on the slot now, their active bookings with marks
+  const onSlot = (...ids: string[]) => ids.map((memberId) => ({ memberId }));
+
+  it('cannot remove a member whose attendance is already marked', async () => {
+    const { db } = makeDb([
+      [split],
+      [{ id: M2 }, { id: M3 }],
+      onSlot(M1, M2, M3),
+      [{ id: 'b1', memberId: M1, marked: 'b1' }],
+    ]);
+    await expect(makeService(db).updateSlotMembers(TRAINER, 'slot-1', [M2, M3])).rejects.toThrow(
+      'Attendance already marked',
+    );
     expect(db.delete).not.toHaveBeenCalled();
   });
 
+  it('removing a member who was not marked cancels their booking (no reason: not shown as theirs)', async () => {
+    const { db, sets } = makeDb([
+      [split],
+      [{ id: M2 }, { id: M3 }],
+      onSlot(M1, M2, M3),
+      [
+        { id: 'b1', memberId: M1, marked: null },
+        { id: 'b2', memberId: M2, marked: null },
+        { id: 'b3', memberId: M3, marked: null },
+      ],
+    ]);
+    await makeService(db).updateSlotMembers(TRAINER, 'slot-1', [M2, M3]);
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED' }));
+    expect(sets).not.toContainEqual(expect.objectContaining({ cancellationReason: expect.anything() }));
+    expect(sets).toContainEqual({ bookedCount: 2 });
+  });
+
+  it('a newly added member is booked right away', async () => {
+    const { db, values, sets } = makeDb([
+      [split],
+      [{ id: M1 }, { id: M2 }],
+      onSlot(M1),
+      [{ id: 'b1', memberId: M1, marked: null }],
+    ]);
+    await makeService(db).updateSlotMembers(TRAINER, 'slot-1', [M1, M2]);
+    expect(values).toContainEqual([{ memberId: M2, slotId: 'slot-1', status: 'ACTIVE' }]);
+    expect(sets).toContainEqual({ bookedCount: 2 });
+  });
+
+  it('a member who cancelled themselves stays unbooked when the trainer saves the same list', async () => {
+    const { db, values } = makeDb([[split], [{ id: M1 }], onSlot(M1), []]);
+    await makeService(db).updateSlotMembers(TRAINER, 'slot-1', [M1]);
+    expect(values).not.toContainEqual([expect.objectContaining({ status: 'ACTIVE' })]);
+  });
+
   it('replaces members without changing capacity', async () => {
-    const { db, values, sets } = makeDb([[split], [{ id: M1 }, { id: M2 }, { id: M3 }], [{ memberId: M1 }]]);
+    const { db, values, sets } = makeDb([
+      [split],
+      [{ id: M1 }, { id: M2 }, { id: M3 }],
+      onSlot(M1),
+      [{ id: 'b1', memberId: M1, marked: null }],
+    ]);
     await makeService(db).updateSlotMembers(TRAINER, 'slot-1', [M1, M2, M3]);
     expect(values).toContainEqual([M1, M2, M3].map((memberId) => ({ slotId: 'slot-1', memberId })));
     expect(sets).not.toContainEqual(expect.objectContaining({ capacity: expect.anything() }));
@@ -168,6 +225,24 @@ describe('Assigned slots — updateSlotMembers', () => {
   it('refuses group slots (open to everyone)', async () => {
     const { db } = makeDb([[{ ...split, trainingType: 'групові' }]]);
     await expect(makeService(db).updateSlotMembers(TRAINER, 'slot-1', [M1])).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('Attendance spends from the package', () => {
+  it('a mark (✓ or ✗) and «—» both keep the package in step, in the same transaction', async () => {
+    for (const status of ['PRESENT', 'ABSENT', 'UNMARKED'] as const) {
+      const entitlements = { syncSpend: jest.fn() };
+      const { db } = makeDb([[{ id: 'b1' }]]);
+      await makeService(db, entitlements).updateBookingAttendance('b1', { status }, TRAINER);
+      expect(entitlements.syncSpend).toHaveBeenCalledWith(db, 'b1');
+    }
+  });
+
+  it('«Підтвердити всіх» spends for every booking', async () => {
+    const entitlements = { syncSpend: jest.fn() };
+    const { db } = makeDb([[{ id: 'slot-1', trainerId: TRAINER }], [{ id: 'b1' }, { id: 'b2' }]]);
+    await makeService(db, entitlements).markAllAttendance('slot-1', TRAINER);
+    expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b1', 'b2']);
   });
 });
 

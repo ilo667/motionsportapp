@@ -1,10 +1,19 @@
 import { ForbiddenException, RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA } from '@nestjs/common/constants';
+import { DateTime } from 'luxon';
 import { InternalCronController } from './internal-cron.controller';
 
-function makeController() {
+function makeController(db: any = {}, entitlements: any = {}) {
   const paymentService = { expireStale: jest.fn().mockResolvedValue({ expired: 0 }) };
-  const controller = new InternalCronController({} as any, {} as any, {} as any, {} as any, paymentService as any);
+  const clock = { now: () => DateTime.fromISO('2026-10-23T22:00:00', { zone: 'Europe/Kyiv' }) };
+  const controller = new InternalCronController(
+    { db } as any,
+    {} as any,
+    {} as any,
+    clock,
+    paymentService as any,
+    entitlements,
+  );
   return { controller, paymentService };
 }
 
@@ -53,4 +62,47 @@ describe('InternalCronController — routes', () => {
       expect(Reflect.getMetadata(METHOD_METADATA, InternalCronController.prototype[handler])).toBe(RequestMethod.GET);
     },
   );
+});
+
+describe('InternalCronController — 22:00 auto-confirm', () => {
+  const env = { ...process.env };
+  afterEach(() => {
+    process.env = { ...env };
+  });
+
+  it("marks unmarked bookings PRESENT in the slot trainer's name and spends from packages", async () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.CRON_SECRET;
+    const reads: unknown[][] = [
+      [{ id: 'day-1', status: 'SCHEDULED' }],
+      [{ id: 'slot-1' }, { id: 'slot-2' }],
+      [
+        { id: 'b1', trainerId: 'trainer-2' },
+        { id: 'b2', trainerId: 'trainer-1' },
+      ],
+    ];
+    const values: Record<string, unknown>[] = [];
+    function link(): any {
+      const chain: any = { then: (r: (v: unknown) => void) => r(reads.shift() ?? []) };
+      for (const m of ['from', 'where', 'limit', 'innerJoin', 'leftJoin', 'onConflictDoNothing'])
+        chain[m] = () => chain;
+      chain.values = (v: Record<string, unknown>) => {
+        values.push(v);
+        return chain;
+      };
+      return chain;
+    }
+    const db: any = { select: () => link(), insert: () => link() };
+    db.transaction = (fn: (tx: unknown) => unknown) => fn(db);
+    const entitlements = { syncSpend: jest.fn() };
+
+    const { controller } = makeController(db, entitlements);
+    await expect(controller.autoConfirmAttendance(undefined as any)).resolves.toMatchObject({ marked: 2 });
+
+    expect(values.map((v) => [v.bookingId, v.markedByAdminId])).toEqual([
+      ['b1', 'trainer-2'],
+      ['b2', 'trainer-1'],
+    ]);
+    expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b1', 'b2']);
+  });
 });

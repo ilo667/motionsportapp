@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import { trainingDays, trainingSlots, bookings, vacancyAlerts, announcements, slotMembers } from '../database/schema';
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
+import { EntitlementsService } from '../purchases/entitlements.service';
 import {
   DEFAULT_WEEKDAYS,
   GROUP_SLOT_TIMES,
@@ -32,6 +33,7 @@ export class ScheduleService {
     private readonly database: DatabaseService,
     private readonly clock: ClockService,
     private readonly paymentService: PaymentService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   async getNext(memberId?: string) {
@@ -229,10 +231,7 @@ export class ScheduleService {
     if (visible.length === 0) return [];
 
     const mine = await this.database.db
-      .select({
-        slotId: bookings.slotId,
-        paymentStatus: bookings.paymentStatus,
-      })
+      .select({ slotId: bookings.slotId })
       .from(bookings)
       .where(
         and(
@@ -245,16 +244,18 @@ export class ScheduleService {
         ),
       );
 
-    return visible.map((r) => {
-      const booking = mine.find((b) => b.slotId === r.id);
-      return {
-        ...r,
-        isMyBooking: !!booking,
-        myPaymentStatus: booking?.paymentStatus ?? null,
-        // Payment and cancellation are allowed until the training starts
-        started: now >= slotStartsAt(r.localDate, r.slotTime),
-      };
-    });
+    // Trainings left in the member's packages of each type: the card shows «з пакета» or «Оплатити»
+    const packages = await this.entitlements.packagesOf(memberId);
+    const leftOf = (type: string) =>
+      packages.filter((p) => p.trainingType === type).reduce((sum, p) => sum + Math.max(p.left, 0), 0);
+
+    return visible.map((r) => ({
+      ...r,
+      isMyBooking: mine.some((b) => b.slotId === r.id),
+      packageLeft: leftOf(r.trainingType),
+      // Cancellation is allowed until the training starts
+      started: now >= slotStartsAt(r.localDate, r.slotTime),
+    }));
   }
 
   // Mon/Wed/Fri 19:00 and 20:00 group slots for the next 3 weeks, owned by the first trainer. Idempotent:

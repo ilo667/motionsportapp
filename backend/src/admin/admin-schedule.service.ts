@@ -321,12 +321,18 @@ export class AdminScheduleService {
           status: 'ACTIVE',
           trainingType: dto.trainingType,
           capacity,
-          bookedCount: 0,
+          bookedCount: dto.memberIds.length,
           trainerId: adminId,
         })
         .onConflictDoUpdate({
           target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.trainerId],
-          set: { trainingType: dto.trainingType, status: 'ACTIVE', capacity, bookedCount: 0, cancelledAt: null },
+          set: {
+            trainingType: dto.trainingType,
+            status: 'ACTIVE',
+            capacity,
+            bookedCount: dto.memberIds.length,
+            cancelledAt: null,
+          },
           // Only a cancelled slot may be re-used (its bookings are all cancelled)
           setWhere: eq(trainingSlots.status, 'CANCELLED'),
         })
@@ -336,13 +342,19 @@ export class AdminScheduleService {
 
       await tx.delete(slotMembers).where(eq(slotMembers.slotId, slot.id));
       await tx.insert(slotMembers).values(dto.memberIds.map((memberId) => ({ slotId: slot.id, memberId })));
+      // Assigning is booking: the members are on the training right away. It is paid from their package
+      // when the trainer marks attendance, not per training
+      await tx
+        .insert(bookings)
+        .values(dto.memberIds.map((memberId) => ({ memberId, slotId: slot.id, status: 'ACTIVE' })));
       return slot.id;
     });
 
     return { ok: true, slotId };
   }
 
-  // Change who an assigned slot is for. Members who already booked it cannot be removed
+  // Change who an assigned slot is for. A newly added member is booked; a removed one loses the booking,
+  // unless their attendance is already marked (it may have been spent from their package)
   async updateSlotMembers(adminId: string, slotId: string, memberIds: string[]) {
     await this.database.db.transaction(async (tx) => {
       const slot = await this.ownSlot(adminId, slotId, tx, true);
@@ -351,16 +363,45 @@ export class AdminScheduleService {
 
       await this.validateSlotMembers(adminId, slot.trainingType, memberIds, tx, slotId);
 
+      const onSlot = await tx
+        .select({ memberId: slotMembers.memberId })
+        .from(slotMembers)
+        .where(eq(slotMembers.slotId, slotId));
       const booked = await tx
-        .select({ memberId: bookings.memberId })
+        .select({ id: bookings.id, memberId: bookings.memberId, marked: attendance.bookingId })
         .from(bookings)
+        .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
         .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
-      if (booked.some((b) => !memberIds.includes(b.memberId))) {
-        throw new ConflictException('Member already booked this training');
-      }
+
+      const removed = booked.filter((b) => !memberIds.includes(b.memberId));
+      if (removed.some((b) => b.marked)) throw new ConflictException('Attendance already marked');
+      // Only members new to the slot are booked: one who cancelled themselves stays cancelled
+      const added = memberIds.filter((id) => !onSlot.some((m) => m.memberId === id));
 
       await tx.delete(slotMembers).where(eq(slotMembers.slotId, slotId));
       await tx.insert(slotMembers).values(memberIds.map((memberId) => ({ slotId, memberId })));
+      if (removed.length > 0) {
+        // No reason: a system cancellation, never shown as the member's
+        await tx
+          .update(bookings)
+          .set({ status: 'CANCELLED', cancelledAt: new Date() })
+          .where(
+            and(
+              inArray(
+                bookings.id,
+                removed.map((b) => b.id),
+              ),
+              eq(bookings.status, 'ACTIVE'),
+            ),
+          );
+      }
+      if (added.length > 0) {
+        await tx.insert(bookings).values(added.map((memberId) => ({ memberId, slotId, status: 'ACTIVE' })));
+      }
+      await tx
+        .update(trainingSlots)
+        .set({ bookedCount: booked.length - removed.length + added.length })
+        .where(eq(trainingSlots.id, slotId));
     });
 
     return { ok: true };
@@ -556,6 +597,7 @@ export class AdminScheduleService {
             target: attendance.bookingId,
             set: { status: 'PRESENT', markedAt: now, markedByAdminId: adminId },
           });
+        await this.entitlements.syncSpend(tx, booking.id);
       }
     });
 
@@ -574,17 +616,21 @@ export class AdminScheduleService {
     if (!booking) throw new NotFoundException('Booking not found');
 
     const now = new Date();
-    if (dto.status === 'UNMARKED') {
-      await this.database.db.delete(attendance).where(eq(attendance.bookingId, bookingId));
-    } else {
-      await this.database.db
-        .insert(attendance)
-        .values({ bookingId, status: dto.status, markedAt: now, markedByAdminId: adminId })
-        .onConflictDoUpdate({
-          target: attendance.bookingId,
-          set: { status: dto.status, markedAt: now, markedByAdminId: adminId },
-        });
-    }
+    // The mark and the package move together: ✓ / ✗ spends a training, «—» gives it back
+    await this.database.db.transaction(async (tx) => {
+      if (dto.status === 'UNMARKED') {
+        await tx.delete(attendance).where(eq(attendance.bookingId, bookingId));
+      } else {
+        await tx
+          .insert(attendance)
+          .values({ bookingId, status: dto.status, markedAt: now, markedByAdminId: adminId })
+          .onConflictDoUpdate({
+            target: attendance.bookingId,
+            set: { status: dto.status, markedAt: now, markedByAdminId: adminId },
+          });
+      }
+      await this.entitlements.syncSpend(tx, bookingId);
+    });
 
     return { ok: true };
   }

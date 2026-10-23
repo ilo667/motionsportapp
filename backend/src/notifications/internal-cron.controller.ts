@@ -7,7 +7,8 @@ import { NotificationService } from './notification.service';
 import { AnnouncementsService } from '../ai/announcements.service';
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
-import { trainingDays, trainingSlots, bookings, attendance, admins } from '../database/schema';
+import { EntitlementsService } from '../purchases/entitlements.service';
+import { trainingDays, trainingSlots, bookings, attendance } from '../database/schema';
 import { GROUP_TYPE, KY_ZONE } from '../schedule/training-types';
 import { getDefaultTrainerId } from '../schedule/default-trainer';
 
@@ -21,6 +22,7 @@ export class InternalCronController {
     private readonly announcementsService: AnnouncementsService,
     private readonly clock: ClockService,
     private readonly paymentService: PaymentService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   @Get('cron/booking-open')
@@ -98,19 +100,13 @@ export class InternalCronController {
       return { ok: true, skipped: 'no active day today' };
     }
 
-    const [admin] = await this.database.db.select({ id: admins.id }).from(admins).limit(1);
-
-    if (!admin) {
-      return { ok: true, skipped: 'no admin found' };
-    }
-
     const slots = await this.database.db
       .select({ id: trainingSlots.id })
       .from(trainingSlots)
       .where(and(eq(trainingSlots.trainingDayId, day.id), eq(trainingSlots.status, 'ACTIVE')));
 
     const unmarkedBookings = await this.database.db
-      .select({ id: bookings.id })
+      .select({ id: bookings.id, trainerId: trainingSlots.trainerId })
       .from(bookings)
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
       .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
@@ -123,10 +119,12 @@ export class InternalCronController {
     const markedAt = now.toJSDate();
     await this.database.db.transaction(async (tx) => {
       for (const booking of unmarkedBookings) {
+        // Marked in the name of the training's trainer; spends from the package like a ✓ by hand
         await tx
           .insert(attendance)
-          .values({ bookingId: booking.id, status: 'PRESENT', markedAt, markedByAdminId: admin.id })
+          .values({ bookingId: booking.id, status: 'PRESENT', markedAt, markedByAdminId: booking.trainerId })
           .onConflictDoNothing();
+        await this.entitlements.syncSpend(tx, booking.id);
       }
     });
 
