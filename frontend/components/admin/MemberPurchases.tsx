@@ -207,7 +207,7 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
                 <span className="block text-subtle text-xs">{packDates(p)}</span>
               </span>
               <span className="tabular-nums text-body whitespace-nowrap">
-                {p.left} з {p.total}
+                залишилось {p.left} з {p.total}
               </span>
             </div>
           ))}

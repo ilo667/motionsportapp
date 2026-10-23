@@ -204,7 +204,7 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
                     {p.trainingType === "групові" ? `Групові · ${p.title}` : p.title}
                   </span>
                   <span className="text-accent text-base tabular-nums">
-                    {p.left} з {p.total}
+                    Залишилось {p.left} з {p.total}
                   </span>
                 </div>
                 <p className="text-subtle text-xs mt-1">
