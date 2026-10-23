@@ -9,26 +9,34 @@ const NOTE_MAX = 300;
 // Highlight clients who cancel often (count over the last 30 days)
 export const FREQUENT_CANCELLATIONS = 3;
 
-const TYPE_SHORT: Record<AdminMember["packagesLeft"][number]["trainingType"], string> = {
-  групові: "Груп.",
-  персональні: "Перс.",
-  спліт: "Спліт",
+// Word forms for 1, 2–4 and 5+ trainings («1 персональне», «3 групові», «8 персональних»)
+const TYPE_FORMS: Record<AdminMember["packagesLeft"][number]["trainingType"], [string, string, string]> = {
+  групові: ["групове", "групові", "групових"],
+  персональні: ["персональне", "персональні", "персональних"],
+  спліт: ["спліт", "спліт", "спліт"],
 };
+
+function trainingsLeft(n: number, forms: [string, string, string]) {
+  const tens = n % 100;
+  const ones = n % 10;
+  const form = tens >= 11 && tens <= 14 ? forms[2] : ones === 1 ? forms[0] : ones >= 2 && ones <= 4 ? forms[1] : forms[2];
+  return `${n} ${form}`;
+}
 
 const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 
-// Under the client's name: a badge for the club card («Клубна карта чекає активації»), then «Перс. 5 · Спліт 2»
+// Under the client's name: a badge for the club card («Клубна карта чекає активації»), then «Залишилось: 5 персональних · 2 спліт»
 export function PurchaseSummary({ m }: { m: AdminMember }) {
   const [text, className] = !m.clubCard
     ? ["Без клубної карти", "text-subtle border-line"]
     : m.clubCard.state === "active"
       ? [`Клубна карта до ${ddmm(m.clubCard.until)}`, "text-accent bg-teal/10 border-teal/30"]
       : ["Клубна карта чекає активації", "text-warn bg-warn-bg border-warn-line"];
-  const left = m.packagesLeft.map((p) => `${TYPE_SHORT[p.trainingType]} ${p.left}`).join(" · ");
+  const left = m.packagesLeft.map((p) => trainingsLeft(p.left, TYPE_FORMS[p.trainingType])).join(" · ");
   return (
     <>
       <span className={`m-1 font-semibold border rounded-full px-2.5 py-1 ${className}`}>{text}</span>
-      {left && <span className="m-1 text-body">{left}</span>}
+      {left && <span className="m-1 text-body">Залишилось: {left}</span>}
     </>
   );
 }
