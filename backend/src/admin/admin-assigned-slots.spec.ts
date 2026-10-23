@@ -260,7 +260,7 @@ describe('Group slots — upsertGroupSlot', () => {
 });
 
 describe('Calendar — assigned slot members', () => {
-  it('returns assigned members with their payment state for assigned slots only', async () => {
+  it('returns assigned members with booking and trainings left (of that type) for assigned slots only', async () => {
     const rows = [
       {
         localDate: '2026-10-21',
@@ -289,16 +289,22 @@ describe('Calendar — assigned slot members', () => {
         { slotId: 'p1', id: M3, displayName: 'Іра' },
       ],
       [
-        { slotId: 'p1', memberId: M1, paymentStatus: 'PAID' },
-        { slotId: 'p1', memberId: M2, paymentStatus: 'PENDING' },
+        { slotId: 'p1', memberId: M1 },
+        { slotId: 'p1', memberId: M2 },
       ],
     ]);
-    const result = await makeService(db).getCalendar(TRAINER, '2026-10');
+    const summaries = new Map([
+      [M1, { clubCardUntil: null, packagesLeft: [{ trainingType: 'спліт', left: 5 }] }],
+      [M2, { clubCardUntil: null, packagesLeft: [{ trainingType: 'персональні', left: 2 }] }],
+    ]);
+    const entitlements = { summaries: jest.fn().mockResolvedValue(summaries) };
+    const result = await makeService(db, entitlements).getCalendar(TRAINER, '2026-10');
     expect(result.find((s) => s.slotId === 'g1')?.members).toEqual([]);
+    // Оля has personal trainings only: nothing left for a split. Іра cancelled
     expect(result.find((s) => s.slotId === 'p1')?.members).toEqual([
-      { id: M1, displayName: 'Катя', paymentStatus: 'PAID' },
-      { id: M2, displayName: 'Оля', paymentStatus: 'PENDING' },
-      { id: M3, displayName: 'Іра', paymentStatus: null },
+      { id: M1, displayName: 'Катя', booked: true, packageLeft: 5 },
+      { id: M2, displayName: 'Оля', booked: true, packageLeft: 0 },
+      { id: M3, displayName: 'Іра', booked: false, packageLeft: 0 },
     ]);
   });
 });

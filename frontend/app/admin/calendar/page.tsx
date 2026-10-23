@@ -38,17 +38,18 @@ const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, пер�
 const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
 const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 
-const PAYMENT_LABELS = {
-  PAID: { text: "оплачено", className: "text-teal" },
-  PENDING: { text: "очікує оплати", className: "text-amber-400" },
-  NONE: { text: "не оплачено", className: "text-muted" },
-};
+// A member of an assigned training: cancelled, paid (trainings left in a package of that type) or not paid
+function memberLabel(m: { booked: boolean; packageLeft: number }) {
+  if (!m.booked) return { text: "скасувала", className: "text-muted" };
+  if (m.packageLeft > 0) return { text: `оплачено · залишилось ${m.packageLeft}`, className: "text-teal" };
+  return { text: "не оплачено", className: "text-muted" };
+}
 
 const ERROR_TEXTS: [string, string][] = [
   ["Time is already taken", "На цей час уже є тренування"],
   ["taken by an assigned training", "На 19:00 чи 20:00 уже стоїть персональне тренування"],
   ["in the past", "Цей час уже минув"],
-  ["already booked", "Ця людина вже оплатила, її не можна прибрати"],
+  ["Attendance already marked", "Цій людині вже поставили відмітку, її не можна прибрати"],
 ];
 
 function errorText(err: unknown, fallback: string) {
@@ -129,10 +130,10 @@ export default function CalendarPage() {
     const start = `${s.localDate}T${s.slotTime}:00`;
     const end = new Date(new Date(start).getTime() + 60 * 60 * 1000);
     const colors = TYPE_COLORS[s.trainingType];
-    // Group: how full it is. Assigned: who paid ("Спліт · Катя ✓, Оля")
+    // Group: how full it is. Assigned: who has a package ("Спліт · Катя ✓, Оля")
     const detail = s.trainingType === "групові"
       ? `${s.bookedCount}/${s.capacity}`
-      : s.members.map((m) => `${m.displayName}${m.paymentStatus === "PAID" ? " ✓" : ""}`).join(", ") || "без людей";
+      : s.members.map((m) => `${m.displayName}${m.booked && m.packageLeft > 0 ? " ✓" : ""}`).join(", ") || "без людей";
     return {
       id: s.slotId,
       title: `${TYPE_SHORT[s.trainingType]} · ${detail}`,
@@ -334,7 +335,7 @@ export default function CalendarPage() {
             {editing && editing.trainingType !== "групові" && editing.members.length > 0 && (
               <ul className="space-y-1">
                 {editing.members.map((m) => {
-                  const label = PAYMENT_LABELS[m.paymentStatus ?? "NONE"];
+                  const label = memberLabel(m);
                   return (
                     <li key={m.id} className="flex items-center justify-between text-sm">
                       <span className="text-body">{m.displayName}</span>

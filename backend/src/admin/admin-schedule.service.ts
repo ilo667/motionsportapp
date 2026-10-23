@@ -240,14 +240,16 @@ export class AdminScheduleService {
             .where(inArray(slotMembers.slotId, assignedIds))
             .orderBy(slotMembers.createdAt)
         : [];
-    // Per-member payment state: the trainer needs who paid, not a count
+    // Per member: still booked, and how many trainings of that type are left in their packages
+    // (the trainer cancels a training nobody paid for)
     const booked =
       assignedIds.length > 0
         ? await this.database.db
-            .select({ slotId: bookings.slotId, memberId: bookings.memberId, paymentStatus: bookings.paymentStatus })
+            .select({ slotId: bookings.slotId, memberId: bookings.memberId })
             .from(bookings)
             .where(and(inArray(bookings.slotId, assignedIds), eq(bookings.status, 'ACTIVE')))
         : [];
+    const summaries = await this.entitlements.summaries([...new Set(assigned.map((a) => a.id))]);
 
     return rows.map((r) => ({
       localDate: r.localDate,
@@ -261,8 +263,8 @@ export class AdminScheduleService {
         .map(({ id, displayName }) => ({
           id,
           displayName,
-          // 'PAID' | 'PENDING' (on LiqPay, seat held) | null (has not started paying)
-          paymentStatus: booked.find((b) => b.slotId === r.slotId && b.memberId === id)?.paymentStatus ?? null,
+          booked: booked.some((b) => b.slotId === r.slotId && b.memberId === id),
+          packageLeft: summaries.get(id)?.packagesLeft.find((p) => p.trainingType === r.trainingType)?.left ?? 0,
         })),
     }));
   }
