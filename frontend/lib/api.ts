@@ -162,6 +162,8 @@ export interface MemberPurchases {
 export interface MyPurchases {
   catalog: { clubCards: CatalogItem[]; services: CatalogItem[]; groupPasses: CatalogItem[] };
   card: ClubCard | null;
+  // The latest card with its state: shows «згоріла» / «закінчилась» when there is no card any more
+  lastCard: { label: string; state: CardState; activateBy: string; validUntil: string | null } | null;
   packages: TrainingPackage[];
   pending: Purchase | null;
   canPayCash: boolean; // cash goes to the member's trainer

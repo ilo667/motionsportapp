@@ -266,6 +266,26 @@ describe('Purchases — create', () => {
   });
 });
 
+describe('Purchases — what the member sees', () => {
+  // Reads: the catalog, the member, the pending purchase, the latest card
+  it('a card never activated in time is shown as burned, not just missing', async () => {
+    const { db } = makeDb([
+      [],
+      MEMBER,
+      [],
+      [{ label: 'Денний · 1 місяць', activateBy: '2026-10-22', validFrom: null, validUntil: null }],
+    ]);
+    const result = await makeService(db).svc.getForMember('m1');
+    expect(result.card).toBeNull();
+    expect(result.lastCard).toEqual({
+      label: 'Денний · 1 місяць',
+      state: 'burned',
+      activateBy: '2026-10-22',
+      validUntil: null,
+    });
+  });
+});
+
 describe('Purchases — cancel', () => {
   it('cancels own pending purchase and its open LiqPay attempts', async () => {
     const { db, sets } = makeDb([[], [{ id: 'purchase-1' }]]);

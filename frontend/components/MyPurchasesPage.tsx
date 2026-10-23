@@ -112,6 +112,14 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
                   ? `діє до ${formatDate(data.card.validUntil!)}`
                   : `чекає активації тренером до ${formatDate(data.card.activateBy)}`}
               </span>
+            ) : data.lastCard?.state === "burned" ? (
+              <span className="text-danger text-sm text-right">
+                {data.lastCard.label} · не активована вчасно, згоріла
+              </span>
+            ) : data.lastCard?.state === "expired" ? (
+              <span className="text-danger text-sm text-right">
+                {data.lastCard.label} · закінчилась {formatDate(data.lastCard.validUntil!)}
+              </span>
             ) : (
               <span className="text-danger text-sm">немає</span>
             )}
@@ -138,6 +146,15 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
                   <div className="h-full bg-teal" style={{ width: `${(p.left / p.total) * 100}%` }} />
                 </div>
               </div>
+            ))}
+
+          {data.packages
+            .filter((p) => (p.state === "burned" || p.state === "expired") && p.left > 0)
+            .map((p) => (
+              <p key={p.id} className="text-muted text-xs px-1">
+                {p.trainingType === "групові" ? `Групові · ${p.title}` : p.title}: {p.left} з {p.total}{" "}
+                {p.state === "burned" ? "згоріли (не почато вчасно)" : `згоріли, строк до ${formatDate(p.validUntil!)}`}
+              </p>
             ))}
 
           {pending && (

@@ -82,6 +82,18 @@ export class PurchasesService {
       .from(purchases)
       .where(and(eq(purchases.memberId, memberId), eq(purchases.status, 'PENDING')))
       .limit(1);
+    // The latest card with its state, so a member whose card burned or ended sees why there is none
+    const [latest] = await this.database.db
+      .select({
+        label: clubCards.label,
+        activateBy: clubCards.activateBy,
+        validFrom: clubCards.validFrom,
+        validUntil: clubCards.validUntil,
+      })
+      .from(clubCards)
+      .where(eq(clubCards.memberId, memberId))
+      .orderBy(desc(clubCards.createdAt))
+      .limit(1);
 
     return {
       catalog: {
@@ -90,6 +102,14 @@ export class PurchasesService {
         groupPasses: catalog.filter((c) => c.section === 'group'),
       },
       card: await this.entitlements.usableCard(memberId),
+      lastCard: latest
+        ? {
+            label: latest.label,
+            state: cardState(latest, this.clock.now().toISODate()!),
+            activateBy: latest.activateBy,
+            validUntil: latest.validUntil,
+          }
+        : null,
       packages: await this.entitlements.packagesOf(memberId),
       pending: pending ? (await this.views([pending.id]))[0] : null,
       // Cash goes to the member's trainer, so a member without one can only pay by LiqPay
