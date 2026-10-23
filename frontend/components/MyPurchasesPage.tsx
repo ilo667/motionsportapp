@@ -102,6 +102,29 @@ function ClubCardBlock({ data }: { data: MyPurchases }) {
   );
 }
 
+// One circle per training: done ones filled with a check, the next one outlined in green, the rest grey.
+// Wraps onto a second row for 10–12
+function TrainingDots({ done, total }: { done: number; total: number }) {
+  return (
+    <div className="flex flex-wrap -m-1 mt-3" role="img" aria-label={`Пройдено ${done} з ${total}`}>
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          className={`m-1 w-7 h-7 rounded-full flex items-center justify-center ${
+            i < done ? "bg-teal" : i === done ? "border-2 border-teal" : "border-2 border-muted/50"
+          }`}
+        >
+          {i < done && (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-on-teal" aria-hidden>
+              <path d="M5 12l5 5 9-10" />
+            </svg>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // «Мої покупки»: club card, packages and group passes, the purchase that awaits payment, and the ways into the
 // purchase flow (trainer service, club card alone, group pass)
 export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
@@ -199,22 +222,25 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
             .filter((p) => p.state === "waiting" || p.state === "active")
             .map((p) => (
               <div key={p.id} className="rounded-xl border border-line bg-surface p-4">
-                <div className="flex items-center justify-between space-x-3">
+                <div className="flex items-baseline justify-between space-x-3">
                   <span className="text-heading font-semibold">
                     {p.trainingType === "групові" ? `Групові · ${p.title}` : p.title}
                   </span>
-                  <span className="text-accent text-base tabular-nums">
-                    Залишилось {p.left} з {p.total}
+                  <span className="text-subtle text-xs whitespace-nowrap">
+                    {p.state === "active" ? `діє до ${formatDate(p.validUntil!)}` : `почати до ${formatDate(p.activateBy)}`}
                   </span>
                 </div>
-                <p className="text-subtle text-xs mt-1">
-                  {p.state === "active"
-                    ? `Діє до ${formatDate(p.validUntil!)}`
-                    : `Почнеться з першого тренування. Встигніть до ${formatDate(p.activateBy)}`}
+                <TrainingDots done={p.total - p.left} total={p.total} />
+                <p className="text-body text-xs mt-3">
+                  {p.total - p.left > 0 ? (
+                    <>
+                      Пройдено <span className="text-accent font-semibold">{p.total - p.left}</span> з {p.total} · ще{" "}
+                      {p.left} попереду
+                    </>
+                  ) : (
+                    `Почнеться з першого тренування · ${p.total} попереду`
+                  )}
                 </p>
-                <div className="h-1.5 rounded-full bg-line overflow-hidden mt-2">
-                  <div className="h-full bg-teal" style={{ width: `${(p.left / p.total) * 100}%` }} />
-                </div>
               </div>
             ))}
 
