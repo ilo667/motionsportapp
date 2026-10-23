@@ -142,7 +142,6 @@ export default function SchedulePage() {
 
   const handleLogout = async () => {
     await api.logout().catch(() => {});
-    try { localStorage.removeItem('mg_authed'); } catch {}
     router.push("/login");
   };
 

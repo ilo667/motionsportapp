@@ -212,8 +212,12 @@ export const api = {
       body: JSON.stringify({ memberCode, pin }),
     }),
 
-  logout: () =>
-    request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+  // Clears the mg_authed flag for every logout (member and trainer), even if the request fails,
+  // so `/` doesn't call the API with a dead session (401 in the console)
+  logout: () => {
+    try { localStorage.removeItem("mg_authed"); } catch {}
+    return request<{ ok: boolean }>("/auth/logout", { method: "POST" });
+  },
 
   forgotPin: (memberCode: string, recoveryCode: string, newPin: string) =>
     request<RegisterResponse>("/auth/member/forgot", {
