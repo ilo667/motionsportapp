@@ -8,7 +8,7 @@ import { VacancyAlertsService } from './vacancy-alerts.service';
 
 const ICON = '/motion-gym-logo-app.png';
 
-type EventType = 'BOOKING_OPEN' | 'SLOT_CANCELLED' | 'VACANCY' | 'MEMBER_CANCELLED';
+type EventType = 'BOOKING_OPEN' | 'SLOT_CANCELLED' | 'VACANCY' | 'MEMBER_CANCELLED' | 'CASH_REQUESTED';
 
 @Injectable()
 export class NotificationService {
@@ -48,6 +48,7 @@ export class NotificationService {
       else if (event.eventType === 'SLOT_CANCELLED') await this.sendCancellation(p);
       else if (event.eventType === 'VACANCY') await this.sendVacancy(p);
       else if (event.eventType === 'MEMBER_CANCELLED') await this.sendMemberCancelled(p);
+      else if (event.eventType === 'CASH_REQUESTED') await this.sendCashRequested(p);
 
       await this.database.db
         .update(notificationEvents)
@@ -123,6 +124,16 @@ export class NotificationService {
     const subscriptions = trainerId ? await this.subs.findAdminByAdminId(trainerId) : await this.subs.findAllAdmin();
     for (const sub of subscriptions) {
       const result = await this.push.send(sub, { title, body: `${displayName}: ${reason}`, icon: ICON, url: '/admin' });
+      if (result === 'expired') await this.subs.disableAdminByEndpoint(sub.endpoint);
+    }
+  }
+
+  // To the member's trainer: they want to pay cash for a purchase (confirmed on «Клієнти»)
+  private async sendCashRequested(payload: Record<string, unknown>) {
+    const subscriptions = await this.subs.findAdminByAdminId(payload.trainerId as string);
+    const body = `${payload.displayName as string}: ${payload.totalUah as number} ₴`;
+    for (const sub of subscriptions) {
+      const result = await this.push.send(sub, { title: 'Оплата готівкою', body, icon: ICON, url: '/admin/clients' });
       if (result === 'expired') await this.subs.disableAdminByEndpoint(sub.endpoint);
     }
   }

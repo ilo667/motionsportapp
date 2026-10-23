@@ -11,6 +11,7 @@ import { AiModule } from './ai/ai.module';
 import { ClockModule } from './clock/clock.module';
 import { PaymentModule } from './payment/payment.module';
 import { PricesModule } from './prices/prices.module';
+import { PurchasesModule } from './purchases/purchases.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { PricesModule } from './prices/prices.module';
     AiModule,
     PaymentModule,
     PricesModule,
+    PurchasesModule,
   ],
 })
 export class AppModule {}
