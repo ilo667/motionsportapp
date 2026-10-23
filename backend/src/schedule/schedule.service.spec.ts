@@ -171,6 +171,15 @@ describe('ScheduleService — assigned trainings', () => {
   });
 });
 
+describe('ScheduleService — payment expiry never breaks the schedule', () => {
+  it('still answers when expiring stale payments fails (e.g. a DB deadlock)', async () => {
+    const { db } = makeDb([[]]);
+    const service = makeService(db, kyivAt(15));
+    (service as any).paymentService.expireStale.mockRejectedValue(new Error('deadlock detected'));
+    await expect(service.getNext()).resolves.toEqual(expect.objectContaining({ localDate: null }));
+  });
+});
+
 describe('ScheduleService — no group day ahead', () => {
   it('returns no group day when there is no group training ahead (e.g. the trainer cancelled them)', async () => {
     const { db } = makeDb([[]]);

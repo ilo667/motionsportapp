@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { and, eq, gte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
@@ -34,6 +34,8 @@ const DEFAULT_HORIZON_DAYS = 21;
 
 @Injectable()
 export class ScheduleService {
+  private readonly logger = new Logger(ScheduleService.name);
+
   // Date on which this instance last created the default group slots (see ensureDefaultGroupSlots)
   private defaultSlotsEnsuredFor: string | null = null;
 
@@ -45,7 +47,11 @@ export class ScheduleService {
   ) {}
 
   async getNext(memberId?: string) {
-    await this.paymentService.expireStale();
+    // A failure here (LiqPay slow, a DB deadlock with a concurrent callback) must not break the schedule;
+    // the next load retries
+    await this.paymentService
+      .expireStale()
+      .catch((err: unknown) => this.logger.warn(`Expire stale payments failed: ${String(err)}`));
     await this.ensureDefaultGroupSlots();
 
     const now = this.clock.now();

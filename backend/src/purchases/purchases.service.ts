@@ -150,6 +150,13 @@ export class PurchasesService {
   // arrives for one of them is handled by hand (PaymentService)
   async cancel(memberId: string, purchaseId: string) {
     await this.database.db.transaction(async (tx) => {
+      // Payments first, then the purchase: the same lock order as the LiqPay paths, so a cancel and a callback
+      // at once wait for each other instead of deadlocking. If the purchase turns out not to be cancellable,
+      // the throw below rolls this back
+      await tx
+        .update(payments)
+        .set({ status: 'REPLACED', updatedAt: new Date() })
+        .where(and(eq(payments.purchaseId, purchaseId), eq(payments.status, 'PENDING')));
       const [cancelled] = await tx
         .update(purchases)
         .set({ status: 'CANCELLED', decidedAt: this.clock.now().toJSDate() })
@@ -164,10 +171,6 @@ export class PurchasesService {
         if (!own) throw new NotFoundException('Purchase not found');
         throw new ConflictException('Purchase is no longer awaiting payment');
       }
-      await tx
-        .update(payments)
-        .set({ status: 'REPLACED', updatedAt: new Date() })
-        .where(and(eq(payments.purchaseId, purchaseId), eq(payments.status, 'PENDING')));
     });
     return { ok: true };
   }

@@ -7,7 +7,7 @@ import { PurchasesService } from './purchases.service';
 import { PurchasesController } from './purchases.controller';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { MemberGuard } from '../common/guards/member.guard';
-import { purchases, purchaseItems } from '../database/schema';
+import { payments, purchases, purchaseItems } from '../database/schema';
 import { KY_ZONE } from '../schedule/training-types';
 
 const NOW = DateTime.fromISO('2026-10-23T12:00:00', { zone: KY_ZONE });
@@ -17,6 +17,7 @@ function makeDb(results: unknown[][]) {
   const queue = [...results];
   const inserts: { table: unknown; values: unknown }[] = [];
   const sets: Record<string, unknown>[] = [];
+  const updated: unknown[] = [];
   function link(result?: () => unknown): any {
     const chain: any = {
       then: (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
@@ -33,7 +34,10 @@ function makeDb(results: unknown[][]) {
   }
   const db: any = {
     select: jest.fn(() => link()),
-    update: jest.fn(() => link()),
+    update: jest.fn((table: unknown) => {
+      updated.push(table);
+      return link();
+    }),
     insert: jest.fn((table: unknown) => {
       const chain = link(() => [{ id: 'purchase-1' }]);
       chain.values = jest.fn((values: unknown) => {
@@ -44,7 +48,7 @@ function makeDb(results: unknown[][]) {
     }),
   };
   db.transaction = jest.fn((fn: (tx: unknown) => unknown) => fn(db));
-  return { db, inserts, sets };
+  return { db, inserts, sets, updated };
 }
 
 const CARD = { id: 'price-card', section: 'club_card', title: 'Повний день', optionLabel: '1 місяць', amountUah: 1400 };
@@ -197,19 +201,27 @@ describe('Purchases — create', () => {
 
 describe('Purchases — cancel', () => {
   it('cancels own pending purchase and its open LiqPay attempts', async () => {
-    const { db, sets } = makeDb([[{ id: 'purchase-1' }], []]);
+    const { db, sets } = makeDb([[], [{ id: 'purchase-1' }]]);
     await makeService(db).svc.cancel('m1', 'purchase-1');
     expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED' }));
     expect(sets).toContainEqual(expect.objectContaining({ status: 'REPLACED' }));
   });
 
+  // Same lock order as the LiqPay paths (payment row, then purchase row), so a cancel and a callback at once
+  // wait for each other instead of deadlocking
+  it('touches the payments before the purchase', async () => {
+    const { db, updated } = makeDb([[], [{ id: 'purchase-1' }]]);
+    await makeService(db).svc.cancel('m1', 'purchase-1');
+    expect(updated).toEqual([payments, purchases]);
+  });
+
   it("404 for someone else's purchase", async () => {
-    const { db } = makeDb([[], []]);
+    const { db } = makeDb([[], [], []]);
     await expect(makeService(db).svc.cancel('m2', 'purchase-1')).rejects.toThrow(NotFoundException);
   });
 
   it('409 when it was already paid or decided', async () => {
-    const { db } = makeDb([[], [{ status: 'PAID' }]]);
+    const { db } = makeDb([[], [], [{ status: 'PAID' }]]);
     await expect(makeService(db).svc.cancel('m1', 'purchase-1')).rejects.toThrow(ConflictException);
   });
 });
