@@ -15,6 +15,7 @@ import {
   trainingSlots,
 } from '../database/schema';
 import { isAssignedType } from '../schedule/training-types';
+import { activateByFor } from './validity';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -68,6 +69,8 @@ export class EntitlementsService {
           purchaseItemId: line.id,
           label: cardLabel(line.title, line.optionLabel),
           ...this.cardDates(today, line.durationMonths ?? 0),
+          durationMonths: line.durationMonths ?? 0,
+          activateBy: activateByFor(today.toISODate()!),
         });
       } else if (line.section === 'assigned' && line.trainingType && line.trainingCount) {
         await tx.insert(packages).values({
@@ -75,6 +78,8 @@ export class EntitlementsService {
           purchaseItemId: line.id,
           trainingType: line.trainingType,
           total: line.trainingCount,
+          purchasedOn: today.toISODate()!,
+          activateBy: activateByFor(today.toISODate()!),
         });
       }
     }
@@ -217,6 +222,8 @@ export class EntitlementsService {
       purchaseItemId: null,
       label: cardLabel(item.title, item.optionLabel),
       ...this.cardDates(this.clock.now().startOf('day'), item.durationMonths ?? 0),
+      durationMonths: item.durationMonths ?? 0,
+      activateBy: activateByFor(this.clock.now().toISODate()!),
       addedBy: trainerId,
     });
   }

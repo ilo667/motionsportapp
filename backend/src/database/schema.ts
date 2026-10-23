@@ -13,7 +13,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { GROUP_TYPE, ASSIGNED_TYPES } from '../schedule/training-types';
+import { GROUP_TYPE, ASSIGNED_TYPES, PASS_TYPES } from '../schedule/training-types';
 import { PRICE_SECTIONS } from '../prices/price-list';
 
 // CHECK that a text column holds one of the known values (NULL passes, so nullable columns stay optional).
@@ -291,8 +291,8 @@ export const priceItems = pgTable(
     optionLabel: text('option_label'), // "3 місяці", "6 тренувань"; null for a single-option item
     amountUah: integer('amount_uah').notNull(),
     sortOrder: integer('sort_order').notNull(),
-    // What buying it gives. Club card: months from the day it is paid (0 = that day only).
-    // Trainer service: a package of trainingCount trainings for slots of trainingType
+    // What buying it gives: valid for durationMonths from activation (0 = that day only). Trainer service and
+    // group pass: a package of trainingCount trainings for slots of trainingType
     durationMonths: integer('duration_months'),
     trainingType: text('training_type'),
     trainingCount: integer('training_count'),
@@ -303,7 +303,7 @@ export const priceItems = pgTable(
   () => [
     oneOf('price_items_section_check', 'section', PRICE_SECTIONS),
     check('price_items_amount_check', sql`amount_uah > 0`),
-    oneOf('price_items_training_type_check', 'training_type', ASSIGNED_TYPES),
+    oneOf('price_items_training_type_check', 'training_type', PASS_TYPES),
   ],
 );
 
@@ -339,6 +339,9 @@ export const purchases = pgTable(
     decidedAt: timestamp('decided_at', { withTimezone: true }),
     // Trainer who confirmed or rejected cash
     decidedBy: uuid('decided_by').references(() => admins.id),
+    // Group pass bought from «Записатися»: the slot to book once paid, and the booking it made
+    slotId: uuid('slot_id').references(() => trainingSlots.id),
+    bookingId: uuid('booking_id').references(() => bookings.id),
   },
   () => [
     oneOf('purchases_method_check', 'method', ['LIQPAY', 'CASH']),
@@ -361,7 +364,10 @@ export const purchaseItems = pgTable('purchase_items', {
   amountUah: integer('amount_uah').notNull(),
 });
 
-// Access to the gym. From a paid purchase, or added by the trainer (bought at the reception)
+const A_MONTH_FROM_TODAY = sql`(CURRENT_DATE + INTERVAL '1 month')::date`;
+
+// Access to the gym. From a paid purchase, or added by the trainer (bought at the reception).
+// Waits for the trainer's «Активувати з сьогодні» (valid_from / valid_until null); burns after activate_by
 export const clubCards = pgTable('club_cards', {
   id: uuid('id').primaryKey().defaultRandom(),
   memberId: uuid('member_id')
@@ -369,13 +375,18 @@ export const clubCards = pgTable('club_cards', {
     .references(() => members.id),
   purchaseItemId: uuid('purchase_item_id').references(() => purchaseItems.id), // null = added by the trainer
   label: text('label').notNull(),
-  validFrom: date('valid_from').notNull(),
-  validUntil: date('valid_until').notNull(),
+  validFrom: date('valid_from'),
+  validUntil: date('valid_until'),
+  durationMonths: integer('duration_months').notNull().default(0),
+  // The code always sets it; the default only fills rows that existed before activation
+  activateBy: date('activate_by').notNull().default(A_MONTH_FROM_TODAY),
   addedBy: uuid('added_by').references(() => admins.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Trainings with the trainer, bought in a pack. Left = total minus its spends; the oldest pack is spent first
+// Trainings bought in a pack: a trainer service or a group pass. Left = total minus its spends; the oldest usable
+// pack is spent first. The first mark activates it (activated_on = that training's date, valid for duration_months);
+// not activated by activate_by, it burns
 export const packages = pgTable(
   'packages',
   {
@@ -388,10 +399,16 @@ export const packages = pgTable(
       .references(() => purchaseItems.id),
     trainingType: text('training_type').notNull(),
     total: integer('total').notNull(),
+    durationMonths: integer('duration_months').notNull().default(1),
+    // The code always sets both; the defaults only fill rows that existed before activation
+    purchasedOn: date('purchased_on').notNull().defaultNow(),
+    activateBy: date('activate_by').notNull().default(A_MONTH_FROM_TODAY),
+    activatedOn: date('activated_on'),
+    validUntil: date('valid_until'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   () => [
-    oneOf('packages_training_type_check', 'training_type', ASSIGNED_TYPES),
+    oneOf('packages_training_type_check', 'training_type', PASS_TYPES),
     check('packages_total_check', sql`total > 0`),
   ],
 );

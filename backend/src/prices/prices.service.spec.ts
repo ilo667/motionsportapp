@@ -122,7 +122,7 @@ describe('Prices', () => {
   });
 
   // What a purchase gives: a club card lasts durationMonths (0 = that day only), a trainer package holds trainingCount
-  it('seed price list: club cards have a duration, trainer services a type and a count, group items neither', () => {
+  it('seed price list: everything has a duration; trainer services and group passes a type and a count', () => {
     for (const p of DEFAULT_PRICE_LIST) {
       if (p.section === 'club_card') {
         expect(Number.isInteger(p.durationMonths) && p.durationMonths! >= 0).toBe(true);
@@ -130,10 +130,11 @@ describe('Prices', () => {
       } else if (p.section === 'assigned') {
         expect(ASSIGNED_TYPES).toContain(p.trainingType);
         expect([1, 6, 8, 12]).toContain(p.trainingCount);
-        expect(p.durationMonths).toBeUndefined();
+        expect(p.durationMonths).toBe(1);
       } else {
-        expect(p.trainingType).toBeUndefined();
-        expect(p.durationMonths).toBeUndefined();
+        expect(p.trainingType).toBe('групові');
+        expect([1, 10]).toContain(p.trainingCount);
+        expect(p.durationMonths).toBe(1);
       }
     }
     expect(DEFAULT_PRICE_LIST.find((p) => p.code === 'club_single')?.durationMonths).toBe(0);

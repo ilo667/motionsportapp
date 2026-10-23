@@ -80,6 +80,8 @@ describe('Entitlements — activation', () => {
           label: 'Повний день · 3 місяці',
           validFrom: '2026-10-23',
           validUntil: '2027-01-23',
+          durationMonths: 3,
+          activateBy: '2026-11-23',
         },
       },
     ]);
@@ -111,7 +113,17 @@ describe('Entitlements — activation', () => {
     ]);
     await makeService(db).activate(db, 'p1');
     expect(inserts).toEqual([
-      { table: packages, values: { memberId: 'm1', purchaseItemId: 'line-2', trainingType: 'персональні', total: 8 } },
+      {
+        table: packages,
+        values: {
+          memberId: 'm1',
+          purchaseItemId: 'line-2',
+          trainingType: 'персональні',
+          total: 8,
+          purchasedOn: '2026-10-23',
+          activateBy: '2026-11-23',
+        },
+      },
     ]);
   });
 });
@@ -200,6 +212,8 @@ describe('Entitlements — manual club card', () => {
         label: 'Денний · 1 місяць',
         validFrom: '2026-10-23',
         validUntil: '2026-11-23',
+        durationMonths: 1,
+        activateBy: '2026-11-23',
         addedBy: 't1',
       },
     });

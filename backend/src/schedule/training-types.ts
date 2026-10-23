@@ -5,6 +5,8 @@ export const KY_ZONE = 'Europe/Kyiv';
 export const GROUP_TYPE = 'групові';
 // Assigned slots: visible only to members listed in slot_members, paid via LiqPay, bookable until the start
 export const ASSIGNED_TYPES = ['персональні', 'спліт'];
+// What a package can pay for: trainer services and group passes
+export const PASS_TYPES = [GROUP_TYPE, ...ASSIGNED_TYPES];
 export const GROUP_SLOT_TIMES = ['19:00', '20:00'];
 // Default group training days (Luxon weekday numbers)
 export const DEFAULT_WEEKDAYS = [1, 3, 5]; // Mon, Wed, Fri
