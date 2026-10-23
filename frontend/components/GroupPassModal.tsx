@@ -83,11 +83,7 @@ export function GroupPassModal({
         ) : (
           <>
             <h2 className="font-geologica font-semibold text-lg text-heading mb-1">Групове тренування {slotTime}</h2>
-            {step === "cash" ? (
-              <p className="text-muted text-sm mb-4">Що оплатите готівкою? Ви одразу записані, тренер візьме гроші в залі.</p>
-            ) : (
-              <div className="mb-4" />
-            )}
+            <div className="mb-4" />
 
             {!data && !error && <p className="text-muted text-sm">Завантаження...</p>}
 
