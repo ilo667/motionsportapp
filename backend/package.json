@@ -9,7 +9,7 @@
     "build": "rm -rf dist && nest build",
     "seed:admin": "ts-node -r tsconfig-paths/register scripts/seed-admin.ts",
     "db:push": "drizzle-kit push",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" \"api/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",

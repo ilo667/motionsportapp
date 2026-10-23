@@ -20,26 +20,47 @@ describe('Coach push — member cancelled / moved', () => {
   it('sends the reason to the coach devices only', async () => {
     const { svc, push, subs } = makeNotifications();
     await (svc as any).sendMemberCancelled({
-      displayName: 'Оля', slotTime: '19:00', localDate: '2026-10-22', reason: 'Захворіла', switchedToTime: null,
+      displayName: 'Оля',
+      slotTime: '19:00',
+      localDate: '2026-10-22',
+      reason: 'Захворіла',
+      switchedToTime: null,
     });
     expect(subs.findAll).not.toHaveBeenCalled();
-    expect(push.send).toHaveBeenCalledWith(adminSub, expect.objectContaining({
-      title: 'Скасування 19:00, 22.10', body: 'Оля: Захворіла', url: '/admin',
-    }));
+    expect(push.send).toHaveBeenCalledWith(
+      adminSub,
+      expect.objectContaining({
+        title: 'Скасування 19:00, 22.10',
+        body: 'Оля: Захворіла',
+        url: '/admin',
+      }),
+    );
   });
 
   it('names both times for a move', async () => {
     const { svc, push } = makeNotifications();
     await (svc as any).sendMemberCancelled({
-      displayName: 'Іра', slotTime: '19:00', localDate: '2026-10-22', reason: 'Не встигаю', switchedToTime: '20:00',
+      displayName: 'Іра',
+      slotTime: '19:00',
+      localDate: '2026-10-22',
+      reason: 'Не встигаю',
+      switchedToTime: '20:00',
     });
-    expect(push.send).toHaveBeenCalledWith(adminSub, expect.objectContaining({ title: 'Перенесення 19:00 → 20:00, 22.10' }));
+    expect(push.send).toHaveBeenCalledWith(
+      adminSub,
+      expect.objectContaining({ title: 'Перенесення 19:00 → 20:00, 22.10' }),
+    );
   });
 
   it("goes only to the member's coach when the member has one", async () => {
     const { svc, subs } = makeNotifications();
     await (svc as any).sendMemberCancelled({
-      displayName: 'Оля', slotTime: '19:00', localDate: '2026-10-22', reason: 'x', switchedToTime: null, coachId: 'coach-2',
+      displayName: 'Оля',
+      slotTime: '19:00',
+      localDate: '2026-10-22',
+      reason: 'x',
+      switchedToTime: null,
+      coachId: 'coach-2',
     });
     expect(subs.findAdminByAdminId).toHaveBeenCalledWith('coach-2');
     expect(subs.findAllAdmin).not.toHaveBeenCalled();
@@ -48,7 +69,12 @@ describe('Coach push — member cancelled / moved', () => {
   it('goes to every coach for an unassigned member', async () => {
     const { svc, subs } = makeNotifications();
     await (svc as any).sendMemberCancelled({
-      displayName: 'Оля', slotTime: '19:00', localDate: '2026-10-22', reason: 'x', switchedToTime: null, coachId: null,
+      displayName: 'Оля',
+      slotTime: '19:00',
+      localDate: '2026-10-22',
+      reason: 'x',
+      switchedToTime: null,
+      coachId: null,
     });
     expect(subs.findAllAdmin).toHaveBeenCalled();
     expect(subs.findAdminByAdminId).not.toHaveBeenCalled();
@@ -57,13 +83,19 @@ describe('Coach push — member cancelled / moved', () => {
   it('disables an expired coach subscription', async () => {
     const { svc, push, subs } = makeNotifications();
     push.send.mockResolvedValue('expired');
-    await (svc as any).sendMemberCancelled({ displayName: 'Оля', slotTime: '19:00', localDate: '2026-10-22', reason: 'x', switchedToTime: null });
+    await (svc as any).sendMemberCancelled({
+      displayName: 'Оля',
+      slotTime: '19:00',
+      localDate: '2026-10-22',
+      reason: 'x',
+      switchedToTime: null,
+    });
     expect(subs.disableAdminByEndpoint).toHaveBeenCalledWith(adminSub.endpoint);
   });
 });
 
 describe('Booking-open push', () => {
-  it("goes only to clients of coaches with group trainings today (and unassigned ones when asked)", async () => {
+  it('goes only to clients of coaches with group trainings today (and unassigned ones when asked)', async () => {
     const { svc, subs } = makeNotifications();
     await (svc as any).sendOpening({ localDate: '2026-10-26', coachIds: ['coach-1'], includeUnassigned: true });
     expect(subs.findForCoaches).toHaveBeenCalledWith(['coach-1'], true);

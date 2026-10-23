@@ -1,7 +1,10 @@
 import * as crypto from 'crypto';
 
 export function liqpaySign(privateKey: string, data: string): string {
-  return crypto.createHash('sha1').update(privateKey + data + privateKey).digest('base64');
+  return crypto
+    .createHash('sha1')
+    .update(privateKey + data + privateKey)
+    .digest('base64');
 }
 
 export function liqpayEncode(params: object): string {

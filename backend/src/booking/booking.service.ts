@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  ConflictException,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Logger, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { eq, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
@@ -30,18 +24,15 @@ export class BookingService {
   ) {}
 
   async book(memberId: string, slotId: string) {
-    const [slot] = await this.database.db
-      .select()
-      .from(trainingSlots)
-      .where(eq(trainingSlots.id, slotId))
-      .limit(1);
+    const [slot] = await this.database.db.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).limit(1);
 
     if (!slot) throw new NotFoundException('Slot not found');
     if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
     // Assigned trainings are booked only through payment (PaymentService.createCheckout)
     if (slot.trainingType !== GROUP_TYPE) throw new BadRequestException('This slot requires payment');
     // Members book only their own coach's group trainings
-    if (slot.coachId !== (await getMemberCoachId(this.database.db, memberId))) throw new NotFoundException('Slot not found');
+    if (slot.coachId !== (await getMemberCoachId(this.database.db, memberId)))
+      throw new NotFoundException('Slot not found');
 
     const [day] = await this.database.db
       .select()
@@ -131,8 +122,7 @@ export class BookingService {
     }
 
     // Vacancy alerts exist only for group slots (assigned ones are not open to others)
-    const wasAtCapacity =
-      slotBefore?.trainingType === GROUP_TYPE && slotBefore.bookedCount >= slotBefore.capacity;
+    const wasAtCapacity = slotBefore?.trainingType === GROUP_TYPE && slotBefore.bookedCount >= slotBefore.capacity;
 
     await this.database.db.transaction(async (tx) => {
       await tx
@@ -157,7 +147,15 @@ export class BookingService {
     }
 
     if (day && slotBefore) {
-      await this.notifyCoach(booking.id, memberId, slotBefore.coachId, slotBefore.slotTime, day.localDate, reason, null);
+      await this.notifyCoach(
+        booking.id,
+        memberId,
+        slotBefore.coachId,
+        slotBefore.slotTime,
+        day.localDate,
+        reason,
+        null,
+      );
     }
 
     return { ok: true };
@@ -178,7 +176,8 @@ export class BookingService {
 
     if (!target) throw new NotFoundException('Slot not found');
     if (target.trainingType !== GROUP_TYPE) throw new BadRequestException('Only group trainings can be switched');
-    if (target.coachId !== (await getMemberCoachId(this.database.db, memberId))) throw new NotFoundException('Slot not found');
+    if (target.coachId !== (await getMemberCoachId(this.database.db, memberId)))
+      throw new NotFoundException('Slot not found');
 
     const current = await this.findGroupBooking(this.database.db, memberId, target.trainingDayId);
 
@@ -284,7 +283,15 @@ export class BookingService {
     }
 
     if (day && oldSlotBefore) {
-      await this.notifyCoach(current.id, memberId, oldSlotBefore.coachId, oldSlotBefore.slotTime, day.localDate, reason, target.slotTime);
+      await this.notifyCoach(
+        current.id,
+        memberId,
+        oldSlotBefore.coachId,
+        oldSlotBefore.slotTime,
+        day.localDate,
+        reason,
+        target.slotTime,
+      );
     }
 
     return { ok: true };
@@ -327,7 +334,12 @@ export class BookingService {
   // The member's active group booking on that day (assigned bookings don't count)
   private async findGroupBooking(db: Db | Tx, memberId: string, trainingDayId: string) {
     const [row] = await db
-      .select({ id: bookings.id, slotId: bookings.slotId, trainingDayId: trainingSlots.trainingDayId, memberId: bookings.memberId })
+      .select({
+        id: bookings.id,
+        slotId: bookings.slotId,
+        trainingDayId: trainingSlots.trainingDayId,
+        memberId: bookings.memberId,
+      })
       .from(bookings)
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
       .where(

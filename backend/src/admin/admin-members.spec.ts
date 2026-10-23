@@ -13,7 +13,10 @@ function makeDb(result: unknown[]) {
   function link(): any {
     const chain: any = { then: (r: (v: unknown) => void) => r(result) };
     for (const m of ['from', 'where', 'orderBy', 'limit', 'returning']) chain[m] = jest.fn(() => link());
-    chain.set = jest.fn((v: Record<string, unknown>) => { sets.push(v); return link(); });
+    chain.set = jest.fn((v: Record<string, unknown>) => {
+      sets.push(v);
+      return link();
+    });
     return chain;
   }
   const db: any = { select: jest.fn(() => link()), update: jest.fn(() => link()) };
@@ -26,7 +29,15 @@ function makeService(db: any) {
 
 describe('Admin members — trainer note', () => {
   it('lists members with their trainer note', async () => {
-    const rows = [{ id: 'm1', memberCode: 'GYM-11111', displayName: 'Катя', trainerNote: 'ходить через раз', createdAt: new Date() }];
+    const rows = [
+      {
+        id: 'm1',
+        memberCode: 'GYM-11111',
+        displayName: 'Катя',
+        trainerNote: 'ходить через раз',
+        createdAt: new Date(),
+      },
+    ];
     const { db } = makeDb(rows);
     await expect(makeService(db).getMembers('coach-1')).resolves.toEqual(rows);
   });
@@ -45,7 +56,9 @@ describe('Admin members — trainer note', () => {
 
   it('throws NotFoundException for an unknown member', async () => {
     const { db } = makeDb([]);
-    await expect(makeService(db).updateMemberNote('coach-1', 'missing', { note: 'x' })).rejects.toThrow(NotFoundException);
+    await expect(makeService(db).updateMemberNote('coach-1', 'missing', { note: 'x' })).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('rejects notes longer than 300 characters', async () => {

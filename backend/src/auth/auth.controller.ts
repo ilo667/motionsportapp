@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  Res,
-  UseGuards,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Post, Get, Body, Res, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { SessionGuard, SessionUser } from './session.guard';
@@ -36,10 +27,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('member/register')
-  async registerMember(
-    @Body() dto: RegisterMemberDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async registerMember(@Body() dto: RegisterMemberDto, @Res({ passthrough: true }) res: Response) {
     const { memberCode, recoveryCode, sessionToken } = await this.authService.registerMember(dto);
     setSessionCookie(res, sessionToken);
     return { memberCode, recoveryCode };
@@ -47,10 +35,7 @@ export class AuthController {
 
   @Post('member/login')
   @HttpCode(HttpStatus.OK)
-  async loginMember(
-    @Body() dto: LoginMemberDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async loginMember(@Body() dto: LoginMemberDto, @Res({ passthrough: true }) res: Response) {
     const { memberCode, displayName, sessionToken } = await this.authService.loginMember(dto);
     setSessionCookie(res, sessionToken);
     return { memberCode, displayName };
@@ -58,20 +43,14 @@ export class AuthController {
 
   @Post('member/forgot')
   @HttpCode(HttpStatus.OK)
-  async recoverMember(
-    @Body() dto: RecoverMemberDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async recoverMember(@Body() dto: RecoverMemberDto, @Res({ passthrough: true }) res: Response) {
     const { memberCode, recoveryCode, sessionToken } = await this.authService.recoverMember(dto);
     setSessionCookie(res, sessionToken);
     return { memberCode, recoveryCode };
   }
 
   @Post('admin/setup')
-  async setupAdmin(
-    @Body() dto: SetupAdminDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async setupAdmin(@Body() dto: SetupAdminDto, @Res({ passthrough: true }) res: Response) {
     const { username, sessionToken } = await this.authService.setupAdmin(dto);
     setSessionCookie(res, sessionToken);
     return { username };
@@ -79,10 +58,7 @@ export class AuthController {
 
   @Post('admin/login')
   @HttpCode(HttpStatus.OK)
-  async loginAdmin(
-    @Body() dto: LoginAdminDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async loginAdmin(@Body() dto: LoginAdminDto, @Res({ passthrough: true }) res: Response) {
     const { username, sessionToken } = await this.authService.loginAdmin(dto);
     setSessionCookie(res, sessionToken);
     return { username };
@@ -91,10 +67,7 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(SessionGuard)
-  async logout(
-    @CurrentUser() user: SessionUser,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async logout(@CurrentUser() user: SessionUser, @Res({ passthrough: true }) res: Response) {
     await this.authService.revokeSession(user.sessionId);
     res.clearCookie(COOKIE_NAME, { path: '/' });
     return { ok: true };

@@ -2,14 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { and, eq, gte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import {
-  trainingDays,
-  trainingSlots,
-  bookings,
-  vacancyAlerts,
-  announcements,
-  slotMembers,
-} from '../database/schema';
+import { trainingDays, trainingSlots, bookings, vacancyAlerts, announcements, slotMembers } from '../database/schema';
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import {
@@ -48,9 +41,7 @@ export class ScheduleService {
     const now = this.clock.now();
     const today = now.toISODate()!;
 
-    const assignedSlots = memberId
-      ? await this.getAssignedSlots(memberId, now)
-      : [];
+    const assignedSlots = memberId ? await this.getAssignedSlots(memberId, now) : [];
 
     // "Наступне тренування" is the next group day; days with only assigned trainings are skipped
     // Group trainings of the member's coach only (the first coach for members without one and for visitors)
@@ -61,12 +52,7 @@ export class ScheduleService {
       await this.database.db
         .select()
         .from(trainingDays)
-        .where(
-          and(
-            gte(trainingDays.localDate, today),
-            eq(trainingDays.status, 'SCHEDULED'),
-          ),
-        )
+        .where(and(gte(trainingDays.localDate, today), eq(trainingDays.status, 'SCHEDULED')))
         .orderBy(trainingDays.localDate)
         .limit(10),
     );
@@ -164,8 +150,7 @@ export class ScheduleService {
       .where(eq(announcements.trainingDayId, targetDay.id))
       .limit(1);
 
-    const announcement =
-      bookingWindowOpen && ann?.publishedAt && ann.text ? ann.text : null;
+    const announcement = bookingWindowOpen && ann?.publishedAt && ann.text ? ann.text : null;
 
     return {
       localDate: targetDay.localDate,
@@ -223,13 +208,7 @@ export class ScheduleService {
       })
       .from(trainingSlots)
       .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
-      .innerJoin(
-        slotMembers,
-        and(
-          eq(slotMembers.slotId, trainingSlots.id),
-          eq(slotMembers.memberId, memberId),
-        ),
-      )
+      .innerJoin(slotMembers, and(eq(slotMembers.slotId, trainingSlots.id), eq(slotMembers.memberId, memberId)))
       .where(
         and(
           gte(trainingDays.localDate, now.toISODate()!),
@@ -311,12 +290,7 @@ export class ScheduleService {
     const days = await this.database.db
       .select({ id: trainingDays.id })
       .from(trainingDays)
-      .where(
-        and(
-          inArray(trainingDays.localDate, dates),
-          eq(trainingDays.status, 'SCHEDULED'),
-        ),
-      );
+      .where(and(inArray(trainingDays.localDate, dates), eq(trainingDays.status, 'SCHEDULED')));
     if (days.length > 0) {
       await this.database.db
         .insert(trainingSlots)

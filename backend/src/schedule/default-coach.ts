@@ -14,7 +14,11 @@ export async function getDefaultCoachId(db: Db): Promise<string | null> {
 // (also for a visitor who is not signed in)
 export async function getMemberCoachId(db: Db, memberId?: string): Promise<string | null> {
   if (memberId) {
-    const [member] = await db.select({ coachId: members.coachId }).from(members).where(eq(members.id, memberId)).limit(1);
+    const [member] = await db
+      .select({ coachId: members.coachId })
+      .from(members)
+      .where(eq(members.id, memberId))
+      .limit(1);
     if (member?.coachId) return member.coachId;
   }
   return getDefaultCoachId(db);

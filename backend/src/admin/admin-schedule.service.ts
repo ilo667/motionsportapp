@@ -20,7 +20,6 @@ import {
   slotStartsAt,
 } from '../schedule/training-types';
 
-
 // Member-initiated cancellations / moves shown to the coach (with the reason they wrote)
 const CANCELLATION_STATS_DAYS = 30;
 const MEMBER_HISTORY_LIMIT = 20;
@@ -68,10 +67,11 @@ export class AdminScheduleService {
       .orderBy(trainingDays.localDate)
       .limit(30);
 
-    const targetDay = upcoming.find((day) => {
-      const closeAt = DateTime.fromISO(`${day.localDate}T21:00:00`, { zone: KY_ZONE });
-      return now < closeAt;
-    }) ?? upcoming[0];
+    const targetDay =
+      upcoming.find((day) => {
+        const closeAt = DateTime.fromISO(`${day.localDate}T21:00:00`, { zone: KY_ZONE });
+        return now < closeAt;
+      }) ?? upcoming[0];
 
     if (!targetDay) return null;
 
@@ -105,12 +105,7 @@ export class AdminScheduleService {
     const days = await this.database.db
       .select({ id: trainingDays.id, localDate: trainingDays.localDate, status: trainingDays.status })
       .from(trainingDays)
-      .where(
-        and(
-          lt(trainingDays.localDate, cursor),
-          this.hasSlotsOf(adminId),
-        ),
-      )
+      .where(and(lt(trainingDays.localDate, cursor), this.hasSlotsOf(adminId)))
       .orderBy(desc(trainingDays.localDate))
       .limit(HISTORY_PAGE_DAYS + 1);
 
@@ -120,7 +115,15 @@ export class AdminScheduleService {
         ? await this.database.db
             .select()
             .from(trainingSlots)
-            .where(and(inArray(trainingSlots.trainingDayId, page.map((d) => d.id)), eq(trainingSlots.coachId, adminId)))
+            .where(
+              and(
+                inArray(
+                  trainingSlots.trainingDayId,
+                  page.map((d) => d.id),
+                ),
+                eq(trainingSlots.coachId, adminId),
+              ),
+            )
             .orderBy(trainingSlots.slotTime)
         : [];
     const views = await this.buildSlotViews(slots);
@@ -257,8 +260,7 @@ export class AdminScheduleService {
           id,
           displayName,
           // 'PAID' | 'PENDING' (on LiqPay, seat held) | null (has not started paying)
-          paymentStatus:
-            booked.find((b) => b.slotId === r.slotId && b.memberId === id)?.paymentStatus ?? null,
+          paymentStatus: booked.find((b) => b.slotId === r.slotId && b.memberId === id)?.paymentStatus ?? null,
         })),
     }));
   }
@@ -380,7 +382,12 @@ export class AdminScheduleService {
     const found = await db
       .select({ id: members.id })
       .from(members)
-      .where(and(inArray(members.id, memberIds), alreadyOnSlot ? or(this.visibleTo(adminId), alreadyOnSlot) : this.visibleTo(adminId)));
+      .where(
+        and(
+          inArray(members.id, memberIds),
+          alreadyOnSlot ? or(this.visibleTo(adminId), alreadyOnSlot) : this.visibleTo(adminId),
+        ),
+      );
     if (found.length !== new Set(memberIds).size) throw new NotFoundException('Member not found');
   }
 
@@ -405,24 +412,22 @@ export class AdminScheduleService {
         const dayId = await this.ensureDay(tx, date);
         await tx
           .insert(trainingSlots)
-          .values(GROUP_SLOT_TIMES.map((slotTime) => ({
-            trainingDayId: dayId,
-            slotTime,
-            status: 'ACTIVE' as const,
-            capacity: 8,
-            bookedCount: 0,
-            coachId: adminId,
-          })))
+          .values(
+            GROUP_SLOT_TIMES.map((slotTime) => ({
+              trainingDayId: dayId,
+              slotTime,
+              status: 'ACTIVE' as const,
+              capacity: 8,
+              bookedCount: 0,
+              coachId: adminId,
+            })),
+          )
           .onConflictDoNothing();
       });
       return { ok: true };
     }
 
-    const [day] = await this.database.db
-      .select()
-      .from(trainingDays)
-      .where(eq(trainingDays.localDate, date))
-      .limit(1);
+    const [day] = await this.database.db.select().from(trainingDays).where(eq(trainingDays.localDate, date)).limit(1);
     if (!day) throw new NotFoundException('Training day not found');
 
     const mySlots = await this.database.db
@@ -525,11 +530,7 @@ export class AdminScheduleService {
         .where(eq(trainingSlots.id, slotId));
     }
 
-    const [updated] = await this.database.db
-      .select()
-      .from(trainingSlots)
-      .where(eq(trainingSlots.id, slotId))
-      .limit(1);
+    const [updated] = await this.database.db.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).limit(1);
 
     return updated;
   }
@@ -630,7 +631,11 @@ export class AdminScheduleService {
 
   // Hand a client to a coach (or claim an unassigned one). Only the current coach can do it
   async assignCoach(adminId: string, memberId: string, coachId: string) {
-    const [coach] = await this.database.db.select({ id: admins.id }).from(admins).where(eq(admins.id, coachId)).limit(1);
+    const [coach] = await this.database.db
+      .select({ id: admins.id })
+      .from(admins)
+      .where(eq(admins.id, coachId))
+      .limit(1);
     if (!coach) throw new NotFoundException('Coach not found');
 
     const [updated] = await this.database.db

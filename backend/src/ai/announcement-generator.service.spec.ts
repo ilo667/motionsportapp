@@ -10,15 +10,15 @@ jest.mock('@google/generative-ai', () => ({
     getGenerativeModel: jest.fn().mockImplementation((opts: { systemInstruction?: string }) => {
       capturedSystem = opts.systemInstruction ?? '';
       return {
-      generateContent: jest.fn().mockImplementation((prompt: string) => {
-        capturedPrompt = prompt;
-        return Promise.resolve({
-          response: {
-            text: () => 'Записуйтесь на тренування сьогодні! 💪',
-            usageMetadata: { totalTokenCount: 20 },
-          },
-        });
-      }),
+        generateContent: jest.fn().mockImplementation((prompt: string) => {
+          capturedPrompt = prompt;
+          return Promise.resolve({
+            response: {
+              text: () => 'Записуйтесь на тренування сьогодні! 💪',
+              usageMetadata: { totalTokenCount: 20 },
+            },
+          });
+        }),
       };
     }),
   })),
@@ -34,7 +34,9 @@ describe('AnnouncementGeneratorService', () => {
   });
 
   describe('when GEMINI_API_KEY is not set', () => {
-    beforeEach(() => { delete process.env.GEMINI_API_KEY; });
+    beforeEach(() => {
+      delete process.env.GEMINI_API_KEY;
+    });
 
     it('returns fallback text', async () => {
       const result = await service.generate([]);
@@ -51,8 +53,12 @@ describe('AnnouncementGeneratorService', () => {
   });
 
   describe('when GEMINI_API_KEY is set', () => {
-    beforeEach(() => { process.env.GEMINI_API_KEY = 'test-key'; });
-    afterEach(() => { delete process.env.GEMINI_API_KEY; });
+    beforeEach(() => {
+      process.env.GEMINI_API_KEY = 'test-key';
+    });
+    afterEach(() => {
+      delete process.env.GEMINI_API_KEY;
+    });
 
     it('returns AI-generated text', async () => {
       const result = await service.generate(['Приклад 1']);

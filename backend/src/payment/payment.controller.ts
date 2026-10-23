@@ -12,19 +12,13 @@ export class PaymentController {
   @Post('checkout')
   @UseGuards(SessionGuard, MemberGuard)
   @HttpCode(200)
-  createCheckout(
-    @Body() dto: CreateCheckoutDto,
-    @CurrentUser() user: SessionUser,
-  ) {
+  createCheckout(@Body() dto: CreateCheckoutDto, @CurrentUser() user: SessionUser) {
     return this.paymentService.createCheckout(dto.slotId, user.id);
   }
 
   @Get('status')
   @UseGuards(SessionGuard, MemberGuard)
-  getStatus(
-    @Query('order') orderId: string,
-    @CurrentUser() user: SessionUser,
-  ) {
+  getStatus(@Query('order') orderId: string, @CurrentUser() user: SessionUser) {
     if (!orderId) throw new BadRequestException('order is required');
     return this.paymentService.getStatus(orderId, user.id);
   }

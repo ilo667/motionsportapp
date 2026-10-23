@@ -4,13 +4,7 @@ import { InternalCronController } from './internal-cron.controller';
 
 function makeController() {
   const paymentService = { expireStale: jest.fn().mockResolvedValue({ expired: 0 }) };
-  const controller = new InternalCronController(
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    paymentService as any,
-  );
+  const controller = new InternalCronController({} as any, {} as any, {} as any, {} as any, paymentService as any);
   return { controller, paymentService };
 }
 

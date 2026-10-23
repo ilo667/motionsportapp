@@ -12,10 +12,7 @@ export class AnnouncementsService {
   ) {}
 
   async listExamples() {
-    return this.database.db
-      .select()
-      .from(announcementExamples)
-      .orderBy(announcementExamples.createdAt);
+    return this.database.db.select().from(announcementExamples).orderBy(announcementExamples.createdAt);
   }
 
   async addExample(text: string) {
@@ -43,10 +40,7 @@ export class AnnouncementsService {
       .limit(1);
     if (existing) return existing;
 
-    const [created] = await this.database.db
-      .insert(announcements)
-      .values({ trainingDayId: day.id })
-      .returning();
+    const [created] = await this.database.db.insert(announcements).values({ trainingDayId: day.id }).returning();
     return created;
   }
 

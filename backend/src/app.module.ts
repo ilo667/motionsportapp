@@ -12,6 +12,17 @@ import { ClockModule } from './clock/clock.module';
 import { PaymentModule } from './payment/payment.module';
 
 @Module({
-  imports: [DatabaseModule, ClockModule, HealthModule, AuthModule, ScheduleModule, BookingModule, AdminScheduleModule, NotificationsModule, AiModule, PaymentModule],
+  imports: [
+    DatabaseModule,
+    ClockModule,
+    HealthModule,
+    AuthModule,
+    ScheduleModule,
+    BookingModule,
+    AdminScheduleModule,
+    NotificationsModule,
+    AiModule,
+    PaymentModule,
+  ],
 })
 export class AppModule {}

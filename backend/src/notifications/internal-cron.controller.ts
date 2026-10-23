@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  Headers,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Controller, Get, Headers, ForbiddenException } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { DateTime } from 'luxon';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -15,7 +10,6 @@ import { PaymentService } from '../payment/payment.service';
 import { trainingDays, trainingSlots, bookings, attendance, admins } from '../database/schema';
 import { GROUP_TYPE, KY_ZONE } from '../schedule/training-types';
 import { getDefaultCoachId } from '../schedule/default-coach';
-
 
 // Vercel Cron invokes paths with GET and sends `Authorization: Bearer $CRON_SECRET`.
 // Manual run: curl -H "Authorization: Bearer $CRON_SECRET" https://<backend>/internal/cron/<job>
@@ -33,16 +27,11 @@ export class InternalCronController {
   async bookingOpen(@Headers('authorization') auth: string) {
     this.verifyCronSecret(auth);
 
-
     const now = this.clock.now();
     const today = now.toISODate()!;
 
     // Find today's scheduled training day
-    const [day] = await this.database.db
-      .select()
-      .from(trainingDays)
-      .where(eq(trainingDays.localDate, today))
-      .limit(1);
+    const [day] = await this.database.db.select().from(trainingDays).where(eq(trainingDays.localDate, today)).limit(1);
 
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
@@ -103,20 +92,13 @@ export class InternalCronController {
     const now = this.clock.now();
     const today = now.toISODate()!;
 
-    const [day] = await this.database.db
-      .select()
-      .from(trainingDays)
-      .where(eq(trainingDays.localDate, today))
-      .limit(1);
+    const [day] = await this.database.db.select().from(trainingDays).where(eq(trainingDays.localDate, today)).limit(1);
 
     if (!day || day.status === 'CANCELLED') {
       return { ok: true, skipped: 'no active day today' };
     }
 
-    const [admin] = await this.database.db
-      .select({ id: admins.id })
-      .from(admins)
-      .limit(1);
+    const [admin] = await this.database.db.select({ id: admins.id }).from(admins).limit(1);
 
     if (!admin) {
       return { ok: true, skipped: 'no admin found' };
@@ -132,13 +114,7 @@ export class InternalCronController {
       .from(bookings)
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
       .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
-      .where(
-        and(
-          eq(trainingSlots.trainingDayId, day.id),
-          eq(bookings.status, 'ACTIVE'),
-          isNull(attendance.bookingId),
-        ),
-      );
+      .where(and(eq(trainingSlots.trainingDayId, day.id), eq(bookings.status, 'ACTIVE'), isNull(attendance.bookingId)));
 
     if (unmarkedBookings.length === 0) {
       return { ok: true, marked: 0 };

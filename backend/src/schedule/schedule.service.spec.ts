@@ -125,14 +125,26 @@ describe('ScheduleService — assigned trainings', () => {
 
   it("lists the member's assigned assigned trainings until they end, with booking state", async () => {
     const assigned = [
-      { id: 'p-morning', localDate: TODAY, slotTime: '12:00', trainingType: 'персональні', capacity: 1, bookedCount: 0 },
+      {
+        id: 'p-morning',
+        localDate: TODAY,
+        slotTime: '12:00',
+        trainingType: 'персональні',
+        capacity: 1,
+        bookedCount: 0,
+      },
       { id: 'p-evening', localDate: TODAY, slotTime: '18:00', trainingType: 'спліт', capacity: 2, bookedCount: 1 },
     ];
     const { db } = makeDb([
       assigned,
       [{ slotId: 'p-evening', paymentStatus: 'PAID' }],
       [{ coachId: 'coach-1' }], // the member's coach
-      [trainingDay], HAS_GROUP, slots, [], [], [],
+      [trainingDay],
+      HAS_GROUP,
+      slots,
+      [],
+      [],
+      [],
     ]);
     const result = await makeService(db, kyivAt(15)).getNext('member-1');
 
@@ -143,7 +155,9 @@ describe('ScheduleService — assigned trainings', () => {
   });
 
   it('marks an assigned training as started (no payment) during its hour', async () => {
-    const assigned = [{ id: 'p1', localDate: TODAY, slotTime: '15:00', trainingType: 'персональні', capacity: 1, bookedCount: 0 }];
+    const assigned = [
+      { id: 'p1', localDate: TODAY, slotTime: '15:00', trainingType: 'персональні', capacity: 1, bookedCount: 0 },
+    ];
     const { db } = makeDb([assigned, [], [{ coachId: 'coach-1' }], [trainingDay], HAS_GROUP, slots, [], [], []]);
     const result = await makeService(db, kyivAt(15)).getNext('member-1');
     expect(result?.assignedSlots).toEqual([expect.objectContaining({ id: 'p1', isMyBooking: false, started: true })]);
@@ -158,7 +172,9 @@ describe('ScheduleService — no group day ahead', () => {
   });
 
   it("still returns the member's assigned trainings when there is no group day", async () => {
-    const assigned = [{ id: 'p1', localDate: TODAY, slotTime: '18:00', trainingType: 'персональні', capacity: 1, bookedCount: 0 }];
+    const assigned = [
+      { id: 'p1', localDate: TODAY, slotTime: '18:00', trainingType: 'персональні', capacity: 1, bookedCount: 0 },
+    ];
     const { db } = makeDb([assigned, [], []]);
     const result = await makeService(db, kyivAt(15)).getNext('member-1');
     expect(result?.localDate).toBeNull();
@@ -176,7 +192,13 @@ describe('ScheduleService — default Mon/Wed/Fri group slots', () => {
   function recordInserts(db: any) {
     const values: unknown[] = [];
     db.insert = jest.fn(() => {
-      const chain: any = { values: (v: unknown) => { values.push(v); return chain; }, onConflictDoNothing: () => Promise.resolve() };
+      const chain: any = {
+        values: (v: unknown) => {
+          values.push(v);
+          return chain;
+        },
+        onConflictDoNothing: () => Promise.resolve(),
+      };
       return chain;
     });
     return values;
@@ -191,10 +213,23 @@ describe('ScheduleService — default Mon/Wed/Fri group slots', () => {
 
     const dayRows = values[0] as { localDate: string }[];
     expect(dayRows.map((d) => d.localDate)).toEqual([
-      '2026-10-21', '2026-10-23', '2026-10-26', '2026-10-28', '2026-10-30', '2026-11-02', '2026-11-04', '2026-11-06', '2026-11-09',
+      '2026-10-21',
+      '2026-10-23',
+      '2026-10-26',
+      '2026-10-28',
+      '2026-10-30',
+      '2026-11-02',
+      '2026-11-04',
+      '2026-11-06',
+      '2026-11-09',
     ]);
     expect(values[1]).toEqual([
-      expect.objectContaining({ trainingDayId: 'd-wed', slotTime: '19:00', trainingType: 'групові', coachId: 'coach-1' }),
+      expect.objectContaining({
+        trainingDayId: 'd-wed',
+        slotTime: '19:00',
+        trainingType: 'групові',
+        coachId: 'coach-1',
+      }),
       expect.objectContaining({ trainingDayId: 'd-wed', slotTime: '20:00', coachId: 'coach-1' }),
       expect.objectContaining({ trainingDayId: 'd-fri', slotTime: '19:00' }),
       expect.objectContaining({ trainingDayId: 'd-fri', slotTime: '20:00' }),

@@ -21,19 +21,11 @@ export class PushSubscriptionsService {
     await this.database.db
       .update(pushSubscriptions)
       .set({ disabledAt: new Date() })
-      .where(
-        and(
-          eq(pushSubscriptions.memberId, memberId),
-          eq(pushSubscriptions.endpoint, endpoint),
-        ),
-      );
+      .where(and(eq(pushSubscriptions.memberId, memberId), eq(pushSubscriptions.endpoint, endpoint)));
   }
 
   async findAll() {
-    return this.database.db
-      .select()
-      .from(pushSubscriptions)
-      .where(isNull(pushSubscriptions.disabledAt));
+    return this.database.db.select().from(pushSubscriptions).where(isNull(pushSubscriptions.disabledAt));
   }
 
   // Members whose coach is one of these (and members without a coach, when asked)
@@ -54,12 +46,7 @@ export class PushSubscriptionsService {
     return this.database.db
       .select()
       .from(pushSubscriptions)
-      .where(
-        and(
-          inArray(pushSubscriptions.memberId, memberIds),
-          isNull(pushSubscriptions.disabledAt),
-        ),
-      );
+      .where(and(inArray(pushSubscriptions.memberId, memberIds), isNull(pushSubscriptions.disabledAt)));
   }
 
   async disableByEndpoint(endpoint: string) {
@@ -88,10 +75,7 @@ export class PushSubscriptionsService {
   }
 
   async findAllAdmin() {
-    return this.database.db
-      .select()
-      .from(adminPushSubscriptions)
-      .where(isNull(adminPushSubscriptions.disabledAt));
+    return this.database.db.select().from(adminPushSubscriptions).where(isNull(adminPushSubscriptions.disabledAt));
   }
 
   async findAdminByAdminId(adminId: string) {

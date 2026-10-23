@@ -36,7 +36,10 @@ export class AdminScheduleController {
 
   @Get('history')
   getHistory(@CurrentUser() user: SessionUser, @Query('before') before?: string) {
-    return this.adminScheduleService.getHistory(user.id, before && /^\d{4}-\d{2}-\d{2}$/.test(before) ? before : undefined);
+    return this.adminScheduleService.getHistory(
+      user.id,
+      before && /^\d{4}-\d{2}-\d{2}$/.test(before) ? before : undefined,
+    );
   }
 
   @Get('members')
@@ -84,11 +87,7 @@ export class AdminScheduleController {
 
   @Put('training-days/:date')
   @HttpCode(HttpStatus.OK)
-  upsertTrainingDay(
-    @Param('date') date: string,
-    @Body() dto: UpsertTrainingDayDto,
-    @CurrentUser() user: SessionUser,
-  ) {
+  upsertTrainingDay(@Param('date') date: string, @Body() dto: UpsertTrainingDayDto, @CurrentUser() user: SessionUser) {
     return this.adminScheduleService.upsertTrainingDay(user.id, date, dto);
   }
 
@@ -104,7 +103,11 @@ export class AdminScheduleController {
   }
 
   @Post('training-days/:date/assigned-slots')
-  createAssignedSlot(@Param('date') date: string, @Body() dto: CreateAssignedSlotDto, @CurrentUser() user: SessionUser) {
+  createAssignedSlot(
+    @Param('date') date: string,
+    @Body() dto: CreateAssignedSlotDto,
+    @CurrentUser() user: SessionUser,
+  ) {
     return this.adminScheduleService.createAssignedSlot(user.id, date, dto);
   }
 
@@ -120,16 +123,17 @@ export class AdminScheduleController {
 
   @Patch('slots/:slotId')
   @HttpCode(HttpStatus.OK)
-  updateSlot(@Param('slotId', ParseUUIDPipe) slotId: string, @Body() dto: UpdateSlotDto, @CurrentUser() user: SessionUser) {
+  updateSlot(
+    @Param('slotId', ParseUUIDPipe) slotId: string,
+    @Body() dto: UpdateSlotDto,
+    @CurrentUser() user: SessionUser,
+  ) {
     return this.adminScheduleService.updateSlot(user.id, slotId, dto);
   }
 
   @Put('slots/:slotId/attendance/all')
   @HttpCode(HttpStatus.OK)
-  markAllAttendance(
-    @Param('slotId') slotId: string,
-    @CurrentUser() user: SessionUser,
-  ) {
+  markAllAttendance(@Param('slotId') slotId: string, @CurrentUser() user: SessionUser) {
     return this.adminScheduleService.markAllAttendance(slotId, user.id);
   }
 

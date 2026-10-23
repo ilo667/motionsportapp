@@ -18,8 +18,19 @@ const EXPIRE_BATCH = 10;
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'REPLACED';
 
 const LOGGED_LIQPAY_FIELDS = [
-  'result', 'order_id', 'status', 'err_code', 'err_description', 'action', 'paytype',
-  'payment_id', 'liqpay_order_id', 'amount', 'currency', 'create_date', 'end_date',
+  'result',
+  'order_id',
+  'status',
+  'err_code',
+  'err_description',
+  'action',
+  'paytype',
+  'payment_id',
+  'liqpay_order_id',
+  'amount',
+  'currency',
+  'create_date',
+  'end_date',
 ];
 
 function newOrderId(bookingId: string) {
@@ -35,21 +46,23 @@ export class PaymentService {
     private readonly clock: ClockService,
   ) {}
 
-  private get publicKey() { return process.env.LIQPAY_PUBLIC_KEY ?? ''; }
-  private get privateKey() { return process.env.LIQPAY_PRIVATE_KEY ?? ''; }
+  private get publicKey() {
+    return process.env.LIQPAY_PUBLIC_KEY ?? '';
+  }
+  private get privateKey() {
+    return process.env.LIQPAY_PRIVATE_KEY ?? '';
+  }
   // Lower it (e.g. 2) to test expiry without waiting
-  private get expiryMs() { return parseInt(process.env.PAYMENT_EXPIRY_MINUTES ?? '15', 10) * 60 * 1000; }
+  private get expiryMs() {
+    return parseInt(process.env.PAYMENT_EXPIRY_MINUTES ?? '15', 10) * 60 * 1000;
+  }
 
   async createCheckout(slotId: string, memberId: string) {
     if (!this.publicKey || !this.privateKey) {
       throw new BadRequestException('Payment is not configured');
     }
 
-    const [slot] = await this.database.db
-      .select()
-      .from(trainingSlots)
-      .where(eq(trainingSlots.id, slotId))
-      .limit(1);
+    const [slot] = await this.database.db.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).limit(1);
 
     if (!slot) throw new NotFoundException('Slot not found');
     if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
@@ -186,7 +199,9 @@ export class PaymentService {
         status: 'PENDING',
       });
     });
-    this.logger.log(`Checkout: member=${memberId} slot=${slotId} — resumed booking=${pending.bookingId}, order ${pending.orderId} → REPLACED by ${orderId}`);
+    this.logger.log(
+      `Checkout: member=${memberId} slot=${slotId} — resumed booking=${pending.bookingId}, order ${pending.orderId} → REPLACED by ${orderId}`,
+    );
     return orderId;
   }
 
@@ -223,11 +238,7 @@ export class PaymentService {
 
     this.logger.log(`LiqPay callback: ${this.describe(decoded)}`);
 
-    const [payment] = await this.database.db
-      .select()
-      .from(payments)
-      .where(eq(payments.orderId, orderId))
-      .limit(1);
+    const [payment] = await this.database.db.select().from(payments).where(eq(payments.orderId, orderId)).limit(1);
 
     if (!payment) return { ok: true };
     if (payment.status === 'PENDING') {
@@ -235,7 +246,9 @@ export class PaymentService {
       return { ok: true };
     }
 
-    this.logger.log(`LiqPay callback: order=${orderId} ignored as PENDING handler — payment is already ${payment.status}`);
+    this.logger.log(
+      `LiqPay callback: order=${orderId} ignored as PENDING handler — payment is already ${payment.status}`,
+    );
     if (SUCCESS_STATUSES.includes(decoded.status as string) && payment.status !== 'PAID') {
       // Member paid in an old LiqPay tab after pressing "Оплатити" again — still valid while the booking awaits payment
       if (payment.status === 'REPLACED' && (await this.isAwaitingPayment(payment.bookingId))) {
@@ -262,7 +275,12 @@ export class PaymentService {
     memberId: string,
   ): Promise<{ status: PaymentStatus; errCode?: string; expiresAt?: string }> {
     const [payment] = await this.database.db
-      .select({ id: payments.id, bookingId: payments.bookingId, status: payments.status, createdAt: payments.createdAt })
+      .select({
+        id: payments.id,
+        bookingId: payments.bookingId,
+        status: payments.status,
+        createdAt: payments.createdAt,
+      })
       .from(payments)
       .innerJoin(bookings, eq(bookings.id, payments.bookingId))
       .where(and(eq(payments.orderId, orderId), eq(bookings.memberId, memberId)))
@@ -277,14 +295,17 @@ export class PaymentService {
     const expiresAt = new Date(payment.createdAt.getTime() + this.expiryMs).toISOString();
     const remote = await this.fetchLiqpayStatus(orderId);
     if (!remote || remote.result !== 'ok') {
-      this.logger.log(`Status check: order=${orderId} → PENDING (LiqPay ${remote ? 'result=' + String(remote.result) : 'unreachable'})`);
+      this.logger.log(
+        `Status check: order=${orderId} → PENDING (LiqPay ${remote ? 'result=' + String(remote.result) : 'unreachable'})`,
+      );
       return { status: 'PENDING', expiresAt };
     }
 
     const status = await this.applyLiqpayStatus(payment, remote);
-    const errCode = status === 'PENDING' && remote.status === 'try_again' && typeof remote.err_code === 'string'
-      ? remote.err_code
-      : undefined;
+    const errCode =
+      status === 'PENDING' && remote.status === 'try_again' && typeof remote.err_code === 'string'
+        ? remote.err_code
+        : undefined;
     this.logger.log(`Status check: order=${orderId} → ${status}${errCode ? ` errCode=${errCode}` : ''}`);
     if (status !== 'PENDING') return { status };
     return errCode ? { status, errCode, expiresAt } : { status, expiresAt };
@@ -347,15 +368,14 @@ export class PaymentService {
           .where(and(eq(payments.id, payment.id), inArray(payments.status, ['PENDING', 'REPLACED'])))
           .returning({ id: payments.id });
         if (!won) return false;
-        await tx
-          .update(bookings)
-          .set({ paymentStatus: 'PAID' })
-          .where(eq(bookings.id, payment.bookingId));
+        await tx.update(bookings).set({ paymentStatus: 'PAID' }).where(eq(bookings.id, payment.bookingId));
         // Other open attempts for this booking must not expire it later
         await tx
           .update(payments)
           .set({ status: 'REPLACED', updatedAt: new Date() })
-          .where(and(eq(payments.bookingId, payment.bookingId), eq(payments.status, 'PENDING'), ne(payments.id, payment.id)));
+          .where(
+            and(eq(payments.bookingId, payment.bookingId), eq(payments.status, 'PENDING'), ne(payments.id, payment.id)),
+          );
         return true;
       });
       return claimed ? 'PAID' : this.currentStatus(payment.id);

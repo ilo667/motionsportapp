@@ -215,7 +215,9 @@ export const aiGenerations = pgTable('ai_generations', {
 
 export const payments = pgTable('payments', {
   id: uuid('id').primaryKey().defaultRandom(),
-  bookingId: uuid('booking_id').notNull().references(() => bookings.id),
+  bookingId: uuid('booking_id')
+    .notNull()
+    .references(() => bookings.id),
   orderId: text('order_id').notNull().unique(),
   amount: integer('amount').notNull(),
   currency: text('currency').notNull().default('UAH'),

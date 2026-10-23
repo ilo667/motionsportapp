@@ -29,15 +29,10 @@ export class VacancyAlertsService {
       .select({ memberId: vacancyAlerts.memberId })
       .from(vacancyAlerts)
       .where(and(eq(vacancyAlerts.slotId, slotId), eq(vacancyAlerts.active, true)));
-    return rows
-      .map((r) => r.memberId)
-      .filter((id) => id !== excludeMemberId);
+    return rows.map((r) => r.memberId).filter((id) => id !== excludeMemberId);
   }
 
   async deactivateBySlot(slotId: string) {
-    await this.database.db
-      .update(vacancyAlerts)
-      .set({ active: false })
-      .where(eq(vacancyAlerts.slotId, slotId));
+    await this.database.db.update(vacancyAlerts).set({ active: false }).where(eq(vacancyAlerts.slotId, slotId));
   }
 }

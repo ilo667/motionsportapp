@@ -21,11 +21,7 @@ export class NotificationService {
     private readonly vacancyAlerts: VacancyAlertsService,
   ) {}
 
-  async enqueueAndProcess(
-    eventType: EventType,
-    dedupeKey: string,
-    payload: Record<string, unknown>,
-  ) {
+  async enqueueAndProcess(eventType: EventType, dedupeKey: string, payload: Record<string, unknown>) {
     const inserted = await this.database.db
       .insert(notificationEvents)
       .values({ eventType, dedupeKey, payload, status: 'PENDING' })
@@ -131,10 +127,7 @@ export class NotificationService {
     }
   }
 
-  private async sendToSubs(
-    subs: Array<{ endpoint: string; p256dh: string; auth: string }>,
-    payload: PushPayload,
-  ) {
+  private async sendToSubs(subs: Array<{ endpoint: string; p256dh: string; auth: string }>, payload: PushPayload) {
     for (const sub of subs) {
       const result = await this.push.send(sub, payload);
       if (result === 'expired') await this.subs.disableByEndpoint(sub.endpoint);

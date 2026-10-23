@@ -40,11 +40,7 @@ export class SessionGuard implements CanActivate {
         displayName: member.displayName,
       };
     } else if (session.principalType === 'admin') {
-      const [admin] = await this.database.db
-        .select()
-        .from(admins)
-        .where(eq(admins.id, session.principalId))
-        .limit(1);
+      const [admin] = await this.database.db.select().from(admins).where(eq(admins.id, session.principalId)).limit(1);
 
       if (!admin) throw new UnauthorizedException();
 

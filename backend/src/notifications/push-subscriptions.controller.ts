@@ -1,19 +1,7 @@
-import {
-  Controller,
-  Post,
-  Delete,
-  Get,
-  Body,
-  UseGuards,
-  HttpCode,
-  Req,
-} from '@nestjs/common';
+import { Controller, Post, Delete, Get, Body, UseGuards, HttpCode, Req } from '@nestjs/common';
 import { SessionGuard, SessionUser } from '../auth/session.guard';
 import { PushSubscriptionsService } from './push-subscriptions.service';
-import {
-  UpsertPushSubscriptionDto,
-  DeletePushSubscriptionDto,
-} from './dto/upsert-push-subscription.dto';
+import { UpsertPushSubscriptionDto, DeletePushSubscriptionDto } from './dto/upsert-push-subscription.dto';
 
 @Controller('push')
 export class PushSubscriptionsController {

@@ -20,14 +20,22 @@ function makeDb(reads: unknown[][] = [], writeResult: () => unknown[] = () => [{
 
   function readLink(): any {
     const chain: any = { then: (r: (v: unknown) => void) => r(reads[idx++] ?? []) };
-    for (const m of ['from', 'innerJoin', 'leftJoin', 'where', 'for', 'orderBy', 'limit']) chain[m] = jest.fn(() => readLink());
+    for (const m of ['from', 'innerJoin', 'leftJoin', 'where', 'for', 'orderBy', 'limit'])
+      chain[m] = jest.fn(() => readLink());
     return chain;
   }
   function writeLink(): any {
     const chain: any = { then: (r: (v: unknown) => void) => r(writeResult()) };
-    for (const m of ['where', 'onConflictDoUpdate', 'onConflictDoNothing', 'returning']) chain[m] = jest.fn(() => writeLink());
-    chain.values = jest.fn((v: unknown) => { values.push(v); return writeLink(); });
-    chain.set = jest.fn((v: Record<string, unknown>) => { sets.push(v); return writeLink(); });
+    for (const m of ['where', 'onConflictDoUpdate', 'onConflictDoNothing', 'returning'])
+      chain[m] = jest.fn(() => writeLink());
+    chain.values = jest.fn((v: unknown) => {
+      values.push(v);
+      return writeLink();
+    });
+    chain.set = jest.fn((v: Record<string, unknown>) => {
+      sets.push(v);
+      return writeLink();
+    });
     return chain;
   }
 
@@ -79,31 +87,50 @@ describe('Assigned slots — DTO validation', () => {
 describe('Assigned slots — createAssignedSlot', () => {
   it('creates a split for 2 members: capacity 3 and one slot_members row each', async () => {
     const { db, values } = makeDb([[{ id: M1 }, { id: M2 }]]);
-    const result = await makeService(db).createAssignedSlot(COACH, '2026-10-21', { slotTime: '10:30', trainingType: 'спліт', memberIds: [M1, M2] });
+    const result = await makeService(db).createAssignedSlot(COACH, '2026-10-21', {
+      slotTime: '10:30',
+      trainingType: 'спліт',
+      memberIds: [M1, M2],
+    });
 
     expect(result).toEqual({ ok: true, slotId: 'slot-new' });
     expect(values).toContainEqual(expect.objectContaining({ slotTime: '10:30', trainingType: 'спліт', capacity: 3 }));
-    expect(values).toContainEqual([{ slotId: 'slot-new', memberId: M1 }, { slotId: 'slot-new', memberId: M2 }]);
+    expect(values).toContainEqual([
+      { slotId: 'slot-new', memberId: M1 },
+      { slotId: 'slot-new', memberId: M2 },
+    ]);
   });
 
   it('allows exactly one member for a personal training', async () => {
     const { db } = makeDb([[{ id: M1 }, { id: M2 }]]);
     await expect(
-      makeService(db).createAssignedSlot(COACH, '2026-10-21', { slotTime: '10:30', trainingType: 'персональні', memberIds: [M1, M2] }),
+      makeService(db).createAssignedSlot(COACH, '2026-10-21', {
+        slotTime: '10:30',
+        trainingType: 'персональні',
+        memberIds: [M1, M2],
+      }),
     ).rejects.toThrow(BadRequestException);
   });
 
   it('throws NotFound when a member does not exist', async () => {
     const { db } = makeDb([[{ id: M1 }]]);
     await expect(
-      makeService(db).createAssignedSlot(COACH, '2026-10-21', { slotTime: '10:30', trainingType: 'спліт', memberIds: [M1, M2] }),
+      makeService(db).createAssignedSlot(COACH, '2026-10-21', {
+        slotTime: '10:30',
+        trainingType: 'спліт',
+        memberIds: [M1, M2],
+      }),
     ).rejects.toThrow(NotFoundException);
   });
 
   it('refuses a time that has already passed', async () => {
     const { db } = makeDb([[{ id: M1 }]]);
     await expect(
-      makeService(db).createAssignedSlot(COACH, '2026-10-20', { slotTime: '11:45', trainingType: 'персональні', memberIds: [M1] }),
+      makeService(db).createAssignedSlot(COACH, '2026-10-20', {
+        slotTime: '11:45',
+        trainingType: 'персональні',
+        memberIds: [M1],
+      }),
     ).rejects.toThrow('in the past');
     expect(db.insert).not.toHaveBeenCalled();
   });
@@ -113,7 +140,11 @@ describe('Assigned slots — createAssignedSlot', () => {
     let call = 0;
     const { db } = makeDb([[{ id: M1 }]], () => (call++ === 0 ? [{ id: 'day-1' }] : []));
     await expect(
-      makeService(db).createAssignedSlot(COACH, '2026-10-21', { slotTime: '19:00', trainingType: 'персональні', memberIds: [M1] }),
+      makeService(db).createAssignedSlot(COACH, '2026-10-21', {
+        slotTime: '19:00',
+        trainingType: 'персональні',
+        memberIds: [M1],
+      }),
     ).rejects.toThrow(ConflictException);
   });
 });
@@ -156,13 +187,36 @@ describe('Group slots — upsertGroupSlot', () => {
 describe('Calendar — assigned slot members', () => {
   it('returns assigned members with their payment state for assigned slots only', async () => {
     const rows = [
-      { localDate: '2026-10-21', slotId: 'g1', slotTime: '19:00', trainingType: 'групові', bookedCount: 3, capacity: 8, coachId: COACH },
-      { localDate: '2026-10-21', slotId: 'p1', slotTime: '10:30', trainingType: 'спліт', bookedCount: 0, capacity: 2, coachId: COACH },
+      {
+        localDate: '2026-10-21',
+        slotId: 'g1',
+        slotTime: '19:00',
+        trainingType: 'групові',
+        bookedCount: 3,
+        capacity: 8,
+        coachId: COACH,
+      },
+      {
+        localDate: '2026-10-21',
+        slotId: 'p1',
+        slotTime: '10:30',
+        trainingType: 'спліт',
+        bookedCount: 0,
+        capacity: 2,
+        coachId: COACH,
+      },
     ];
     const { db } = makeDb([
       rows,
-      [{ slotId: 'p1', id: M1, displayName: 'Катя' }, { slotId: 'p1', id: M2, displayName: 'Оля' }, { slotId: 'p1', id: M3, displayName: 'Іра' }],
-      [{ slotId: 'p1', memberId: M1, paymentStatus: 'PAID' }, { slotId: 'p1', memberId: M2, paymentStatus: 'PENDING' }],
+      [
+        { slotId: 'p1', id: M1, displayName: 'Катя' },
+        { slotId: 'p1', id: M2, displayName: 'Оля' },
+        { slotId: 'p1', id: M3, displayName: 'Іра' },
+      ],
+      [
+        { slotId: 'p1', memberId: M1, paymentStatus: 'PAID' },
+        { slotId: 'p1', memberId: M2, paymentStatus: 'PENDING' },
+      ],
     ]);
     const result = await makeService(db).getCalendar(COACH, '2026-10');
     expect(result.find((s) => s.slotId === 'g1')?.members).toEqual([]);
@@ -176,17 +230,49 @@ describe('Calendar — assigned slot members', () => {
 
 describe('Cancellation reasons for the coach', () => {
   const rows = [
-    { bookingId: 'b1', slotId: 's1', memberId: M1, displayName: 'Оля', reason: 'Захворіла', cancelledAt: new Date('2026-10-22T14:42:00Z'),
-      slotTime: '19:00', localDate: '2026-10-22', switchedToSlotId: null, switchedToTime: null },
-    { bookingId: 'b2', slotId: 's1', memberId: M2, displayName: 'Іра', reason: 'Не встигаю', cancelledAt: new Date('2026-10-22T13:10:00Z'),
-      slotTime: '19:00', localDate: '2026-10-22', switchedToSlotId: 's2', switchedToTime: '20:00' },
+    {
+      bookingId: 'b1',
+      slotId: 's1',
+      memberId: M1,
+      displayName: 'Оля',
+      reason: 'Захворіла',
+      cancelledAt: new Date('2026-10-22T14:42:00Z'),
+      slotTime: '19:00',
+      localDate: '2026-10-22',
+      switchedToSlotId: null,
+      switchedToTime: null,
+    },
+    {
+      bookingId: 'b2',
+      slotId: 's1',
+      memberId: M2,
+      displayName: 'Іра',
+      reason: 'Не встигаю',
+      cancelledAt: new Date('2026-10-22T13:10:00Z'),
+      slotTime: '19:00',
+      localDate: '2026-10-22',
+      switchedToSlotId: 's2',
+      switchedToTime: '20:00',
+    },
   ];
 
   it('calendar modal: cancelled and moved, with reason and time', async () => {
     const { db } = makeDb([[{ id: 's1', coachId: COACH }], rows]);
     await expect(makeService(db).getSlotCancellations(COACH, 's1')).resolves.toEqual([
-      { bookingId: 'b1', displayName: 'Оля', reason: 'Захворіла', cancelledAt: '2026-10-22T14:42:00.000Z', switchedToTime: null },
-      { bookingId: 'b2', displayName: 'Іра', reason: 'Не встигаю', cancelledAt: '2026-10-22T13:10:00.000Z', switchedToTime: '20:00' },
+      {
+        bookingId: 'b1',
+        displayName: 'Оля',
+        reason: 'Захворіла',
+        cancelledAt: '2026-10-22T14:42:00.000Z',
+        switchedToTime: null,
+      },
+      {
+        bookingId: 'b2',
+        displayName: 'Іра',
+        reason: 'Не встигаю',
+        cancelledAt: '2026-10-22T13:10:00.000Z',
+        switchedToTime: '20:00',
+      },
     ]);
   });
 
@@ -199,7 +285,7 @@ describe('Cancellation reasons for the coach', () => {
 });
 
 describe('Clients per coach', () => {
-  it('hides history of another coach\'s client (404)', async () => {
+  it("hides history of another coach's client (404)", async () => {
     const { db } = makeDb([[]]);
     await expect(makeService(db).getMemberCancellations('coach-1', M1)).rejects.toThrow(NotFoundException);
   });
@@ -214,7 +300,10 @@ describe('Clients per coach', () => {
 
   it('reassigns a client to another coach', async () => {
     const { db, sets } = makeDb([[{ id: 'coach-2' }]], () => [{ id: M1, coachId: 'coach-2' }]);
-    await expect(makeService(db).assignCoach('coach-1', M1, 'coach-2')).resolves.toEqual({ id: M1, coachId: 'coach-2' });
+    await expect(makeService(db).assignCoach('coach-1', M1, 'coach-2')).resolves.toEqual({
+      id: M1,
+      coachId: 'coach-2',
+    });
     expect(sets).toEqual([{ coachId: 'coach-2' }]);
   });
 
@@ -237,23 +326,52 @@ describe('Clients per coach', () => {
 });
 
 describe('History of past trainings', () => {
-  const day = (n: number) => ({ id: `day-${n}`, localDate: `2026-10-${String(n).padStart(2, '0')}`, status: 'SCHEDULED' });
-  const slot = { id: 's1', trainingDayId: 'day-20', slotTime: '19:00', status: 'ACTIVE', trainingType: 'групові', capacity: 8, bookedCount: 2, coachId: COACH };
+  const day = (n: number) => ({
+    id: `day-${n}`,
+    localDate: `2026-10-${String(n).padStart(2, '0')}`,
+    status: 'SCHEDULED',
+  });
+  const slot = {
+    id: 's1',
+    trainingDayId: 'day-20',
+    slotTime: '19:00',
+    status: 'ACTIVE',
+    trainingType: 'групові',
+    capacity: 8,
+    bookedCount: 2,
+    coachId: COACH,
+  };
 
   it('groups slots under their day with participants, attendance and cancellations', async () => {
     const { db } = makeDb([
       [day(20)],
       [slot],
-      [{ bookingId: 'b1', slotId: 's1', memberId: M1, displayName: 'Катя', attendanceStatus: 'PRESENT' },
-       { bookingId: 'b2', slotId: 's1', memberId: M2, displayName: 'Ліза', attendanceStatus: null }],
-      [{ bookingId: 'b3', slotId: 's1', memberId: M3, displayName: 'Оля', reason: 'Захворіла', cancelledAt: new Date('2026-10-20T14:00:00Z'),
-         slotTime: '19:00', localDate: '2026-10-20', switchedToSlotId: null, switchedToTime: null }],
+      [
+        { bookingId: 'b1', slotId: 's1', memberId: M1, displayName: 'Катя', attendanceStatus: 'PRESENT' },
+        { bookingId: 'b2', slotId: 's1', memberId: M2, displayName: 'Ліза', attendanceStatus: null },
+      ],
+      [
+        {
+          bookingId: 'b3',
+          slotId: 's1',
+          memberId: M3,
+          displayName: 'Оля',
+          reason: 'Захворіла',
+          cancelledAt: new Date('2026-10-20T14:00:00Z'),
+          slotTime: '19:00',
+          localDate: '2026-10-20',
+          switchedToSlotId: null,
+          switchedToTime: null,
+        },
+      ],
     ]);
     const { days, nextBefore } = await makeService(db).getHistory(COACH);
     expect(nextBefore).toBeNull();
     expect(days).toHaveLength(1);
     expect(days[0].slots[0].participants.map((p) => p.attendanceStatus)).toEqual(['PRESENT', 'UNMARKED']);
-    expect(days[0].slots[0].cancellations).toEqual([expect.objectContaining({ displayName: 'Оля', reason: 'Захворіла' })]);
+    expect(days[0].slots[0].cancellations).toEqual([
+      expect.objectContaining({ displayName: 'Оля', reason: 'Захворіла' }),
+    ]);
   });
 
   it('returns a cursor when there are older days than one page', async () => {
@@ -275,7 +393,14 @@ describe('History of past trainings', () => {
 });
 
 describe('Each coach sees and changes only own trainings', () => {
-  const otherSlot = { id: 's9', trainingDayId: 'day-1', slotTime: '19:00', status: 'ACTIVE', trainingType: 'групові', coachId: 'coach-2' };
+  const otherSlot = {
+    id: 's9',
+    trainingDayId: 'day-1',
+    slotTime: '19:00',
+    status: 'ACTIVE',
+    trainingType: 'групові',
+    coachId: 'coach-2',
+  };
 
   it("cancelling another coach's slot answers 404", async () => {
     const { db } = makeDb([[otherSlot]]);
@@ -285,20 +410,24 @@ describe('Each coach sees and changes only own trainings', () => {
 
   it("marking attendance on another coach's training answers 404", async () => {
     const { db } = makeDb([[]]); // booking joined with a slot of this coach: nothing
-    await expect(
-      makeService(db).updateBookingAttendance('b1', { status: 'PRESENT' }, COACH),
-    ).rejects.toThrow(NotFoundException);
+    await expect(makeService(db).updateBookingAttendance('b1', { status: 'PRESENT' }, COACH)).rejects.toThrow(
+      NotFoundException,
+    );
     expect(db.insert).not.toHaveBeenCalled();
   });
 
   it("cannot put another coach's client on a training (404)", async () => {
     const { db } = makeDb([[]]); // visibleTo(coach) finds nobody
     await expect(
-      makeService(db).createAssignedSlot(COACH, '2026-10-21', { slotTime: '10:30', trainingType: 'персональні', memberIds: [M1] }),
+      makeService(db).createAssignedSlot(COACH, '2026-10-21', {
+        slotTime: '10:30',
+        trainingType: 'персональні',
+        memberIds: [M1],
+      }),
     ).rejects.toThrow(NotFoundException);
   });
 
-  it('history and the today page look only at days with this coach\'s slots', () => {
+  it("history and the today page look only at days with this coach's slots", () => {
     const { db } = makeDb();
     const cond = new PgDialect().sqlToQuery((makeService(db) as any).hasSlotsOf(COACH));
     expect(cond.sql).toContain('ts.coach_id = $1');

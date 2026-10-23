@@ -79,7 +79,13 @@ ${topic ? `\nОкрема тема на цей день: ${topic}` : ''}`;
       const tokenUsage = result.response.usageMetadata?.totalTokenCount;
 
       if (!text) {
-        return { text: FALLBACK_TEXT, model: GEMINI_MODEL, source: 'fallback', fallbackReason: 'empty response', latencyMs };
+        return {
+          text: FALLBACK_TEXT,
+          model: GEMINI_MODEL,
+          source: 'fallback',
+          fallbackReason: 'empty response',
+          latencyMs,
+        };
       }
       return { text, model: GEMINI_MODEL, source: 'ai', latencyMs, tokenUsage };
     } catch (err) {

@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  InternalServerErrorException,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, InternalServerErrorException, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { eq, and, isNull, gt, sql } from 'drizzle-orm';
@@ -84,28 +79,19 @@ export class AuthService {
   }
 
   async setupAdmin(dto: SetupAdminDto) {
-    const [{ count }] = await this.database.db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(admins);
+    const [{ count }] = await this.database.db.select({ count: sql<number>`count(*)::int` }).from(admins);
 
     if (count > 0) throw new ConflictException('Admin account already exists');
 
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-    const [admin] = await this.database.db
-      .insert(admins)
-      .values({ username: dto.username, passwordHash })
-      .returning();
+    const [admin] = await this.database.db.insert(admins).values({ username: dto.username, passwordHash }).returning();
 
     const sessionToken = await this.createSession('admin', admin.id);
     return { username: admin.username, sessionToken };
   }
 
   async loginAdmin(dto: LoginAdminDto) {
-    const [admin] = await this.database.db
-      .select()
-      .from(admins)
-      .where(eq(admins.username, dto.username))
-      .limit(1);
+    const [admin] = await this.database.db.select().from(admins).where(eq(admins.username, dto.username)).limit(1);
 
     if (!admin) throw new UnauthorizedException('Invalid credentials');
 
@@ -117,10 +103,7 @@ export class AuthService {
   }
 
   async revokeSession(sessionId: string) {
-    await this.database.db
-      .update(sessions)
-      .set({ revokedAt: new Date() })
-      .where(eq(sessions.id, sessionId));
+    await this.database.db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, sessionId));
   }
 
   async validateSessionToken(rawToken: string) {
@@ -129,13 +112,7 @@ export class AuthService {
     const [session] = await this.database.db
       .select()
       .from(sessions)
-      .where(
-        and(
-          eq(sessions.tokenHash, tokenHash),
-          isNull(sessions.revokedAt),
-          gt(sessions.expiresAt, new Date()),
-        ),
-      )
+      .where(and(eq(sessions.tokenHash, tokenHash), isNull(sessions.revokedAt), gt(sessions.expiresAt, new Date())))
       .limit(1);
 
     return session ?? null;
