@@ -5,6 +5,7 @@ import { DateTime } from 'luxon';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { AdminScheduleService } from './admin-schedule.service';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
+import { attendance, packageSpends } from '../database/schema';
 
 const M1 = '11111111-1111-4111-8111-111111111111';
 const M2 = '22222222-2222-4222-8222-222222222222';
@@ -470,6 +471,38 @@ describe('History of past trainings', () => {
     await makeService(db).getHistory(TRAINER, '2026-12-31');
     const cond = new PgDialect().sqlToQuery((where.mock.calls[0] as unknown[])[0] as any);
     expect(cond.params).toContain('2026-10-20'); // today in the test clock, not the cursor
+  });
+});
+
+describe('Cancelling a training gives the trainings back', () => {
+  const mySlot = {
+    id: 's1',
+    trainingDayId: 'day-1',
+    slotTime: '18:00',
+    status: 'ACTIVE',
+    trainingType: 'персональні',
+    trainerId: TRAINER,
+  };
+  const notifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
+
+  it('cancelling one training removes its marks and spends (a ✓ or ✗ no longer costs a training)', async () => {
+    const { db } = makeDb([[mySlot], [{ memberId: M1 }], [{ localDate: '2026-10-20' }], [mySlot]]);
+    const svc = new AdminScheduleService({ db } as any, notifications as any, { now: () => now }, {
+      syncSpend: jest.fn(),
+    } as any);
+    await svc.updateSlot(TRAINER, 's1', { status: 'CANCELLED' });
+    const deleted = db.delete.mock.calls.map((c: unknown[]) => c[0]);
+    expect(deleted).toEqual(expect.arrayContaining([packageSpends, attendance]));
+  });
+
+  it('«Скасувати мої тренування цього дня» does the same for every cancelled training', async () => {
+    const { db } = makeDb([[{ id: 'day-1', localDate: '2026-10-25' }], [{ id: 's1', slotTime: '18:00' }], []]);
+    const svc = new AdminScheduleService({ db } as any, notifications as any, { now: () => now }, {
+      syncSpend: jest.fn(),
+    } as any);
+    await svc.upsertTrainingDay(TRAINER, '2026-10-25', { status: 'CANCELLED' } as any);
+    const deleted = db.delete.mock.calls.map((c: unknown[]) => c[0]);
+    expect(deleted).toEqual(expect.arrayContaining([packageSpends, attendance]));
   });
 });
 

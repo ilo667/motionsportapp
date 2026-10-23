@@ -155,6 +155,19 @@ export class AdminScheduleService {
   }
 
   // The slot if it belongs to this trainer; another trainer's slot answers 404 like a missing one
+  // A cancelled training costs nothing: its attendance marks go, and with them the trainings they took from
+  // packages (activation stays, as with «—»). Called in the transaction that cancels the bookings, before it
+  private async releaseMarks(tx: Tx, slotIds: string[]) {
+    if (slotIds.length === 0) return;
+    const ofSlots = () =>
+      tx
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')));
+    await tx.delete(packageSpends).where(inArray(packageSpends.bookingId, ofSlots()));
+    await tx.delete(attendance).where(inArray(attendance.bookingId, ofSlots()));
+  }
+
   private async ownSlot(adminId: string, slotId: string, db: Db | Tx = this.database.db, lock = false) {
     const query = db.select().from(trainingSlots).where(eq(trainingSlots.id, slotId));
     const [slot] = await (lock ? query.for('update').limit(1) : query.limit(1));
@@ -509,6 +522,7 @@ export class AdminScheduleService {
 
     await this.database.db.transaction(async (tx) => {
       if (mySlotIds.length > 0) {
+        await this.releaseMarks(tx, mySlotIds);
         await tx
           .update(bookings)
           .set({ status: 'CANCELLED', cancelledAt: new Date() })
@@ -554,6 +568,7 @@ export class AdminScheduleService {
         .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
 
       await this.database.db.transaction(async (tx) => {
+        await this.releaseMarks(tx, [slotId]);
         await tx
           .update(bookings)
           .set({ status: 'CANCELLED', cancelledAt: new Date() })
