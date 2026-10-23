@@ -21,7 +21,7 @@ const CONTENT: Record<Exclude<ResultState, "PENDING" | "REJECTED">, { icon: stri
     icon: "✓",
     iconClass: "text-accent",
     title: "Платіж прийнято",
-    text: "Покупка вже у «Мої покупки». Строк почнеться з першого тренування (клубну карту активує тренер).",
+    text: "Покупка вже у «Мої покупки».",
   },
   FAILED: {
     icon: "✕",
