@@ -141,8 +141,11 @@ export class PurchasesService {
     const cardAndService = groups.length === 0 && cards.length <= 1 && services.length <= 1;
     if (!groupAlone && !cardAndService) throw new BadRequestException('Not a valid set of items');
     if (dto.slotId && !groupAlone) throw new BadRequestException('A slot goes only with a group pass');
-    if (services.length === 1 && cards.length === 0 && !(await this.entitlements.usableCard(memberId))) {
-      throw new BadRequestException('Club card required');
+    if (cards.length || services.length) {
+      const hasCard = !!(await this.entitlements.usableCard(memberId));
+      // One club card at a time: a new one only once the current card has ended or burned
+      if (cards.length && hasCard) throw new ConflictException('Member already has a club card');
+      if (services.length && !cards.length && !hasCard) throw new BadRequestException('Club card required');
     }
 
     // The club card goes first, as on the page

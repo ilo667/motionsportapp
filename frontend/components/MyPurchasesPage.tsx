@@ -282,12 +282,15 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
                   price={fromPrice(data.catalog.groupPasses)}
                   onClick={() => setBuying("group")}
                 />
-                <BuyTile
-                  icon={<CardIcon />}
-                  title="Клубна карта"
-                  price={fromPrice(data.catalog.clubCards)}
-                  onClick={() => setBuying("card")}
-                />
+                {/* A member with a club card (active or waiting) sees it above; a second one can't be bought */}
+                {!data.card && (
+                  <BuyTile
+                    icon={<CardIcon />}
+                    title="Клубна карта"
+                    price={fromPrice(data.catalog.clubCards)}
+                    onClick={() => setBuying("card")}
+                  />
+                )}
               </div>
             </>
           )}

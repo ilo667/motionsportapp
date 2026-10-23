@@ -107,6 +107,17 @@ describe('Purchases — create', () => {
     expect(payments.checkoutPurchase).toHaveBeenCalledWith('purchase-1', 'm1');
   });
 
+  it('409 for a club card while the member already has one (active or waiting)', async () => {
+    const { db, inserts } = makeDb([[CARD]]);
+    await expect(
+      makeService(db, { card: { id: 'c', state: 'waiting' } }).svc.create('m1', {
+        priceItemIds: ['price-card'],
+        method: 'LIQPAY',
+      }),
+    ).rejects.toThrow(ConflictException);
+    expect(inserts).toEqual([]);
+  });
+
   it('a group pass is bought alone: with a card or a trainer service → 400', async () => {
     const a = makeDb([[GROUP, CARD]]);
     await expect(
