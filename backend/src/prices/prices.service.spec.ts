@@ -4,8 +4,10 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { DateTime } from 'luxon';
 import { PricesService } from './prices.service';
-import { PricesController, PublicPricesController } from './prices.controller';
+import { PricesController, MemberPricesController } from './prices.controller';
 import { AdminGuard } from '../common/guards/admin.guard';
+import { MemberGuard } from '../common/guards/member.guard';
+import { SessionGuard } from '../auth/session.guard';
 import { UpdatePriceDto } from './dto/update-price.dto';
 import { DEFAULT_PRICE_LIST, PRICE_SECTIONS } from './price-list';
 import { KY_ZONE, ASSIGNED_TYPES } from '../schedule/training-types';
@@ -107,11 +109,11 @@ describe('Prices', () => {
     expect(await validate(plainToInstance(UpdatePriceDto, { amountUah: 100_000, expectedAmountUah: 600 }))).toEqual([]);
   });
 
-  // Public «Ціни» page: amounts only, never who changed them
-  it('the public price list has no trainer names or change times', async () => {
+  // Client «Ціни» page: amounts only, never who changed them
+  it('the client price list has no trainer names or change times', async () => {
     const row = { id: 'p1', section: 'group', title: 'Разове відвідування', optionLabel: null, amountUah: 250 };
     const { db } = makeDb([[row]]);
-    expect(await new PricesService({ db } as any, { now: () => NOW }).getPublicPrices()).toEqual([row]);
+    expect(await new PricesService({ db } as any, { now: () => NOW }).getMemberPrices()).toEqual([row]);
     expect(db.select).toHaveBeenCalledWith({
       id: expect.anything(),
       section: expect.anything(),
@@ -121,8 +123,9 @@ describe('Prices', () => {
     });
   });
 
-  it('the public price list needs no sign-in (no guards)', () => {
-    expect(Reflect.getMetadata(GUARDS_METADATA, PublicPricesController)).toBeUndefined();
+  it('the client price list is for signed-in members only (MemberGuard)', () => {
+    const guards = Reflect.getMetadata(GUARDS_METADATA, MemberPricesController) as unknown[];
+    expect(guards).toEqual([SessionGuard, MemberGuard]);
   });
 
   it('price endpoints are admin-only (AdminGuard on the controller)', () => {

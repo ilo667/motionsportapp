@@ -54,8 +54,8 @@ export class PricesService {
     };
   }
 
-  // For everyone (the «Ціни» page, no sign-in): what each option costs, in page order. No trainer names
-  async getPublicPrices() {
+  // For clients (the «Ціни» page): what each option costs, in page order. No trainer names
+  async getMemberPrices() {
     return this.database.db
       .select({
         id: priceItems.id,

@@ -187,9 +187,6 @@ export default function SchedulePage() {
           >
             Вхід для тренера
           </Link>
-          <Link href="/prices" className="text-muted text-sm hover:text-body transition-colors pt-3">
-            Ціни
-          </Link>
         </div>
       </PageLayout>
     );
@@ -197,9 +194,6 @@ export default function SchedulePage() {
 
   const scheduleAction = (
     <div className="flex items-center space-x-4">
-      <Link href="/prices" className="text-sm text-muted hover:text-body transition-colors">
-        Ціни
-      </Link>
       <Link href="/purchases" className="text-sm text-accent hover:underline">
         Мій абонемент
       </Link>

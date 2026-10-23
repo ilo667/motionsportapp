@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, PriceChange, PriceItem } from "@/lib/api";
 import { PriceList } from "@/components/PriceList";
-import { refreshPublicPrices } from "@/app/prices/actions";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 
@@ -151,8 +150,6 @@ export default function PricesPage() {
     setSaving(true);
     try {
       await api.updatePrice(confirm.item.id, confirm.amountUah, confirm.item.amountUah);
-      // Clients see the new price on /prices right away (best effort: the day-long cache catches up anyway)
-      refreshPublicPrices().catch(() => {});
       setConfirm(null);
       stopEdit();
       await load();

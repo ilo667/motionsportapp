@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Body, Param, UseGuards, ParseUUIDPipe } from '@
 import { PricesService } from './prices.service';
 import { SessionGuard, SessionUser } from '../auth/session.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
+import { MemberGuard } from '../common/guards/member.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UpdatePriceDto } from './dto/update-price.dto';
 
@@ -22,13 +23,14 @@ export class PricesController {
   }
 }
 
-// The same list for clients and visitors: amounts only, no sign-in
+// The same list for signed-in clients (the «Ціни» page): amounts only
 @Controller('prices')
-export class PublicPricesController {
+@UseGuards(SessionGuard, MemberGuard)
+export class MemberPricesController {
   constructor(private readonly pricesService: PricesService) {}
 
   @Get()
   getPrices() {
-    return this.pricesService.getPublicPrices();
+    return this.pricesService.getMemberPrices();
   }
 }
