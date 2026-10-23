@@ -154,3 +154,56 @@ describe('Trainer — client purchases', () => {
     expect(guards).toContain(AdminGuard);
   });
 });
+
+describe('Trainer — money that came after the purchase ended', () => {
+  it('lists such payments with what was bought, the amount and the payment number for a refund', async () => {
+    const paidAt = new Date('2026-10-23T11:05:00Z');
+    const { db } = makeDb([
+      [
+        {
+          paymentId: 'pay-1',
+          purchaseId: 'purchase-1',
+          memberId: 'm1',
+          displayName: 'Катя',
+          amountUah: 250,
+          liqpayPaymentId: '123456',
+          paidAt,
+        },
+      ],
+      [{ id: 'purchase-1', method: 'LIQPAY', status: 'CANCELLED', totalUah: 250, createdAt: paidAt }],
+      [{ purchaseId: 'purchase-1', section: 'group', title: 'Разове відвідування', optionLabel: null, amountUah: 250 }],
+    ]);
+    const { svc } = makeService(db);
+    expect(await svc.strayPayments('trainer-1')).toEqual([
+      {
+        paymentId: 'pay-1',
+        memberId: 'm1',
+        displayName: 'Катя',
+        amountUah: 250,
+        liqpayPaymentId: '123456',
+        paidAt: paidAt.toISOString(),
+        lines: [{ section: 'group', title: 'Разове відвідування', optionLabel: null, amountUah: 250 }],
+      },
+    ]);
+  });
+
+  it('«Розібрано» marks the payment handled by this trainer', async () => {
+    const { db, sets } = makeDb([[{ handledAt: null }]]);
+    const { svc } = makeService(db);
+    await svc.markPaymentHandled('trainer-1', 'pay-1');
+    expect(sets).toEqual([{ handledAt: NOW.toJSDate(), handledByAdminId: 'trainer-1' }]);
+  });
+
+  it("another trainer's client (or an ordinary payment): 404, nothing changed", async () => {
+    const { db, sets } = makeDb([[]]);
+    const { svc } = makeService(db);
+    await expect(svc.markPaymentHandled('trainer-2', 'pay-1')).rejects.toThrow(NotFoundException);
+    expect(sets).toEqual([]);
+  });
+
+  it('already handled (by anyone): 409', async () => {
+    const { db } = makeDb([[{ handledAt: null }]], () => []);
+    const { svc } = makeService(db);
+    await expect(svc.markPaymentHandled('trainer-1', 'pay-1')).rejects.toThrow(ConflictException);
+  });
+});

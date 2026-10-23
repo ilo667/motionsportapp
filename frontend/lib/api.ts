@@ -149,6 +149,17 @@ export interface Purchase {
   lines: PurchaseLine[];
 }
 
+// Money that came after its purchase ended: nothing was given for it (trainer: «Гроші без покупки»)
+export interface StrayPayment {
+  paymentId: string;
+  memberId: string;
+  displayName: string;
+  amountUah: number;
+  liqpayPaymentId: string | null; // to find the payment for a refund
+  paidAt: string;
+  lines: PurchaseLine[];
+}
+
 export interface CashRequest extends Purchase {
   memberId: string;
   displayName: string;
@@ -412,6 +423,11 @@ export const api = {
 
   rejectCash: (purchaseId: string) =>
     request<{ ok: boolean }>(`/admin/purchases/${purchaseId}/reject`, { method: "POST" }),
+
+  getStrayPayments: () => request<StrayPayment[]>("/admin/payments/stray"),
+
+  markPaymentHandled: (paymentId: string) =>
+    request<{ ok: boolean }>(`/admin/payments/${paymentId}/handled`, { method: "POST" }),
 
   getMemberPurchases: (memberId: string) => request<MemberPurchases>(`/admin/members/${memberId}/purchases`),
 

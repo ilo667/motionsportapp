@@ -269,6 +269,10 @@ export const payments = pgTable(
     status: text('status').notNull().default('PENDING'), // PENDING | PAID | FAILED | EXPIRED | REPLACED
     liqpayPaymentId: text('liqpay_payment_id'),
     rawCallback: jsonb('raw_callback'),
+    // Money that came after its purchase ended (raw_callback says success, status is not PAID) is shown to the
+    // trainer until they press «Розібрано» (gave the purchase by hand or the money was refunded)
+    handledAt: timestamp('handled_at', { withTimezone: true }),
+    handledByAdminId: uuid('handled_by_admin_id').references(() => admins.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

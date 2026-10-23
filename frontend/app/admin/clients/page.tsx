@@ -6,6 +6,7 @@ import { api, AdminMember, Trainer, CashRequest } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { CashRequests } from "@/components/admin/CashRequests";
+import { StrayPayments } from "@/components/admin/StrayPayments";
 import { FREQUENT_CANCELLATIONS, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
 
 export default function ClientsPage() {
@@ -110,6 +111,7 @@ export default function ClientsPage() {
 
       {members && (
         <div className="flex flex-col space-y-8">
+          <StrayPayments />
           <CashRequests requests={cash} onDecided={reloadPurchases} />
 
           {unassigned.length > 0 && (

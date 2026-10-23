@@ -16,6 +16,17 @@ export class AdminPurchasesController {
     return this.purchasesService.pendingCash(user.id);
   }
 
+  @Get('payments/stray')
+  strayPayments(@CurrentUser() user: SessionUser) {
+    return this.purchasesService.strayPayments(user.id);
+  }
+
+  @Post('payments/:id/handled')
+  @HttpCode(200)
+  markPaymentHandled(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SessionUser) {
+    return this.purchasesService.markPaymentHandled(user.id, id);
+  }
+
   @Post('purchases/:id/confirm')
   @HttpCode(200)
   confirm(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SessionUser) {

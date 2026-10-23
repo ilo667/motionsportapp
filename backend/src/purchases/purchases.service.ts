@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException, Logger } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { ClockService } from '../clock/clock.service';
 import {
@@ -286,6 +286,52 @@ export class PurchasesService {
     });
   }
 
+  // Money that LiqPay took after its purchase had ended (cancelled, expired or paid by another attempt): nothing was
+  // given for it. Shown to the member's trainer (or every trainer for a client without one) until «Розібрано»
+  async strayPayments(trainerId: string) {
+    const rows = await this.database.db
+      .select({
+        paymentId: payments.id,
+        purchaseId: payments.purchaseId,
+        memberId: members.id,
+        displayName: members.displayName,
+        amountUah: payments.amount,
+        liqpayPaymentId: payments.liqpayPaymentId,
+        paidAt: payments.updatedAt,
+      })
+      .from(payments)
+      .innerJoin(purchases, eq(purchases.id, payments.purchaseId))
+      .innerJoin(members, eq(members.id, purchases.memberId))
+      .where(and(strayPayment(), isNull(payments.handledAt), memberOf(trainerId)))
+      .orderBy(asc(payments.updatedAt));
+    const views = await this.views(rows.map((r) => r.purchaseId!));
+    return rows.map(({ purchaseId, paidAt, ...r }) => ({
+      ...r,
+      paidAt: paidAt.toISOString(),
+      lines: views.find((v) => v.id === purchaseId)?.lines ?? [],
+    }));
+  }
+
+  // «Розібрано»: compare-and-set, so two trainers can't both handle it
+  async markPaymentHandled(trainerId: string, paymentId: string) {
+    const [payment] = await this.database.db
+      .select({ handledAt: payments.handledAt })
+      .from(payments)
+      .innerJoin(purchases, eq(purchases.id, payments.purchaseId))
+      .innerJoin(members, eq(members.id, purchases.memberId))
+      .where(and(eq(payments.id, paymentId), strayPayment(), memberOf(trainerId)))
+      .limit(1);
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.handledAt) throw new ConflictException('Payment already handled');
+    const [won] = await this.database.db
+      .update(payments)
+      .set({ handledAt: this.clock.now().toJSDate(), handledByAdminId: trainerId })
+      .where(and(eq(payments.id, paymentId), isNull(payments.handledAt)))
+      .returning({ id: payments.id });
+    if (!won) throw new ConflictException('Payment already handled');
+    return { ok: true };
+  }
+
   // «Оплату отримано»: only the member's trainer, only a cash request still awaiting payment
   async confirmCash(trainerId: string, purchaseId: string) {
     await this.database.db.transaction(async (tx) => {
@@ -442,4 +488,18 @@ export class PurchasesService {
       this.logger.error(`Cash request push for purchase ${purchaseId} failed`, err);
     }
   }
+}
+
+// LiqPay said success, but the payment was never applied (PaymentService.needsManualHandling)
+function strayPayment() {
+  return and(
+    isNotNull(payments.purchaseId),
+    ne(payments.status, 'PAID'),
+    sql`${payments.rawCallback}->>'status' in ('success', 'sandbox')`,
+  );
+}
+
+// The member is this trainer's client, or has no trainer yet (every trainer sees those)
+function memberOf(trainerId: string) {
+  return or(eq(members.trainerId, trainerId), isNull(members.trainerId));
 }
