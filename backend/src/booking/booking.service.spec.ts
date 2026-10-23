@@ -71,11 +71,19 @@ const validDay = {
   status: 'SCHEDULED',
 };
 
-function makeService(db: any, now: DateTime) {
+// groupPassLeft: group trainings the member's pass still holds for that day (booking needs one)
+function makeService(db: any, now: DateTime, groupPassLeft = 1) {
   const mockClock = { now: () => now };
   const mockNotifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
   const mockVacancyAlerts = { unsubscribe: jest.fn().mockResolvedValue(undefined) };
-  return new BookingService({ db } as any, mockNotifications as any, mockClock, mockVacancyAlerts as any);
+  const mockEntitlements = { groupPassLeft: jest.fn().mockResolvedValue(groupPassLeft) };
+  return new BookingService(
+    { db } as any,
+    mockNotifications as any,
+    mockClock,
+    mockVacancyAlerts as any,
+    mockEntitlements as any,
+  );
 }
 
 describe('BookingService — booking window', () => {
@@ -146,6 +154,20 @@ describe('BookingService — slot validation', () => {
     const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER, [available], [existingBooking]]);
     const service = makeService(db, at15);
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('already have an active booking');
+  });
+});
+
+describe('BookingService — group pass', () => {
+  it('409 Group pass required without a pass that has trainings left, and nothing is booked', async () => {
+    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay]]);
+    await expect(makeService(db, kyivAt(15), 0).book('member-1', 'slot-1')).rejects.toThrow('Group pass required');
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('with a pass that has trainings left it books as before', async () => {
+    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER, [validSlot], []]);
+    await expect(makeService(db, kyivAt(15), 1).book('member-1', 'slot-1')).resolves.toEqual({ ok: true });
+    expect(db.insert).toHaveBeenCalled();
   });
 });
 

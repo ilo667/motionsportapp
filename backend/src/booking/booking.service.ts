@@ -8,6 +8,8 @@ import { VacancyAlertsService } from '../notifications/vacancy-alerts.service';
 import { ClockService } from '../clock/clock.service';
 import { GROUP_TYPE, KY_ZONE, slotStartsAt } from '../schedule/training-types';
 import { getMemberTrainerId } from '../schedule/default-trainer';
+import { EntitlementsService } from '../purchases/entitlements.service';
+import { findGroupBooking, groupBookingWindow } from './group-booking';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -21,6 +23,7 @@ export class BookingService {
     private readonly notifications: NotificationService,
     private readonly clock: ClockService,
     private readonly vacancyAlerts: VacancyAlertsService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   async book(memberId: string, slotId: string) {
@@ -43,6 +46,10 @@ export class BookingService {
     if (!day || day.status !== 'SCHEDULED') throw new ConflictException('Training day is not scheduled');
 
     this.validateBookingWindow(day.localDate);
+    // Group trainings are paid: a pass usable that day with a training left (else «Записатися» offers to buy one)
+    if ((await this.entitlements.groupPassLeft(memberId, day.localDate)) === 0) {
+      throw new ConflictException('Group pass required');
+    }
 
     try {
       await this.database.db.transaction(async (tx) => {
@@ -58,7 +65,7 @@ export class BookingService {
         if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is no longer available');
         if (locked.bookedCount >= locked.capacity) throw new ConflictException('Slot is full');
 
-        if (await this.findGroupBooking(tx, memberId, locked.trainingDayId)) {
+        if (await findGroupBooking(tx, memberId, locked.trainingDayId)) {
           throw new ConflictException('You already have an active booking for this day');
         }
 
@@ -179,7 +186,7 @@ export class BookingService {
     if (target.trainerId !== (await getMemberTrainerId(this.database.db, memberId)))
       throw new NotFoundException('Slot not found');
 
-    const current = await this.findGroupBooking(this.database.db, memberId, target.trainingDayId);
+    const current = await findGroupBooking(this.database.db, memberId, target.trainingDayId);
 
     if (!current) throw new NotFoundException('No active booking to switch from');
     if (current.slotId === newSlotId) throw new BadRequestException('Already booked on this slot');
@@ -332,28 +339,6 @@ export class BookingService {
   }
 
   // The member's active group booking on that day (assigned bookings don't count)
-  private async findGroupBooking(db: Db | Tx, memberId: string, trainingDayId: string) {
-    const [row] = await db
-      .select({
-        id: bookings.id,
-        slotId: bookings.slotId,
-        trainingDayId: trainingSlots.trainingDayId,
-        memberId: bookings.memberId,
-      })
-      .from(bookings)
-      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
-      .where(
-        and(
-          eq(bookings.memberId, memberId),
-          eq(trainingSlots.trainingDayId, trainingDayId),
-          eq(bookings.status, 'ACTIVE'),
-          eq(trainingSlots.trainingType, GROUP_TYPE),
-        ),
-      )
-      .limit(1);
-    return row ?? null;
-  }
-
   private validateBeforeStart(localDate: string, slotTime: string) {
     const now = this.clock.now();
     if (now >= slotStartsAt(localDate, slotTime)) throw new BadRequestException('Training has already started');
@@ -361,8 +346,7 @@ export class BookingService {
 
   private validateBookingWindow(localDate: string) {
     const now = this.clock.now();
-    const openAt = DateTime.fromISO(`${localDate}T14:00:00`, { zone: KY_ZONE });
-    const closeAt = DateTime.fromISO(`${localDate}T21:00:00`, { zone: KY_ZONE });
+    const { openAt, closeAt } = groupBookingWindow(localDate);
     if (now < openAt) throw new BadRequestException('Booking opens at 14:00');
     if (now >= closeAt) throw new BadRequestException('Booking window has closed');
   }
