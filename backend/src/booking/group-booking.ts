@@ -2,18 +2,18 @@ import { and, eq, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { DatabaseService } from '../database/database.service';
 import { bookings, members, trainingDays, trainingSlots, vacancyAlerts } from '../database/schema';
-import { GROUP_TYPE, KY_ZONE } from '../schedule/training-types';
+import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
+import { bookingOpensAt } from '../trainer-schedule/rules';
+import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { getMemberTrainerId } from '../schedule/default-trainer';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-// Group bookings are open 14:00–21:00 of the training day
-export function groupBookingWindow(localDate: string) {
-  return {
-    openAt: DateTime.fromISO(`${localDate}T14:00:00`, { zone: KY_ZONE }),
-    closeAt: DateTime.fromISO(`${localDate}T21:00:00`, { zone: KY_ZONE }),
-  };
+// A group booking opens on the training day at the trainer's time («Мій розклад») and closes when the training
+// starts; cancelling and switching also end at the start
+export function groupBookingWindow(localDate: string, slotTime: string, opensAt: string) {
+  return { openAt: bookingOpensAt(localDate, opensAt), closeAt: slotStartsAt(localDate, slotTime) };
 }
 
 // The member's active group booking on that day (one per day)
@@ -58,6 +58,7 @@ export async function tryBookGroup(
     .select({
       id: trainingSlots.id,
       status: trainingSlots.status,
+      slotTime: trainingSlots.slotTime,
       trainingType: trainingSlots.trainingType,
       capacity: trainingSlots.capacity,
       bookedCount: trainingSlots.bookedCount,
@@ -77,7 +78,8 @@ export async function tryBookGroup(
     return { ok: false, reason: 'NOT_FOUND' };
   if (slot.status !== 'ACTIVE') return { ok: false, reason: 'CANCELLED' };
   if (slot.dayStatus !== 'SCHEDULED') return { ok: false, reason: 'NOT_SCHEDULED' };
-  const { openAt, closeAt } = groupBookingWindow(slot.localDate);
+  const { bookingOpensAt: opensAt } = await loadTrainerSchedule(tx, slot.trainerId);
+  const { openAt, closeAt } = groupBookingWindow(slot.localDate, slot.slotTime, opensAt);
   if (now < openAt || now >= closeAt) return { ok: false, reason: 'WINDOW' };
   if (slot.bookedCount >= slot.capacity) return { ok: false, reason: 'FULL' };
   if (await findGroupBooking(tx, memberId, slot.trainingDayId)) return { ok: false, reason: 'ALREADY_BOOKED' };

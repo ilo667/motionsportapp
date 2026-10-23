@@ -1,5 +1,10 @@
 import { DateTime } from 'luxon';
 import { tryBookGroup } from './group-booking';
+import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+
+jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
+const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
+beforeEach(() => mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '14:00', autoCreate: true, times: [] }));
 import { vacancyAlerts } from '../database/schema';
 
 const at = (hour: number) => DateTime.fromObject({ year: 2026, month: 10, day: 20, hour }, { zone: 'Europe/Kyiv' });
@@ -41,6 +46,7 @@ function makeTx(reads: unknown[][]) {
 const slot = {
   id: 'slot-1',
   status: 'ACTIVE',
+  slotTime: '19:00',
   trainingType: 'групові',
   capacity: 8,
   bookedCount: 3,
@@ -78,9 +84,18 @@ describe('tryBookGroup — booking inside someone else’s transaction, never th
     expect(await tryBookGroup(tx, at(15), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'ALREADY_BOOKED' });
   });
 
-  it('outside 14:00–21:00: WINDOW', async () => {
+  it('before the trainer opens booking or once the training started: WINDOW', async () => {
+    const early = makeTx([MEMBER, [slot], TRAINER, []]);
+    expect(await tryBookGroup(early.tx, at(13), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'WINDOW' });
+    const started = makeTx([MEMBER, [slot], TRAINER, []]);
+    expect(await tryBookGroup(started.tx, at(19), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'WINDOW' });
+  });
+
+  it("opens at the trainer's own time (12:00 here)", async () => {
+    mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '12:00', autoCreate: true, times: [] });
     const { tx } = makeTx([MEMBER, [slot], TRAINER, []]);
-    expect(await tryBookGroup(tx, at(21), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'WINDOW' });
+    expect(await tryBookGroup(tx, at(12), 'member-1', 'slot-1')).toEqual({ ok: true, bookingId: 'booking-1' });
+    expect(mockLoadSchedule).toHaveBeenCalledWith(tx, 'trainer-1');
   });
 
   it('a cancelled slot or day: CANCELLED / NOT_SCHEDULED', async () => {

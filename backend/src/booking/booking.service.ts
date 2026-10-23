@@ -1,15 +1,15 @@
 import { Injectable, Logger, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
-import { DateTime } from 'luxon';
 import { eq, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { bookings, trainingSlots, trainingDays, members } from '../database/schema';
 import { NotificationService } from '../notifications/notification.service';
 import { VacancyAlertsService } from '../notifications/vacancy-alerts.service';
 import { ClockService } from '../clock/clock.service';
-import { GROUP_TYPE, KY_ZONE, slotStartsAt } from '../schedule/training-types';
+import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
 import { getMemberTrainerId } from '../schedule/default-trainer';
 import { EntitlementsService } from '../purchases/entitlements.service';
 import { findGroupBooking, groupBookingWindow } from './group-booking';
+import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -45,7 +45,7 @@ export class BookingService {
 
     if (!day || day.status !== 'SCHEDULED') throw new ConflictException('Training day is not scheduled');
 
-    this.validateBookingWindow(day.localDate);
+    await this.validateBookingWindow(day.localDate, slot.slotTime, slot.trainerId);
     // Group trainings are paid: a pass usable that day with a training left (else «Записатися» offers to buy one)
     if ((await this.entitlements.groupPassLeft(memberId, day.localDate)) === 0) {
       throw new ConflictException('Group pass required');
@@ -123,10 +123,8 @@ export class BookingService {
       .where(eq(trainingSlots.id, booking.slotId))
       .limit(1);
 
-    if (day && slotBefore?.trainingType === GROUP_TYPE) this.validateBeforeClose(day.localDate);
-    if (day && slotBefore && slotBefore.trainingType !== GROUP_TYPE) {
-      this.validateBeforeStart(day.localDate, slotBefore.slotTime);
-    }
+    // Group or assigned: only until the training starts (a booked no-show loses the training)
+    if (day && slotBefore) this.validateBeforeStart(day.localDate, slotBefore.slotTime);
 
     // Vacancy alerts exist only for group slots (assigned ones are not open to others)
     const wasAtCapacity = slotBefore?.trainingType === GROUP_TYPE && slotBefore.bookedCount >= slotBefore.capacity;
@@ -197,8 +195,6 @@ export class BookingService {
       .where(eq(trainingDays.id, current.trainingDayId))
       .limit(1);
 
-    if (day) this.validateBookingWindow(day.localDate);
-
     const oldSlotId = current.slotId;
 
     const [oldSlotBefore] = await this.database.db
@@ -211,6 +207,12 @@ export class BookingService {
       .from(trainingSlots)
       .where(eq(trainingSlots.id, oldSlotId))
       .limit(1);
+
+    // Both trainings must not have started: the one they move to (its booking window), and the one they leave
+    if (day) {
+      await this.validateBookingWindow(day.localDate, target.slotTime, target.trainerId);
+      if (oldSlotBefore) this.validateBeforeStart(day.localDate, oldSlotBefore.slotTime);
+    }
 
     const wasAtCapacity = oldSlotBefore && oldSlotBefore.bookedCount >= oldSlotBefore.capacity;
 
@@ -344,16 +346,11 @@ export class BookingService {
     if (now >= slotStartsAt(localDate, slotTime)) throw new BadRequestException('Training has already started');
   }
 
-  private validateBookingWindow(localDate: string) {
+  private async validateBookingWindow(localDate: string, slotTime: string, trainerId: string) {
     const now = this.clock.now();
-    const { openAt, closeAt } = groupBookingWindow(localDate);
-    if (now < openAt) throw new BadRequestException('Booking opens at 14:00');
-    if (now >= closeAt) throw new BadRequestException('Booking window has closed');
-  }
-
-  private validateBeforeClose(localDate: string) {
-    const now = this.clock.now();
-    const closeAt = DateTime.fromISO(`${localDate}T21:00:00`, { zone: KY_ZONE });
+    const { bookingOpensAt: opensAt } = await loadTrainerSchedule(this.database.db, trainerId);
+    const { openAt, closeAt } = groupBookingWindow(localDate, slotTime, opensAt);
+    if (now < openAt) throw new BadRequestException('Booking is not open yet');
     if (now >= closeAt) throw new BadRequestException('Booking window has closed');
   }
 }

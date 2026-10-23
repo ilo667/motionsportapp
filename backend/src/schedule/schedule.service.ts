@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DateTime } from 'luxon';
-import { and, eq, gte, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import {
   trainingDays,
@@ -18,6 +18,7 @@ import { EntitlementsService } from '../purchases/entitlements.service';
 import { GROUP_TYPE, KY_ZONE, ASSIGNED_TYPES, slotStartsAt } from './training-types';
 import { getMemberTrainerId } from './default-trainer';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+import { bookingOpensAt } from '../trainer-schedule/rules';
 
 // An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
 const ASSIGNED_SHOWN_FOR_MINUTES = 60;
@@ -70,12 +71,8 @@ export class ScheduleService {
         .limit(10),
     );
 
-    const targetDay = upcoming.find((day) => {
-      const closeAt = DateTime.fromISO(`${day.localDate}T21:00:00`, {
-        zone: KY_ZONE,
-      });
-      return now < closeAt;
-    });
+    // The next day with a group training of this trainer that has not started yet
+    const targetDay = upcoming.find((day) => now < slotStartsAt(day.localDate, day.lastTime));
 
     // No group day ahead (e.g. the trainer cancelled them): the member still gets their assigned trainings
     if (!targetDay) {
@@ -93,12 +90,11 @@ export class ScheduleService {
       };
     }
 
-    const openAt = DateTime.fromISO(`${targetDay.localDate}T14:00:00`, {
-      zone: KY_ZONE,
-    });
-    const closeAt = DateTime.fromISO(`${targetDay.localDate}T21:00:00`, {
-      zone: KY_ZONE,
-    });
+    // Booking opens at the trainer's time and closes, training by training, when each one starts: the day's window
+    // ends with the last one
+    const { bookingOpensAt: opensAt } = await loadTrainerSchedule(this.database.db, trainerId!);
+    const openAt = bookingOpensAt(targetDay.localDate, opensAt);
+    const closeAt = slotStartsAt(targetDay.localDate, targetDay.lastTime);
     const bookingWindowOpen = now >= openAt && now < closeAt;
 
     const slots = await this.database.db
@@ -175,6 +171,8 @@ export class ScheduleService {
         bookedCount: s.bookedCount,
         isMyBooking: s.id === myBookingSlotId,
         isMyVacancyAlert: myVacancyAlertSlotIds.has(s.id),
+        // Booking, cancelling and switching for this training are over
+        started: now >= slotStartsAt(targetDay.localDate, s.slotTime),
       })),
       assignedSlots,
       // Group trainings are paid: 0 → «Записатися» offers to buy a pass
@@ -184,11 +182,12 @@ export class ScheduleService {
     };
   }
 
-  // Days with group slots of this trainer (any status: a cancelled group slot is still shown as "Скасовано")
+  // Days with group slots of this trainer (any status: a cancelled group slot is still shown as "Скасовано"),
+  // each with the time of its last group slot
   private async withGroupSlots(trainerId: string | null, days: DayRow[]) {
     if (days.length === 0 || !trainerId) return [];
     const rows = await this.database.db
-      .selectDistinct({ dayId: trainingSlots.trainingDayId })
+      .select({ dayId: trainingSlots.trainingDayId, lastTime: sql<string>`max(${trainingSlots.slotTime})` })
       .from(trainingSlots)
       .where(
         and(
@@ -199,9 +198,12 @@ export class ScheduleService {
           eq(trainingSlots.trainingType, GROUP_TYPE),
           eq(trainingSlots.trainerId, trainerId),
         ),
-      );
-    const withGroup = new Set(rows.map((r) => r.dayId));
-    return days.filter((d) => withGroup.has(d.id));
+      )
+      .groupBy(trainingSlots.trainingDayId);
+    return days.flatMap((d) => {
+      const row = rows.find((r) => r.dayId === d.id);
+      return row ? [{ ...d, lastTime: row.lastTime }] : [];
+    });
   }
 
   // Upcoming assigned trainings the trainer assigned to this member, on any day

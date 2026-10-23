@@ -21,6 +21,8 @@ import type { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { NotificationService } from '../notifications/notification.service';
 import { ClockService } from '../clock/clock.service';
 import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
+import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+import { bookingOpensAt } from '../trainer-schedule/rules';
 import {
   GROUP_SLOT_TIMES,
   GROUP_TYPE,
@@ -78,23 +80,27 @@ export class AdminScheduleService {
       .orderBy(trainingDays.localDate)
       .limit(30);
 
+    // Today stays on the page until midnight (marks after the last training); then the next day with trainings
     const targetDay =
-      upcoming.find((day) => {
-        const closeAt = DateTime.fromISO(`${day.localDate}T21:00:00`, { zone: KY_ZONE });
-        return now < closeAt;
-      }) ?? upcoming[0];
+      upcoming.find((day) => now < DateTime.fromISO(day.localDate, { zone: KY_ZONE }).endOf('day')) ?? upcoming[0];
 
     if (!targetDay) return null;
-
-    const openAt = DateTime.fromISO(`${targetDay.localDate}T14:00:00`, { zone: KY_ZONE });
-    const closeAt = DateTime.fromISO(`${targetDay.localDate}T21:00:00`, { zone: KY_ZONE });
-    const bookingWindowOpen = now >= openAt && now < closeAt;
 
     const slots = await this.database.db
       .select()
       .from(trainingSlots)
       .where(and(eq(trainingSlots.trainingDayId, targetDay.id), eq(trainingSlots.trainerId, adminId)))
       .orderBy(trainingSlots.slotTime);
+
+    // Booking for the trainer's group trainings: from their opening time until the last one starts (a day with
+    // no group training: until midnight)
+    const { bookingOpensAt: opensAt } = await loadTrainerSchedule(this.database.db, adminId);
+    const openAt = bookingOpensAt(targetDay.localDate, opensAt);
+    const lastGroup = slots.filter((s) => s.trainingType === GROUP_TYPE).at(-1);
+    const closeAt = lastGroup
+      ? slotStartsAt(targetDay.localDate, lastGroup.slotTime)
+      : DateTime.fromISO(targetDay.localDate, { zone: KY_ZONE }).endOf('day');
+    const bookingWindowOpen = now >= openAt && now < closeAt;
 
     return {
       localDate: targetDay.localDate,

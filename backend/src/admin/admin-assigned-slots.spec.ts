@@ -6,6 +6,11 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { AdminScheduleService } from './admin-schedule.service';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { attendance, packageSpends } from '../database/schema';
+import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+
+jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
+const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
+beforeEach(() => mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '14:00', autoCreate: true, times: [] }));
 
 const M1 = '11111111-1111-4111-8111-111111111111';
 const M2 = '22222222-2222-4222-8222-222222222222';
@@ -628,5 +633,25 @@ describe('Each trainer sees and changes only own trainings', () => {
     const cond = new PgDialect().sqlToQuery((makeService(db) as any).hasSlotsOf(TRAINER));
     expect(cond.sql).toContain('ts.trainer_id = $1');
     expect(cond.params).toEqual([TRAINER]);
+  });
+});
+
+describe("Trainer's today page — the booking window of the trainer's own schedule", () => {
+  it('opens at the trainer time, closes when the last group training starts; the day stays until midnight', async () => {
+    mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '08:00', autoCreate: true, times: [] });
+    const day = { id: 'day-1', localDate: '2026-10-20', status: 'SCHEDULED' };
+    const own = [
+      { id: 'g', slotTime: '10:00', trainingType: 'групові', status: 'ACTIVE', capacity: 8, bookedCount: 0 },
+      { id: 'p', slotTime: '18:00', trainingType: 'персональні', status: 'ACTIVE', capacity: 1, bookedCount: 1 },
+    ];
+    const { db } = makeDb([[day], own]);
+    const result = await makeService(db).getSchedule(TRAINER); // 12:00: the 10:00 group is over, 18:00 ahead
+    expect(mockLoadSchedule).toHaveBeenCalledWith(db, TRAINER);
+    expect(result).toMatchObject({
+      localDate: '2026-10-20',
+      bookingWindowOpen: false,
+      bookingOpenAt: '2026-10-20T05:00:00.000Z', // 08:00 Kyiv (UTC+3)
+      bookingCloseAt: '2026-10-20T07:00:00.000Z', // 10:00 Kyiv
+    });
   });
 });

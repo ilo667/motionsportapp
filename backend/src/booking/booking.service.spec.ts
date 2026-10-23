@@ -1,6 +1,11 @@
 import { NotFoundException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { BookingService } from './booking.service';
+import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+
+jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
+const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
+beforeEach(() => mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '14:00', autoCreate: true, times: [] }));
 
 const KY_ZONE = 'Europe/Kyiv';
 
@@ -87,16 +92,17 @@ function makeService(db: any, now: DateTime, groupPassLeft = 1) {
 }
 
 describe('BookingService — booking window', () => {
-  it('throws before 14:00', async () => {
+  it('throws before the trainer opens booking (14:00)', async () => {
     const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay]]);
     const service = makeService(db, kyivAt(13, 59));
-    await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Booking opens at 14:00');
+    await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Booking is not open yet');
   });
 
-  it('throws after 21:00', async () => {
+  it('uses the opening time the trainer has now, not the one the training was created with', async () => {
+    mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '16:00', autoCreate: true, times: [] });
     const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay]]);
-    const service = makeService(db, kyivAt(21, 1));
-    await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Booking window has closed');
+    await expect(makeService(db, kyivAt(15)).book('member-1', 'slot-1')).rejects.toThrow('Booking is not open yet');
+    expect(mockLoadSchedule).toHaveBeenCalledWith(db, 'trainer-1');
   });
 
   it('does not throw at exactly 14:00', async () => {
@@ -107,10 +113,11 @@ describe('BookingService — booking window', () => {
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Slot is full');
   });
 
-  it('throws at exactly 21:00', async () => {
+  it('closes when the training starts (19:00), not at 21:00', async () => {
     const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay]]);
-    const service = makeService(db, kyivAt(21, 0));
-    await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Booking window has closed');
+    await expect(makeService(db, kyivAt(19, 0)).book('member-1', 'slot-1')).rejects.toThrow(
+      'Booking window has closed',
+    );
   });
 });
 
@@ -193,11 +200,17 @@ describe('BookingService — cancel', () => {
     await expect(service.cancel('member-1', 'slot-p', 'reason')).rejects.toThrow('already started');
   });
 
-  it('keeps the 21:00 limit for group bookings', async () => {
+  // A booked no-show loses the training, so a group booking can't be dropped once its training started
+  it('a group booking can be cancelled until its training starts, not after', async () => {
     const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '20:00', trainingType: 'групові' };
-    const { db } = makeDb([[{ ...booking, slotId: 'slot-1' }], [validDay], [groupSlot]]);
-    const service = makeService(db, kyivAt(21, 0));
-    await expect(service.cancel('member-1', 'slot-1', 'reason')).rejects.toThrow('Booking window has closed');
+    const late = makeDb([[{ ...booking, slotId: 'slot-1' }], [validDay], [groupSlot]]);
+    await expect(makeService(late.db, kyivAt(20, 0)).cancel('member-1', 'slot-1', 'reason')).rejects.toThrow(
+      'Training has already started',
+    );
+    const inTime = makeDb([[{ ...booking, slotId: 'slot-1' }], [validDay], [groupSlot], [{ displayName: 'Оля' }]]);
+    await expect(makeService(inTime.db, kyivAt(19, 59)).cancel('member-1', 'slot-1', 'reason')).resolves.toEqual({
+      ok: true,
+    });
   });
 });
 
@@ -244,6 +257,38 @@ describe('BookingService — switch slot', () => {
     await expect(service.switchSlot('member-1', 'slot-2', 'reason')).rejects.toThrow(NotFoundException);
   });
 });
+describe('BookingService — switch after a training started', () => {
+  const current = { id: 'booking-1', slotId: 'slot-1', trainingDayId: 'day-1', memberId: 'member-1' };
+
+  it('19:00 → 20:00 at 19:10: the own training already started', async () => {
+    const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '20:00', trainerId: 'trainer-1' };
+    const { db } = makeDb([
+      [target],
+      MEMBER_TRAINER,
+      [current],
+      [validDay],
+      [{ bookedCount: 3, capacity: 8, slotTime: '19:00' }],
+    ]);
+    await expect(makeService(db, kyivAt(19, 10)).switchSlot('member-1', 'slot-2', 'r')).rejects.toThrow(
+      'Training has already started',
+    );
+  });
+
+  it('20:00 → 19:00 at 19:10: the target already started', async () => {
+    const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '19:00', trainerId: 'trainer-1' };
+    const { db } = makeDb([
+      [target],
+      MEMBER_TRAINER,
+      [{ ...current, slotId: 'slot-2' }],
+      [validDay],
+      [{ bookedCount: 3, capacity: 8, slotTime: '20:00' }],
+    ]);
+    await expect(makeService(db, kyivAt(19, 10)).switchSlot('member-1', 'slot-1', 'r')).rejects.toThrow(
+      'Booking window has closed',
+    );
+  });
+});
+
 describe('BookingService — trainer push with the reason', () => {
   it('sends MEMBER_CANCELLED with the reason to the trainer of that training', async () => {
     const booking = {
