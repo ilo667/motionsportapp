@@ -92,7 +92,7 @@ export function NoteCell({ member, onSaved }: { member: AdminMember; onSaved: (n
         {member.trainerNote ? (
           <span className="text-body whitespace-pre-wrap break-words">{member.trainerNote}</span>
         ) : (
-          <span className="text-muted">+ нотатка</span>
+          <span className="text-muted">+ примітка</span>
         )}
       </button>
     );

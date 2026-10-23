@@ -120,7 +120,7 @@ export default function ClientPage() {
           </div>
 
           <section>
-            <h2 className={sectionTitle}>Нотатка</h2>
+            <h2 className={sectionTitle}>Примітка</h2>
             <NoteCell member={member} onSaved={(trainerNote) => setMember({ ...member, trainerNote })} />
           </section>
 

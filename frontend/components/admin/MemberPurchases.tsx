@@ -17,7 +17,7 @@ const cardDates = (c: Card): string => {
     case "waiting":
       return `Активувати до ${formatDate(c.activateBy)}, інакше згорить`;
     case "active":
-      return `Діє ${formatDate(c.validFrom!)} – ${formatDate(c.validUntil!)}`;
+      return `Діє з ${formatDate(c.validFrom!)} по ${formatDate(c.validUntil!)}`;
     case "expired":
       return `Діяла до ${formatDate(c.validUntil!)}`;
     case "burned":

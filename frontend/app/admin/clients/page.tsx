@@ -56,7 +56,7 @@ export default function ClientsPage() {
       <thead>
         <tr className="text-muted text-xs text-left border-b border-line">
           <th className="py-2 pr-3 font-medium w-2/5">Клієнт</th>
-          <th className="py-2 pr-3 font-medium">Нотатка</th>
+          <th className="py-2 pr-3 font-medium">Примітка</th>
           <th className="py-2 font-medium text-right" title="Скасування за останні 30 днів">Скасувань</th>
         </tr>
       </thead>
