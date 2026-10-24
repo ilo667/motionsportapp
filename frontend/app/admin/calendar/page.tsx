@@ -32,7 +32,6 @@ const TYPE_SHORT: Record<TrainingType, string> = {
 };
 
 const TYPES: TrainingType[] = ["групові", "персональні", "спліт"];
-const GROUP_TIMES = ["19:00", "20:00"];
 // Member pickers per type: персональні exactly 1, спліт 1 required + 2 optional
 const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, персональні: 1, спліт: 3 };
 const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
@@ -48,7 +47,10 @@ function memberLabel(m: { booked: boolean; spent: boolean; packageLeft: number }
 
 const ERROR_TEXTS: [string, string][] = [
   ["Time is already taken", "На цей час уже є тренування"],
-  ["taken by an assigned training", "На 19:00 чи 20:00 уже стоїть персональне тренування"],
+  ["taken by an assigned training", "На цей час уже стоїть персональне тренування"],
+  ["Group trainings are from 06:00 to 21:00", "Групові можна ставити з 06:00 до 21:00"],
+  ["at least an hour apart", "Між груповими має бути щонайменше година"],
+  ["15-minute steps", "Вкажіть час з кроком 15 хвилин"],
   ["in the past", "Цей час уже минув"],
   ["Attendance already marked", "Цій людині вже поставили відмітку, її не можна прибрати"],
 ];
@@ -99,6 +101,15 @@ export default function CalendarPage() {
     },
     [router],
   );
+
+  // The trainer's booking opening time: a group training before it can't be booked (warned in the modal)
+  const [opensAt, setOpensAt] = useState("");
+  useEffect(() => {
+    api
+      .getMySchedule()
+      .then((s) => setOpensAt(s.bookingOpensAt))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     api.getMembers().then(setMembers).catch(handleAuthError);
@@ -232,13 +243,10 @@ export default function CalendarPage() {
 
   const handleAdd = () => {
     if (modal?.mode !== "add") return;
-    if (selectedType === "групові") {
-      return run(
-        () => Promise.all(GROUP_TIMES.map((t) => api.upsertGroupSlot(modal.date, t))),
-        "Помилка збереження. Спробуйте ще раз.",
-      );
-    }
     if (!TIME_RE.test(time)) return setError("Вкажіть час з кроком 15 хвилин, наприклад 18:30");
+    if (selectedType === "групові") {
+      return run(() => api.upsertGroupSlot(modal.date, time), "Помилка збереження. Спробуйте ще раз.");
+    }
     if (!memberIds[0]) return setError("Виберіть людину");
     return run(
       () =>
@@ -419,11 +427,7 @@ export default function CalendarPage() {
               </div>
             )}
 
-            {!editing && !assigned && (
-              <p className="text-muted text-xs">Буде створено слоти 19:00 і 20:00, їх бачать усі</p>
-            )}
-
-            {!editing && assigned && (
+            {!editing && (
               <div>
                 <label htmlFor="slot-time" className="block text-muted text-xs mb-2 uppercase tracking-wide">
                   Час
@@ -437,6 +441,11 @@ export default function CalendarPage() {
                   // iOS Safari gives a time input its own min width and ignores w-full without these
                   className={`${FIELD_CLASS} block min-w-0 appearance-none [color-scheme:dark] [&::-webkit-date-and-time-value]:text-left`}
                 />
+                {!assigned && opensAt && TIME_RE.test(time) && time <= opensAt && (
+                  <p className="text-warn text-xs mt-2">
+                    Запис відкривається о {opensAt} — на це тренування записатися не вийде
+                  </p>
+                )}
               </div>
             )}
 

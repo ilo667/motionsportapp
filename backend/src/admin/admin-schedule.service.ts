@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { eq, and, or, inArray, gte, lt, lte, asc, desc, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
+import { eq, and, ne, or, inArray, gte, lt, lte, asc, desc, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
@@ -22,15 +22,8 @@ import { NotificationService } from '../notifications/notification.service';
 import { ClockService } from '../clock/clock.service';
 import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
-import { bookingOpensAt } from '../trainer-schedule/rules';
-import {
-  GROUP_SLOT_TIMES,
-  GROUP_TYPE,
-  KY_ZONE,
-  ASSIGNED_MEMBER_LIMITS,
-  isAssignedType,
-  slotStartsAt,
-} from '../schedule/training-types';
+import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
+import { GROUP_TYPE, KY_ZONE, ASSIGNED_MEMBER_LIMITS, isAssignedType, slotStartsAt } from '../schedule/training-types';
 
 // Member-initiated cancellations / moves shown to the trainer (with the reason they wrote)
 const CANCELLATION_STATS_DAYS = 30;
@@ -305,12 +298,31 @@ export class AdminScheduleService {
     }));
   }
 
-  // Group slot at 19:00 / 20:00. Re-activates a cancelled slot at that time, but never takes over an active assigned one
+  // Group slot at any time from 06:00 to 21:00, at least an hour from the trainer's other active group trainings
+  // that day. Re-activates a cancelled slot at that time, but never takes over an active assigned one
   async upsertGroupSlot(adminId: string, date: string, slotTime: string) {
-    if (!GROUP_SLOT_TIMES.includes(slotTime)) throw new BadRequestException('Group trainings are at 19:00 and 20:00');
+    const timeError = groupTimeError(slotTime, []);
+    if (timeError) throw new BadRequestException(timeError);
 
     await this.database.db.transaction(async (tx) => {
       const dayId = await this.ensureDay(tx, date);
+      const others = await tx
+        .select({ slotTime: trainingSlots.slotTime })
+        .from(trainingSlots)
+        .where(
+          and(
+            eq(trainingSlots.trainingDayId, dayId),
+            eq(trainingSlots.trainerId, adminId),
+            eq(trainingSlots.trainingType, GROUP_TYPE),
+            eq(trainingSlots.status, 'ACTIVE'),
+            ne(trainingSlots.slotTime, slotTime),
+          ),
+        );
+      const gapError = groupTimeError(
+        slotTime,
+        others.map((o) => o.slotTime),
+      );
+      if (gapError) throw new BadRequestException(gapError);
       const [slot] = await tx
         .insert(trainingSlots)
         .values({
@@ -485,19 +497,23 @@ export class AdminScheduleService {
     return day.id;
   }
 
-  // SCHEDULED: adds this trainer's group slots (19:00 / 20:00, times taken by others are skipped).
+  // SCHEDULED: adds this trainer's group slots of that weekday from «Мій розклад» (times taken are skipped).
   // CANCELLED: cancels only this trainer's slots; the day itself is cancelled when nothing active is left on it
   async upsertTrainingDay(adminId: string, date: string, dto: UpsertTrainingDayDto) {
     if (dto.status === 'SCHEDULED') {
       await this.database.db.transaction(async (tx) => {
         const dayId = await this.ensureDay(tx, date);
+        const weekday = DateTime.fromISO(date, { zone: KY_ZONE }).weekday;
+        const times = (await loadTrainerSchedule(tx, adminId)).times.filter((t) => t.weekday === weekday);
+        if (times.length === 0) return;
         await tx
           .insert(trainingSlots)
           .values(
-            GROUP_SLOT_TIMES.map((slotTime) => ({
+            times.map(({ slotTime }) => ({
               trainingDayId: dayId,
               slotTime,
               status: 'ACTIVE' as const,
+              trainingType: GROUP_TYPE,
               capacity: 8,
               bookedCount: 0,
               trainerId: adminId,

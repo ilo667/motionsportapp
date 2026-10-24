@@ -7,7 +7,6 @@ export const GROUP_TYPE = 'групові';
 export const ASSIGNED_TYPES = ['персональні', 'спліт'];
 // What a package can pay for: trainer services and group passes
 export const PASS_TYPES = [GROUP_TYPE, ...ASSIGNED_TYPES];
-export const GROUP_SLOT_TIMES = ['19:00', '20:00'];
 // Members an assigned slot is assigned to: персональні exactly 1, спліт 1–3.
 // Capacity is always `max` (персональні 1, спліт 3), however many members are assigned
 export const ASSIGNED_MEMBER_LIMITS: Record<string, { min: number; max: number }> = {

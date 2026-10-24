@@ -75,6 +75,14 @@ export interface PriceItem {
   updatedAt: string | null;
 }
 
+// A trainer's regular group trainings («Мій розклад»): times per weekday (1 = Пн … 7 = Нд), one opening time for
+// booking on the training day, and whether they are created 3 weeks ahead by themselves
+export interface TrainerSchedule {
+  bookingOpensAt: string; // "HH:MM"
+  autoCreate: boolean;
+  times: { weekday: number; slotTime: string }[];
+}
+
 // One option of the public price list (no trainer names)
 export type PriceListItem = Omit<PriceItem, "updatedBy" | "updatedAt">;
 
@@ -496,6 +504,12 @@ export const api = {
     }),
 
   getCalendar: (month: string) => request<CalendarSlot[]>(`/admin/calendar?month=${month}`),
+
+  // «Мій розклад»: the signed-in trainer's regular group trainings
+  getMySchedule: () => request<TrainerSchedule>("/admin/my-schedule"),
+
+  saveMySchedule: (schedule: TrainerSchedule) =>
+    request<TrainerSchedule>("/admin/my-schedule", { method: "PUT", body: JSON.stringify(schedule) }),
 
   upsertGroupSlot: (date: string, slotTime: string) =>
     request<{ ok: boolean }>(`/admin/training-days/${date}/slots/${encodeURIComponent(slotTime)}`, {

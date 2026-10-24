@@ -275,15 +275,44 @@ describe('Attendance spends from the package', () => {
 });
 
 describe('Group slots — upsertGroupSlot', () => {
-  it('only at 19:00 and 20:00', async () => {
-    const { db } = makeDb();
-    await expect(makeService(db).upsertGroupSlot(TRAINER, '2026-10-21', '18:00')).rejects.toThrow(BadRequestException);
+  it('any time from 06:00 to 21:00 in 15-minute steps (no longer only 19:00 / 20:00)', async () => {
+    const { db, values } = makeDb([[]]);
+    await makeService(db).upsertGroupSlot(TRAINER, '2026-10-21', '18:00');
+    expect(values).toContainEqual(expect.objectContaining({ slotTime: '18:00', trainingType: 'групові', capacity: 8 }));
+    await expect(makeService(makeDb().db).upsertGroupSlot(TRAINER, '2026-10-21', '05:45')).rejects.toThrow(
+      new BadRequestException('Group trainings are from 06:00 to 21:00'),
+    );
+  });
+
+  it("at least an hour from the trainer's other active group training that day", async () => {
+    const { db } = makeDb([[{ slotTime: '19:00' }]]);
+    await expect(makeService(db).upsertGroupSlot(TRAINER, '2026-10-21', '19:30')).rejects.toThrow(
+      new BadRequestException('Group trainings must be at least an hour apart'),
+    );
   });
 
   it('does not take over an active assigned training at that time', async () => {
     let call = 0;
     const { db } = makeDb([], () => (call++ === 0 ? [{ id: 'day-1' }] : []));
     await expect(makeService(db).upsertGroupSlot(TRAINER, '2026-10-21', '19:00')).rejects.toThrow(ConflictException);
+  });
+});
+
+describe('Training day SCHEDULED — the trainer schedule of that weekday', () => {
+  it("adds the trainer's own times for that weekday (Wed here), not 19:00 / 20:00", async () => {
+    mockLoadSchedule.mockResolvedValue({
+      bookingOpensAt: '08:00',
+      autoCreate: true,
+      times: [
+        { weekday: 1, slotTime: '10:00' },
+        { weekday: 3, slotTime: '18:00' },
+      ],
+    });
+    const { db, values } = makeDb();
+    await makeService(db).upsertTrainingDay(TRAINER, '2026-10-21', { status: 'SCHEDULED' } as any);
+    expect(values).toContainEqual([
+      expect.objectContaining({ slotTime: '18:00', trainingType: 'групові', trainerId: TRAINER }),
+    ]);
   });
 });
 
