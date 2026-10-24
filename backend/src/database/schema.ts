@@ -41,6 +41,23 @@ export const admins = pgTable('admins', {
   username: text('username').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  // Who sent the invite link; null = added by `npm run seed:admin`
+  invitedByAdminId: uuid('invited_by_admin_id').references((): AnyPgColumn => admins.id),
+});
+
+// One-time link that lets a new trainer sign up («Запросити тренера»). Only the SHA-256 of the token is stored,
+// so the link is shown once, when it is created
+export const trainerInvites = pgTable('trainer_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tokenHash: text('token_hash').notNull().unique(),
+  createdByAdminId: uuid('created_by_admin_id')
+    .notNull()
+    .references((): AnyPgColumn => admins.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  usedByAdminId: uuid('used_by_admin_id').references((): AnyPgColumn => admins.id),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
 });
 
 export const sessions = pgTable(

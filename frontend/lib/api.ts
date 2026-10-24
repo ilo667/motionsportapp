@@ -60,6 +60,16 @@ export interface MemberVisit {
 export interface Trainer {
   id: string;
   username: string;
+  createdAt: string;
+  invitedBy: string | null; // null = added by the seed script
+}
+
+// An invite link still waiting to be used (any trainer's)
+export interface TrainerInvite {
+  id: string;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string;
 }
 
 // Price list shared by all trainers (admin only for now; payments don't use it yet)
@@ -399,6 +409,27 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
+
+  checkTrainerInvite: (token: string) => request<{ valid: boolean }>(`/auth/admin/invite/${encodeURIComponent(token)}`),
+
+  registerTrainer: (token: string, username: string, password: string) =>
+    request<{ username: string }>("/auth/admin/register", {
+      method: "POST",
+      body: JSON.stringify({ token, username, password }),
+    }),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/admin/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  createTrainerInvite: () =>
+    request<{ id: string; token: string; expiresAt: string }>("/admin/trainer-invites", { method: "POST" }),
+
+  getTrainerInvites: () => request<TrainerInvite[]>("/admin/trainer-invites"),
+
+  revokeTrainerInvite: (id: string) => request<{ ok: boolean }>(`/admin/trainer-invites/${id}`, { method: "DELETE" }),
 
   getAdminSchedule: () => request<AdminSchedule | null>("/admin/schedule"),
 

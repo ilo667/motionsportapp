@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/admin/schedule", label: "Розклад групових" },
   { href: "/admin/history", label: "Історія" },
   { href: "/admin/prices", label: "Ціни" },
+  { href: "/admin/trainers", label: "Тренери" },
 ];
 
 // Trainer navigation in the header: the same burger on phone and desktop

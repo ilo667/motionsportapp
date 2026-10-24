@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Res, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Res, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { SessionGuard, SessionUser } from './session.guard';
@@ -7,6 +7,9 @@ import { RegisterMemberDto } from './dto/register-member.dto';
 import { LoginMemberDto } from './dto/login-member.dto';
 import { RecoverMemberDto } from './dto/recover-member.dto';
 import { LoginAdminDto } from './dto/login-admin.dto';
+import { RegisterAdminDto } from './dto/register-admin.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { AdminGuard } from '../common/guards/admin.guard';
 
 const COOKIE_NAME = 'session';
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
@@ -54,6 +57,25 @@ export class AuthController {
     const { username, sessionToken } = await this.authService.loginAdmin(dto);
     setSessionCookie(res, sessionToken);
     return { username };
+  }
+
+  @Get('admin/invite/:token')
+  checkInvite(@Param('token') token: string) {
+    return this.authService.checkInvite(token);
+  }
+
+  @Post('admin/register')
+  async registerAdmin(@Body() dto: RegisterAdminDto, @Res({ passthrough: true }) res: Response) {
+    const { username, sessionToken } = await this.authService.registerAdmin(dto);
+    setSessionCookie(res, sessionToken);
+    return { username };
+  }
+
+  @Post('admin/password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(SessionGuard, AdminGuard)
+  changeAdminPassword(@CurrentUser() user: SessionUser, @Body() dto: ChangePasswordDto) {
+    return this.authService.changeAdminPassword(user.id, user.sessionId, dto);
   }
 
   @Post('logout')

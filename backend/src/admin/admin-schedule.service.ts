@@ -750,10 +750,18 @@ export class AdminScheduleService {
   }
 
   // For the reassign picker. Usernames only, never password hashes
+  // All trainers (reassigning a client, the «Тренери» page): who invited whom, null = added by seed:admin
   async getTrainers() {
+    const inviter = alias(admins, 'inviter');
     return this.database.db
-      .select({ id: admins.id, username: admins.username })
+      .select({
+        id: admins.id,
+        username: admins.username,
+        createdAt: admins.createdAt,
+        invitedBy: inviter.username,
+      })
       .from(admins)
+      .leftJoin(inviter, eq(inviter.id, admins.invitedByAdminId))
       .orderBy(asc(admins.username));
   }
 

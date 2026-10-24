@@ -479,10 +479,10 @@ describe('Clients per trainer', () => {
     await expect(makeService(db).assignTrainer('trainer-1', M1, 'trainer-2')).rejects.toThrow('Member not found');
   });
 
-  it('trainer picker returns usernames only', async () => {
+  it('trainer list never selects password hashes', async () => {
     const { db } = makeDb([[{ id: 'trainer-1', username: 'ilona' }]]);
     await expect(makeService(db).getTrainers()).resolves.toEqual([{ id: 'trainer-1', username: 'ilona' }]);
-    expect(db.select).toHaveBeenCalledWith({ id: expect.anything(), username: expect.anything() });
+    expect(Object.keys(db.select.mock.calls[0][0]).sort()).toEqual(['createdAt', 'id', 'invitedBy', 'username']);
   });
 });
 

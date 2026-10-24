@@ -32,7 +32,7 @@ npm run build      # rm -rf dist && nest build
 npm run test       # Jest, matches *.spec.ts in src/
 npm run test:cov
 npm run db:push    # apply src/database/schema.ts to the DB (drizzle-kit push)
-npm run seed:admin # create a trainer account (ADMIN_USERNAME / ADMIN_PASSWORD)
+npm run seed:admin # create a trainer account or reset its password (ADMIN_USERNAME / ADMIN_PASSWORD); new trainers normally come by invite link
 npm run seed:prices # add missing price list rows (src/prices/price-list.ts); never overwrites amounts
 npm run lint       # check only, does not change files
 npm run format     # prettier (printWidth 120); the local pre-commit hook rejects unformatted backend files
@@ -60,6 +60,9 @@ Auth endpoints:
 - `POST /auth/member/login` — memberCode + PIN
 - `POST /auth/member/forgot` — memberCode + recoveryCode + newPin → new recoveryCode
 - `POST /auth/admin/login` — username + password
+- `GET /auth/admin/invite/:token` — `{valid}` for the invite page
+- `POST /auth/admin/register` — token + username + password → new trainer, signed in
+- `POST /auth/admin/password` — currentPassword + newPassword (trainer only); the trainer's other sessions are revoked
 - `POST /auth/logout`
 - `GET /auth/me`
 
@@ -114,7 +117,8 @@ Auth endpoints:
 - «Скасувати мої тренування цього дня» cancels only this trainer's slots; the day becomes CANCELLED only when no active slot is left on it.
 - Clients: a trainer sees **own + unassigned** clients («Без тренера», «Забрати собі»), reassigns under the client's name; the trainer note moves with the client. Assigned trainings can only be given to own/unassigned clients (members already on the slot may stay).
 - Trainer push (`MEMBER_CANCELLED`) goes to the trainer **whose training** it is.
-- Add a trainer: `ADMIN_USERNAME=… ADMIN_PASSWORD=… npm run seed:admin` (in `backend/`).
+- **Add a trainer by invite link** (`TrainersModule`, page `/admin/trainers` «Тренери»): any signed-in trainer makes a one-time link (`POST /admin/trainer-invites` → `/admin/join?t=<token>`, 7 days, one use; `GET` lists the waiting ones of every trainer, `DELETE /admin/trainer-invites/:id` revokes, compare-and-set → 409 if used / revoked). `trainer_invites` stores only the token's SHA-256 (`auth/token.ts`, same as sessions), so the link is shown once. Sign-up (`AuthService.registerAdmin`) takes the invite compare-and-set and checks the username **before** the insert in one transaction, so a taken username (409) leaves the link usable. Username `^[a-z0-9._-]{3,32}$`, password ≥ 10 (no login rate limit: a long password protects the account). `admins.invited_by_admin_id` remembers who invited; `GET /admin/trainers` returns `createdAt` + `invitedBy` (null = seed script). A new trainer starts with an empty schedule. There is **no free trainer sign-up and no disabling of trainers** yet.
+- A trainer changes **only their own** password on «Тренери»; a forgotten password is reset with `ADMIN_USERNAME=… ADMIN_PASSWORD=… npm run seed:admin` (in `backend/`), which also creates the very first trainer.
 
 ### Cancellation reasons — rules
 
