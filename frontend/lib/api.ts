@@ -509,8 +509,12 @@ export const api = {
   // «Мій розклад»: the signed-in trainer's regular group trainings
   getMySchedule: () => request<TrainerSchedule>("/admin/my-schedule"),
 
+  // Saved, plus what was put in the calendar: trainings added, schedule dates left out (taken or cancelled)
   saveMySchedule: (schedule: TrainerSchedule) =>
-    request<TrainerSchedule>("/admin/my-schedule", { method: "PUT", body: JSON.stringify(schedule) }),
+    request<TrainerSchedule & { added: number; skipped: number }>("/admin/my-schedule", {
+      method: "PUT",
+      body: JSON.stringify(schedule),
+    }),
 
   upsertGroupSlot: (date: string, slotTime: string) =>
     request<{ ok: boolean }>(`/admin/training-days/${date}/slots/${encodeURIComponent(slotTime)}`, {

@@ -67,7 +67,7 @@ function makeService(db: any, now: DateTime, packages: unknown[] = [], groupPass
   const service = new ScheduleService({ db } as any, mockClock, mockPaymentService as any, mockEntitlements as any);
   mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '14:00', autoCreate: true, times: [] });
   // Group trainings created from the trainer schedules are tested separately
-  jest.spyOn(service, 'ensureGroupSlots').mockResolvedValue(undefined);
+  jest.spyOn(service, 'ensureGroupSlots').mockResolvedValue({ added: 0, skipped: 0 });
   return service;
 }
 
@@ -265,12 +265,18 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
           values.push(v);
           return chain;
         },
-        onConflictDoNothing: () => Promise.resolve(),
+        // the slots insert asks back which rows it really created (a taken time is skipped by the conflict)
+        onConflictDoNothing: () => {
+          const done: any = Promise.resolve();
+          done.returning = () => Promise.resolve(createdRows.splice(0));
+          return done;
+        },
       };
       return chain;
     });
     return values;
   }
+  let createdRows: { id: string }[] = [];
 
   const MON_10_WED_19 = {
     bookingOpensAt: '08:00',
@@ -390,6 +396,49 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
     expect(values).toHaveLength(2); // days + slots, only from the first call
     await service.ensureGroupSlots('trainer-2', { force: true });
     expect(values).toHaveLength(4);
+  });
+
+  // What «Зберегти» tells the trainer: how many were added and how many dates were left out
+  it('counts added trainings and skipped dates; a group already at that time is neither', async () => {
+    mockLoadSchedule.mockResolvedValue({
+      bookingOpensAt: '14:00',
+      autoCreate: true,
+      times: [{ weekday: 6, slotTime: '19:00' }],
+    });
+    // One trainer (a saved schedule): no trainer list read. Saturdays in the horizon: 24.10 (cancelled groups), 31.10 (a personal at 19:00), 7.11 (free)
+    const days = [
+      { id: 'd-24', localDate: '2026-10-24' },
+      { id: 'd-31', localDate: '2026-10-31' },
+      { id: 'd-07', localDate: '2026-11-07' },
+    ];
+    const { db } = makeDb([days, [{ trainingDayId: 'd-24', status: 'CANCELLED', slotTime: '19:00' }]]);
+    recordInserts(db);
+    createdRows = [{ id: 'new-07' }]; // 31.10 hit the personal training's time
+    expect(await makeRealService(db).ensureGroupSlots('trainer-1', { force: true })).toEqual({ added: 1, skipped: 2 });
+  });
+
+  it('a group already in the calendar at the schedule time is not reported as skipped', async () => {
+    mockLoadSchedule.mockResolvedValue({
+      bookingOpensAt: '14:00',
+      autoCreate: true,
+      times: [{ weekday: 6, slotTime: '19:00' }],
+    });
+    const days = [
+      { id: 'd-24', localDate: '2026-10-24' },
+      { id: 'd-31', localDate: '2026-10-31' },
+      { id: 'd-07', localDate: '2026-11-07' },
+    ];
+    const { db } = makeDb([
+      days,
+      [
+        { trainingDayId: 'd-24', status: 'ACTIVE', slotTime: '19:00' },
+        { trainingDayId: 'd-31', status: 'ACTIVE', slotTime: '19:00' },
+        { trainingDayId: 'd-07', status: 'ACTIVE', slotTime: '19:00' },
+      ],
+    ]);
+    recordInserts(db);
+    createdRows = [];
+    expect(await makeRealService(db).ensureGroupSlots('trainer-1', { force: true })).toEqual({ added: 0, skipped: 0 });
   });
 
   it('creates nothing without a trainer account', async () => {

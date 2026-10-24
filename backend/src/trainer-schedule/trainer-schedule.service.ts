@@ -39,8 +39,8 @@ export class TrainerScheduleService {
           .values(schedule.times.map((t) => ({ trainerId, weekday: t.weekday, slotTime: t.slotTime })));
       }
     });
-    // The trainer sees the new trainings in the calendar at once
-    await this.schedule.ensureGroupSlots(trainerId, { force: true });
-    return loadTrainerSchedule(this.database.db, trainerId);
+    // The trainer sees the new trainings in the calendar at once, and how many were added or left out
+    const created = await this.schedule.ensureGroupSlots(trainerId, { force: true });
+    return { ...(await loadTrainerSchedule(this.database.db, trainerId)), ...created };
   }
 }

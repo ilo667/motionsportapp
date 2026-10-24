@@ -26,6 +26,8 @@ const ASSIGNED_SHOWN_FOR_MINUTES = 60;
 type DayRow = typeof trainingDays.$inferSelect;
 
 // Group trainings appear by themselves on these weekdays, so they exist even if the trainer forgets
+export type GroupSlotsResult = { added: number; skipped: number };
+
 // Group trainings are created this many days ahead
 const GROUP_HORIZON_DAYS = 21;
 const GROUP_CAPACITY = 8;
@@ -275,21 +277,30 @@ export class ScheduleService {
   // left alone, a CANCELLED day is skipped, and so is a day where the trainer cancelled their own trainings (a
   // cancelled group, none active), so the trainer's changes are never undone. Without `trainerId`: every trainer,
   // once per day per instance (the schedule is polled every 5 s). `force`: a schedule was just saved
-  async ensureGroupSlots(trainerId?: string, opts: { force?: boolean } = {}) {
+  // Returns how many trainings were added and how many schedule dates were left out (a time taken by another
+  // training, too close to a group one, or a day whose groups are cancelled): «Зберегти» tells the trainer
+  async ensureGroupSlots(trainerId?: string, opts: { force?: boolean } = {}): Promise<GroupSlotsResult> {
     const now = this.clock.now();
     const today = now.toISODate()!;
-    if (!trainerId && !opts.force && this.groupSlotsEnsuredFor === today) return;
+    const total = { added: 0, skipped: 0 };
+    if (!trainerId && !opts.force && this.groupSlotsEnsuredFor === today) return total;
 
     const trainerIds = trainerId
       ? [trainerId]
       : (await this.database.db.select({ id: admins.id }).from(admins)).map((a) => a.id);
-    for (const id of trainerIds) await this.ensureTrainerGroupSlots(id, now);
+    for (const id of trainerIds) {
+      const one = await this.ensureTrainerGroupSlots(id, now);
+      total.added += one.added;
+      total.skipped += one.skipped;
+    }
     if (!trainerId) this.groupSlotsEnsuredFor = today;
+    return total;
   }
 
-  private async ensureTrainerGroupSlots(trainerId: string, now: DateTime) {
+  private async ensureTrainerGroupSlots(trainerId: string, now: DateTime): Promise<GroupSlotsResult> {
+    const none = { added: 0, skipped: 0 };
     const schedule = await loadTrainerSchedule(this.database.db, trainerId);
-    if (!schedule.autoCreate || schedule.times.length === 0) return;
+    if (!schedule.autoCreate || schedule.times.length === 0) return none;
 
     const timesOn = (weekday: number) => schedule.times.filter((t) => t.weekday === weekday).map((t) => t.slotTime);
     const dates: string[] = [];
@@ -297,7 +308,9 @@ export class ScheduleService {
       const d = now.plus({ days: i });
       if (timesOn(d.weekday).length > 0) dates.push(d.toISODate()!);
     }
-    if (dates.length === 0) return;
+    if (dates.length === 0) return none;
+    // Every (date, time) the schedule asks for, cancelled days included
+    const wanted = dates.reduce((n, date) => n + timesOn(DateTime.fromISO(date, { zone: KY_ZONE }).weekday).length, 0);
 
     await this.database.db
       .insert(trainingDays)
@@ -308,7 +321,7 @@ export class ScheduleService {
       .select({ id: trainingDays.id, localDate: trainingDays.localDate })
       .from(trainingDays)
       .where(and(inArray(trainingDays.localDate, dates), eq(trainingDays.status, 'SCHEDULED')));
-    if (days.length === 0) return;
+    if (days.length === 0) return { added: 0, skipped: wanted };
 
     const own = await this.database.db
       .select({
@@ -356,6 +369,23 @@ export class ScheduleService {
             trainerId,
           })),
       );
-    if (rows.length > 0) await this.database.db.insert(trainingSlots).values(rows).onConflictDoNothing();
+    // Already there as an active group at that very time: nothing to add, nothing to report
+    const alreadyThere = days.reduce(
+      (n, day) =>
+        n +
+        timesOn(DateTime.fromISO(day.localDate, { zone: KY_ZONE }).weekday).filter((t) =>
+          own.some((o) => o.trainingDayId === day.id && o.status === 'ACTIVE' && o.slotTime === t),
+        ).length,
+      0,
+    );
+    const created =
+      rows.length > 0
+        ? await this.database.db
+            .insert(trainingSlots)
+            .values(rows)
+            .onConflictDoNothing()
+            .returning({ id: trainingSlots.id })
+        : [];
+    return { added: created.length, skipped: wanted - created.length - alreadyThere };
   }
 }

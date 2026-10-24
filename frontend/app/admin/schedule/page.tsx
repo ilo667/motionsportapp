@@ -27,6 +27,26 @@ const ERROR_TEXTS: [string, string][] = [
   ["15-minute steps", "Час — кроком 15 хвилин"],
 ];
 
+// One line after «Зберегти»: what went into the calendar
+function savedText(autoCreate: boolean, added: number, skipped: number) {
+  if (!autoCreate) return "Збережено";
+  if (added === 0 && skipped === 0) return "Збережено. Усі тренування вже в календарі";
+  const left = skipped
+    ? `. ${skipped} ${plural(skipped, ["дату", "дати", "дат"])} пропущено — там уже є тренування або групові скасовані, перевірте календар`
+    : "";
+  return `Збережено. Додано в календар: ${added} ${plural(added, ["тренування", "тренування", "тренувань"])}${left}`;
+}
+
+// Ukrainian forms for 1, 2–4 and 5+ («1 тренування», «3 дати», «21 дату»)
+function plural(n: number, [one, few, many]: [string, string, string]) {
+  const tens = n % 100;
+  const ones = n % 10;
+  if (tens >= 11 && tens <= 14) return many;
+  if (ones === 1) return one;
+  if (ones >= 2 && ones <= 4) return few;
+  return many;
+}
+
 // «Розклад групових»: the trainer's regular group trainings, created 3 weeks ahead by themselves
 export default function GroupSchedulePage() {
   const router = useRouter();
@@ -37,7 +57,8 @@ export default function GroupSchedulePage() {
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  // What the last save put in the calendar; null until saved (or after an edit)
+  const [saved, setSaved] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -52,7 +73,7 @@ export default function GroupSchedulePage() {
 
   const change = (next: TrainerSchedule) => {
     setSchedule(next);
-    setSaved(false);
+    setSaved(null);
     setError("");
   };
 
@@ -85,8 +106,9 @@ export default function GroupSchedulePage() {
     setSaving(true);
     setError("");
     try {
-      setSchedule(await api.saveMySchedule(schedule));
-      setSaved(true);
+      const { added, skipped, ...next } = await api.saveMySchedule(schedule);
+      setSchedule(next);
+      setSaved(savedText(next.autoCreate, added, skipped));
     } catch (err) {
       const raw = err instanceof Error ? err.message : "";
       setError(ERROR_TEXTS.find(([needle]) => raw.includes(needle))?.[1] ?? "Не вдалося зберегти. Спробуйте ще раз.");
@@ -197,7 +219,7 @@ export default function GroupSchedulePage() {
           </div>
 
           {error && <p className="text-danger text-sm">{error}</p>}
-          {saved && <p className="text-accent text-sm">Збережено</p>}
+          {saved && <p className="text-accent text-sm">{saved}</p>}
 
           <button
             onClick={save}
