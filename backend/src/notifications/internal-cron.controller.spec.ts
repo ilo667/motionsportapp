@@ -181,18 +181,18 @@ describe('InternalCronController — «Записуйтесь» at each trainer 
   });
 
   // t1 opens at 10:00 (first group 18:00) and is the first trainer; t2 opens at 16:00 (first group 19:00)
-  async function runAt(hour: number, minute = 5) {
+  async function runAt(hour: number, minute = 5, times?: { trainerId: string; slotTime: string }[]) {
     process.env.NODE_ENV = 'development';
     delete process.env.CRON_SECRET;
     mockLoadSchedule.mockImplementation((_db: unknown, id: string) =>
       Promise.resolve({ bookingOpensAt: id === 't1' ? '10:00' : '16:00', autoCreate: true, times: [] }),
     );
-    // reads: today's day, each trainer's first group training today, the first trainer
+    // reads: today's day, the active group trainings today (trainer + time), the first trainer
     const reads: unknown[][] = [
       [{ id: 'day-1', status: 'SCHEDULED' }],
-      [
-        { trainerId: 't1', firstTime: '18:00' },
-        { trainerId: 't2', firstTime: '19:00' },
+      times ?? [
+        { trainerId: 't1', slotTime: '18:00' },
+        { trainerId: 't2', slotTime: '19:00' },
       ],
       [{ id: 't1' }],
     ];
@@ -234,6 +234,15 @@ describe('InternalCronController — «Записуйтесь» at each trainer 
     const calls = await runAt(18, 30);
     expect(calls.map((c) => c[1])).toEqual(['booking-open:2026-10-23:t2']);
     expect(calls[0][2]).toMatchObject({ trainerIds: ['t2'], includeUnassigned: false });
+  });
+
+  // A one-off 09:00 added before t1 opens at 10:00 must not close the push window for the 18:00 one
+  it('a group training before the opening time does not stop the push for the later ones', async () => {
+    const calls = await runAt(10, 5, [
+      { trainerId: 't1', slotTime: '09:00' },
+      { trainerId: 't1', slotTime: '18:00' },
+    ]);
+    expect(calls.map((c) => c[1])).toEqual(['booking-open:2026-10-23:t1']);
   });
 
   it('before anyone opens: nothing', async () => {

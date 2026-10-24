@@ -101,7 +101,7 @@ export class AdminScheduleController {
     return this.adminScheduleService.upsertTrainingDay(user.id, date, dto);
   }
 
-  // Group slot (19:00 / 20:00). Assigned slots: POST training-days/:date/assigned-slots
+  // Group slot at any time 06:00–21:00. Assigned slots: POST training-days/:date/assigned-slots
   @Put('training-days/:date/slots/:slotTime')
   @HttpCode(HttpStatus.OK)
   upsertCalendarSlot(

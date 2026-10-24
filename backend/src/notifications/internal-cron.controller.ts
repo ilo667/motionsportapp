@@ -1,6 +1,6 @@
 import { Controller, Get, Headers, ForbiddenException } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { NotificationService } from './notification.service';
 import { AnnouncementsService } from '../ai/announcements.service';
@@ -49,9 +49,14 @@ export class InternalCronController {
     const firstTrainerId = await getDefaultTrainerId(this.database.db);
 
     const sent: string[] = [];
-    for (const { trainerId, firstTime } of trainers) {
+    for (const trainerId of [...new Set(trainers.map((t) => t.trainerId))]) {
       const { bookingOpensAt: opensAt } = await loadTrainerSchedule(this.database.db, trainerId);
-      if (now < bookingOpensAt(today, opensAt) || now >= slotStartsAt(today, firstTime)) continue;
+      // The first group training that can be booked: one before the opening time (added in the calendar) can't
+      const firstTime = trainers
+        .filter((t) => t.trainerId === trainerId && t.slotTime > opensAt)
+        .map((t) => t.slotTime)
+        .sort()[0];
+      if (!firstTime || now < bookingOpensAt(today, opensAt) || now >= slotStartsAt(today, firstTime)) continue;
       await this.notifications.enqueueAndProcess('BOOKING_OPEN', `booking-open:${today}:${trainerId}`, {
         localDate: today,
         trainerIds: [trainerId],
@@ -148,10 +153,10 @@ export class InternalCronController {
   }
 
   // Trainers with an active group training on that day
-  // Trainers with an active group training today, each with the time of their first one
+  // Today's active group trainings: trainer and time
   private async groupTrainersToday(dayId: string) {
     return this.database.db
-      .select({ trainerId: trainingSlots.trainerId, firstTime: sql<string>`min(${trainingSlots.slotTime})` })
+      .select({ trainerId: trainingSlots.trainerId, slotTime: trainingSlots.slotTime })
       .from(trainingSlots)
       .where(
         and(
@@ -159,8 +164,7 @@ export class InternalCronController {
           eq(trainingSlots.trainingType, GROUP_TYPE),
           eq(trainingSlots.status, 'ACTIVE'),
         ),
-      )
-      .groupBy(trainingSlots.trainerId);
+      );
   }
 
   private verifyCronSecret(auth: string | undefined) {

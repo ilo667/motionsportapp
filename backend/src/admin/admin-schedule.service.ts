@@ -298,11 +298,12 @@ export class AdminScheduleService {
     }));
   }
 
-  // Group slot at any time from 06:00 to 21:00, at least an hour from the trainer's other active group trainings
+  // Group slot at any time from 06:00 to 21:00 (not in the past), at least an hour from the trainer's other active group trainings
   // that day. Re-activates a cancelled slot at that time, but never takes over an active assigned one
   async upsertGroupSlot(adminId: string, date: string, slotTime: string) {
     const timeError = groupTimeError(slotTime, []);
     if (timeError) throw new BadRequestException(timeError);
+    if (slotStartsAt(date, slotTime) <= this.clock.now()) throw new BadRequestException('Training time is in the past');
 
     await this.database.db.transaction(async (tx) => {
       const dayId = await this.ensureDay(tx, date);

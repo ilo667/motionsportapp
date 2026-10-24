@@ -115,6 +115,14 @@ describe('TrainerScheduleService.save', () => {
     ]);
   });
 
+  // The schedule is committed; only adding the trainings failed (the daily run adds them later)
+  it('adding the trainings failing after the save still reports the schedule as saved', async () => {
+    const { db } = makeDb([[{ bookingOpensAt: '12:00', autoCreate: true }], SCHEDULE.times]);
+    const failing = { ensureGroupSlots: jest.fn().mockRejectedValue(new Error('db down')) };
+    const svc = new TrainerScheduleService({ db } as any, failing as any);
+    await expect(svc.save('t2', SCHEDULE)).resolves.toEqual(SCHEDULE);
+  });
+
   it('the schedule endpoints are for trainers only', () => {
     expect(Reflect.getMetadata(GUARDS_METADATA, TrainerScheduleController)).toContain(AdminGuard);
   });

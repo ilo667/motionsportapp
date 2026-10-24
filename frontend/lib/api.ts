@@ -511,7 +511,7 @@ export const api = {
 
   // Saved, plus what was put in the calendar: trainings added, schedule dates left out (taken or cancelled)
   saveMySchedule: (schedule: TrainerSchedule) =>
-    request<TrainerSchedule & { added: number; skipped: number }>("/admin/my-schedule", {
+    request<TrainerSchedule & { added?: number; skipped?: number }>("/admin/my-schedule", {
       method: "PUT",
       body: JSON.stringify(schedule),
     }),

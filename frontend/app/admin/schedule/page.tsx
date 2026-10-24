@@ -28,8 +28,9 @@ const ERROR_TEXTS: [string, string][] = [
 ];
 
 // One line after «Зберегти»: what went into the calendar
-function savedText(autoCreate: boolean, added: number, skipped: number) {
-  if (!autoCreate) return "Збережено";
+// No counts: the trainings could not be added right now (they appear on the next schedule load)
+function savedText(autoCreate: boolean, added?: number, skipped?: number) {
+  if (!autoCreate || added === undefined || skipped === undefined) return "Збережено";
   if (added === 0 && skipped === 0) return "Збережено. Усі тренування вже в календарі";
   const left = skipped
     ? `. ${skipped} ${plural(skipped, ["дату", "дати", "дат"])} пропущено — там уже є тренування або групові скасовані, перевірте календар`
@@ -103,6 +104,8 @@ export default function GroupSchedulePage() {
 
   const save = async () => {
     if (!schedule) return;
+    if (!TIME_RE.test(schedule.bookingOpensAt))
+      return setError("Вкажіть, о котрій відкривається запис, наприклад 14:00");
     setSaving(true);
     setError("");
     try {

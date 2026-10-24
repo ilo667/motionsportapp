@@ -132,6 +132,8 @@ export default function AdminPage() {
   const now = new Date(schedule.serverTime);
   const closeAt = new Date(schedule.bookingCloseAt);
   const afterWindow = now >= closeAt;
+  // Booking is only for group trainings: a day with only personal / split ones shows no booking badge
+  const hasGroup = schedule.slots.some((s) => s.trainingType === "групові");
 
   return (
     <PageLayout variant="top" action={<AdminMenu />}>
@@ -151,7 +153,7 @@ export default function AdminPage() {
           <span className="text-xs text-danger bg-danger/10 border border-danger/30 rounded-full px-2 py-0.5">
             День скасовано
           </span>
-        ) : schedule.bookingWindowOpen ? (
+        ) : !hasGroup ? null : schedule.bookingWindowOpen ? (
           <span className="text-sm font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-4 py-1.5 flex items-center space-x-1.5">
             <span className="relative flex w-3 h-3 shrink-0 items-center justify-center mr-1.5">
               <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-teal opacity-75"></span>

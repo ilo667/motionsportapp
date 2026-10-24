@@ -284,6 +284,12 @@ describe('Group slots — upsertGroupSlot', () => {
     );
   });
 
+  it('not at a time that has already passed (the clock is 2026-10-20 12:00 here)', async () => {
+    await expect(makeService(makeDb([[]]).db).upsertGroupSlot(TRAINER, '2026-10-20', '10:00')).rejects.toThrow(
+      new BadRequestException('Training time is in the past'),
+    );
+  });
+
   it("at least an hour from the trainer's other active group training that day", async () => {
     const { db } = makeDb([[{ slotTime: '19:00' }]]);
     await expect(makeService(db).upsertGroupSlot(TRAINER, '2026-10-21', '19:30')).rejects.toThrow(

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DateTime } from 'luxon';
-import { and, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import {
   trainingDays,
@@ -185,11 +185,12 @@ export class ScheduleService {
   }
 
   // Days with group slots of this trainer (any status: a cancelled group slot is still shown as "Скасовано"),
-  // each with the time of its last group slot
+  // each with the time of its last ACTIVE group slot (a cancelled last one must not keep the day "next"); a day
+  // whose group slots are all cancelled keeps its last one, so it still shows until then
   private async withGroupSlots(trainerId: string | null, days: DayRow[]) {
     if (days.length === 0 || !trainerId) return [];
     const rows = await this.database.db
-      .select({ dayId: trainingSlots.trainingDayId, lastTime: sql<string>`max(${trainingSlots.slotTime})` })
+      .select({ dayId: trainingSlots.trainingDayId, slotTime: trainingSlots.slotTime, status: trainingSlots.status })
       .from(trainingSlots)
       .where(
         and(
@@ -200,11 +201,13 @@ export class ScheduleService {
           eq(trainingSlots.trainingType, GROUP_TYPE),
           eq(trainingSlots.trainerId, trainerId),
         ),
-      )
-      .groupBy(trainingSlots.trainingDayId);
+      );
+    const latest = (times: string[]) => [...times].sort().at(-1);
     return days.flatMap((d) => {
-      const row = rows.find((r) => r.dayId === d.id);
-      return row ? [{ ...d, lastTime: row.lastTime }] : [];
+      const own = rows.filter((r) => r.dayId === d.id);
+      const lastTime =
+        latest(own.filter((r) => r.status === 'ACTIVE').map((r) => r.slotTime)) ?? latest(own.map((r) => r.slotTime));
+      return lastTime ? [{ ...d, lastTime }] : [];
     });
   }
 
@@ -310,7 +313,10 @@ export class ScheduleService {
     }
     if (dates.length === 0) return none;
     // Every (date, time) the schedule asks for, cancelled days included
-    const wanted = dates.reduce((n, date) => n + timesOn(DateTime.fromISO(date, { zone: KY_ZONE }).weekday).length, 0);
+    // The schedule's times on a date that are still ahead (today's past ones are not created: nobody could book)
+    const aheadOn = (date: string) =>
+      timesOn(DateTime.fromISO(date, { zone: KY_ZONE }).weekday).filter((t) => slotStartsAt(date, t) > now);
+    const wanted = dates.reduce((n, date) => n + aheadOn(date).length, 0);
 
     await this.database.db
       .insert(trainingDays)
@@ -356,7 +362,7 @@ export class ScheduleService {
     const rows = days
       .filter((day) => !cancelledByTrainer(day.id))
       .flatMap((day) =>
-        timesOn(DateTime.fromISO(day.localDate, { zone: KY_ZONE }).weekday)
+        aheadOn(day.localDate)
           // A changed time must not overlap a group training already created that day (an hour apart)
           .filter((slotTime) => !overlapsActive(day.id, slotTime))
           .map((slotTime) => ({
@@ -373,7 +379,7 @@ export class ScheduleService {
     const alreadyThere = days.reduce(
       (n, day) =>
         n +
-        timesOn(DateTime.fromISO(day.localDate, { zone: KY_ZONE }).weekday).filter((t) =>
+        aheadOn(day.localDate).filter((t) =>
           own.some((o) => o.trainingDayId === day.id && o.status === 'ACTIVE' && o.slotTime === t),
         ).length,
       0,

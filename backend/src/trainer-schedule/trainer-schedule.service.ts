@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { ScheduleService } from '../schedule/schedule.service';
@@ -8,6 +8,8 @@ import { loadTrainerSchedule } from './trainer-schedule.store';
 
 @Injectable()
 export class TrainerScheduleService {
+  private readonly logger = new Logger(TrainerScheduleService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly schedule: ScheduleService,
@@ -39,8 +41,14 @@ export class TrainerScheduleService {
           .values(schedule.times.map((t) => ({ trainerId, weekday: t.weekday, slotTime: t.slotTime })));
       }
     });
-    // The trainer sees the new trainings in the calendar at once, and how many were added or left out
-    const created = await this.schedule.ensureGroupSlots(trainerId, { force: true });
-    return { ...(await loadTrainerSchedule(this.database.db, trainerId)), ...created };
+    const saved = await loadTrainerSchedule(this.database.db, trainerId);
+    // The trainer sees the new trainings in the calendar at once, and how many were added or left out. The
+    // schedule is already committed: if adding fails, it is still saved (the next schedule load adds them)
+    try {
+      return { ...saved, ...(await this.schedule.ensureGroupSlots(trainerId, { force: true })) };
+    } catch (err) {
+      this.logger.warn(`Group trainings for trainer ${trainerId} not added after saving: ${String(err)}`);
+      return saved;
+    }
   }
 }

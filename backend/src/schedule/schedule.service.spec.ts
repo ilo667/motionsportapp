@@ -7,8 +7,8 @@ const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
 
 const KY_ZONE = 'Europe/Kyiv';
 
-function kyivAt(hour: number): DateTime {
-  return DateTime.fromObject({ year: 2026, month: 10, day: 20, hour }, { zone: KY_ZONE });
+function kyivAt(hour: number, minute = 0): DateTime {
+  return DateTime.fromObject({ year: 2026, month: 10, day: 20, hour, minute }, { zone: KY_ZONE });
 }
 
 function makeDb(results: unknown[][] = []) {
@@ -52,8 +52,11 @@ const slots = [
 ];
 // getMemberTrainerId(): a visitor / member without a trainer → the first trainer
 const TRAINER = [{ id: 'trainer-1' }];
-// withGroupSlots(): the listed days that have group slots of the trainer, with the last one's time
-const HAS_GROUP = [{ dayId: 'day-1', lastTime: '20:00' }];
+// withGroupSlots(): the trainer's group slots on the listed days (time and status)
+const HAS_GROUP = [
+  { dayId: 'day-1', slotTime: '19:00', status: 'ACTIVE' },
+  { dayId: 'day-1', slotTime: '20:00', status: 'ACTIVE' },
+];
 const publishedAnnouncement = { text: 'Записуйтесь сьогодні! 💪', publishedAt: new Date() };
 const unpublishedAnnouncement = { text: 'Записуйтесь сьогодні! 💪', publishedAt: null };
 
@@ -149,7 +152,16 @@ describe('ScheduleService — booking window flag', () => {
       { id: 's-am', slotTime: '10:00', status: 'ACTIVE', capacity: 8, bookedCount: 2 },
       { id: 's-pm', slotTime: '19:00', status: 'ACTIVE', capacity: 8, bookedCount: 1 },
     ];
-    const { db } = makeDb([TRAINER, [trainingDay], [{ dayId: 'day-1', lastTime: '19:00' }], day, []]);
+    const { db } = makeDb([
+      TRAINER,
+      [trainingDay],
+      [
+        { dayId: 'day-1', slotTime: '10:00', status: 'ACTIVE' },
+        { dayId: 'day-1', slotTime: '19:00', status: 'ACTIVE' },
+      ],
+      day,
+      [],
+    ]);
     const service = makeService(db, kyivAt(12));
     mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '08:00', autoCreate: true, times: [] });
     const result = await service.getNext();
@@ -159,6 +171,39 @@ describe('ScheduleService — booking window flag', () => {
       ['10:00', true],
       ['19:00', false],
     ]);
+  });
+
+  // 20:00 cancelled: once 19:00 started there is nothing left to book today, so the next day is shown
+  it('a cancelled last group training does not keep the day "next"', async () => {
+    const tomorrow = { id: 'day-2', localDate: '2026-10-21', status: 'SCHEDULED' };
+    const { db } = makeDb([
+      TRAINER,
+      [trainingDay, tomorrow],
+      [
+        { dayId: 'day-1', slotTime: '19:00', status: 'ACTIVE' },
+        { dayId: 'day-1', slotTime: '20:00', status: 'CANCELLED' },
+        { dayId: 'day-2', slotTime: '19:00', status: 'ACTIVE' },
+      ],
+      slots,
+      [],
+    ]);
+    const result = await makeService(db, kyivAt(19, 30)).getNext();
+    expect(result?.localDate).toBe('2026-10-21');
+  });
+
+  it('a day whose group trainings are all cancelled still shows («Скасовано») until their time', async () => {
+    const { db } = makeDb([
+      TRAINER,
+      [trainingDay],
+      [
+        { dayId: 'day-1', slotTime: '19:00', status: 'CANCELLED' },
+        { dayId: 'day-1', slotTime: '20:00', status: 'CANCELLED' },
+      ],
+      slots,
+      [],
+    ]);
+    const result = await makeService(db, kyivAt(15)).getNext();
+    expect(result?.localDate).toBe(TODAY);
   });
 
   it('bookingWindowOpen is false once the last group training started', async () => {
@@ -171,7 +216,13 @@ describe('ScheduleService — assigned trainings', () => {
   it('skips a day that has only assigned trainings when picking the next group day', async () => {
     const assignedOnly = { id: 'day-p', localDate: TODAY, status: 'SCHEDULED' };
     const groupDay = { id: 'day-2', localDate: '2026-10-21', status: 'SCHEDULED' };
-    const { db } = makeDb([TRAINER, [assignedOnly, groupDay], [{ dayId: 'day-2', lastTime: '20:00' }], slots, []]);
+    const { db } = makeDb([
+      TRAINER,
+      [assignedOnly, groupDay],
+      [{ dayId: 'day-2', slotTime: '20:00', status: 'ACTIVE' }],
+      slots,
+      [],
+    ]);
     const result = await makeService(db, kyivAt(15)).getNext();
     expect(result?.localDate).toBe('2026-10-21');
   });
@@ -439,6 +490,21 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
     recordInserts(db);
     createdRows = [];
     expect(await makeRealService(db).ensureGroupSlots('trainer-1', { force: true })).toEqual({ added: 0, skipped: 0 });
+  });
+
+  it('does not create a time of today that has already passed (the clock is 10:00 here)', async () => {
+    mockLoadSchedule.mockResolvedValue({
+      bookingOpensAt: '08:00',
+      autoCreate: true,
+      times: [
+        { weekday: 2, slotTime: '09:00' },
+        { weekday: 2, slotTime: '19:00' },
+      ],
+    });
+    const { db } = makeDb([[{ id: 'trainer-2' }], [{ id: 'd-tue', localDate: '2026-10-20' }], []]);
+    const values = recordInserts(db);
+    await makeRealService(db).ensureGroupSlots();
+    expect((values[1] as { slotTime: string }[]).map((v) => v.slotTime)).toEqual(['19:00']);
   });
 
   it('creates nothing without a trainer account', async () => {
