@@ -7,9 +7,9 @@ import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store'
 jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
 const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
 
-function makeController(db: any = {}, entitlements: any = {}) {
+function makeController(db: any = {}, entitlements: any = {}, at = '2026-10-23T22:00:00') {
   const paymentService = { expireStale: jest.fn().mockResolvedValue({ expired: 0 }) };
-  const clock = { now: () => DateTime.fromISO('2026-10-23T22:00:00', { zone: 'Europe/Kyiv' }) };
+  const clock = { now: () => DateTime.fromISO(at, { zone: 'Europe/Kyiv' }) };
   const controller = new InternalCronController(
     { db } as any,
     {} as any,
@@ -81,8 +81,8 @@ describe('InternalCronController — 22:00 auto-confirm', () => {
       [{ id: 'day-1', status: 'SCHEDULED' }],
       [{ id: 'slot-1' }, { id: 'slot-2' }],
       [
-        { id: 'b1', memberId: 'm1', trainerId: 'trainer-2' },
-        { id: 'b2', memberId: 'm2', trainerId: 'trainer-1' },
+        { id: 'b1', memberId: 'm1', trainerId: 'trainer-2', slotTime: '19:00' },
+        { id: 'b2', memberId: 'm2', trainerId: 'trainer-1', slotTime: '20:00' },
       ],
     ];
     const values: Record<string, unknown>[] = [];
@@ -118,9 +118,9 @@ describe('InternalCronController — 22:00 auto-confirm', () => {
       [{ id: 'day-1', status: 'SCHEDULED' }],
       [{ id: 'slot-1' }],
       [
-        { id: 'b3', memberId: 'm-b', trainerId: 't' },
-        { id: 'b2', memberId: 'm-a', trainerId: 't' },
-        { id: 'b1', memberId: 'm-b', trainerId: 't' },
+        { id: 'b3', memberId: 'm-b', trainerId: 't', slotTime: '19:00' },
+        { id: 'b2', memberId: 'm-a', trainerId: 't', slotTime: '19:00' },
+        { id: 'b1', memberId: 'm-b', trainerId: 't', slotTime: '20:00' },
       ],
     ];
     function link(): any {
@@ -136,6 +136,41 @@ describe('InternalCronController — 22:00 auto-confirm', () => {
     const { controller } = makeController(db, entitlements);
     await controller.autoConfirmAttendance(undefined as any);
     expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b2', 'b1', 'b3']);
+  });
+});
+
+describe('InternalCronController — auto-confirm only marks trainings that are over', () => {
+  const env = { ...process.env };
+  afterEach(() => {
+    process.env = { ...env };
+  });
+
+  // Vercel runs crons in UTC: «0 20 * * *» is 22:00 in Kyiv in winter but 23:00 in summer, and the old 19 UTC was
+  // 21:00 in winter. Whatever the hour, a training still going on (or not started) is left alone
+  it('at 21:00 marks the 19:00 training (over at 20:00) but not 20:30', async () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.CRON_SECRET;
+    const reads: unknown[][] = [
+      [{ id: 'day-1', status: 'SCHEDULED' }],
+      [{ id: 'slot-1' }, { id: 'slot-2' }],
+      [
+        { id: 'b-early', memberId: 'm1', trainerId: 't', slotTime: '19:00' },
+        { id: 'b-late', memberId: 'm2', trainerId: 't', slotTime: '20:30' },
+      ],
+    ];
+    function link(): any {
+      const chain: any = { then: (r: (v: unknown) => void) => r(reads.shift() ?? []) };
+      for (const m of ['from', 'where', 'limit', 'innerJoin', 'leftJoin', 'onConflictDoNothing', 'values'])
+        chain[m] = () => chain;
+      return chain;
+    }
+    const db: any = { select: () => link(), insert: () => link() };
+    db.transaction = (fn: (tx: unknown) => unknown) => fn(db);
+    const entitlements = { syncSpend: jest.fn() };
+
+    const { controller } = makeController(db, entitlements, '2026-10-26T21:00:00');
+    await expect(controller.autoConfirmAttendance(undefined as any)).resolves.toMatchObject({ marked: 1 });
+    expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b-early']);
   });
 });
 

@@ -106,12 +106,21 @@ export class InternalCronController {
       .from(trainingSlots)
       .where(and(eq(trainingSlots.trainingDayId, day.id), eq(trainingSlots.status, 'ACTIVE')));
 
-    const unmarkedBookings = await this.database.db
-      .select({ id: bookings.id, memberId: bookings.memberId, trainerId: trainingSlots.trainerId })
+    const unmarked = await this.database.db
+      .select({
+        id: bookings.id,
+        memberId: bookings.memberId,
+        trainerId: trainingSlots.trainerId,
+        slotTime: trainingSlots.slotTime,
+      })
       .from(bookings)
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
       .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
       .where(and(eq(trainingSlots.trainingDayId, day.id), eq(bookings.status, 'ACTIVE'), isNull(attendance.bookingId)));
+
+    // Only trainings that are over (an hour after the start): Vercel runs crons in UTC, so this job comes at a
+    // different Kyiv hour in winter and summer, and must not mark a training that is still going on
+    const unmarkedBookings = unmarked.filter((b) => now >= slotStartsAt(today, b.slotTime).plus({ hours: 1 }));
 
     if (unmarkedBookings.length === 0) {
       return { ok: true, marked: 0 };

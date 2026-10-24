@@ -93,6 +93,7 @@
 | 6.2 | Підтвердити відвідування | Адмін → натискати кнопку "—" біля імені → змінюється на "✓" → "✗" → "—" | Цикл змінюється коректно |
 | 6.3 | Підтвердити всіх | Адмін → "Підтвердити всіх" | Всі учасники отримують "✓", кнопка замінюється текстом "✓ Всі учасники підтверджені". Окремі відмітки після цього **можна змінювати** (виправити помилку) |
 | 6.4 | Автопідтвердження о 22:00 | Не підтверджувати відвідуваність → дочекатись спрацювання cron `/internal/cron/auto-confirm-attendance` | Всі UNMARKED бронювання отримують PRESENT автоматично |
+| 6.4a | Автопідтвердження не чіпає тренування, що триває | Групове о 21:00 з записом, викликати cron о 21:30 (`vercel crons run /internal/cron/auto-confirm-attendance`) | Запис на 21:00 без відмітки; ранні тренування дня (закінчились годину тому) — ✓. Розклад cron у UTC: `0 20 * * *` = 22:00 узимку, 23:00 улітку |
 | 6.5 | Cron доходить до коду | `cd backend && vercel crons run /internal/cron/booking-open` → `vercel logs requests` | `GET /internal/cron/booking-open 200` з `vercel-cron/1.0` (не 404). Без `CRON_SECRET` на Vercel — 403 |
 | 6.6 | Security-заголовки | DevTools → Network → будь-яка сторінка сайту і будь-який запит `/api/...` → Headers | Сторінка: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`. API: `X-Content-Type-Options: nosniff`, `X-Frame-Options` (`DENY` або `SAMEORIGIN`, обидва годяться), `Content-Security-Policy`, без `X-Powered-By`. Оплата LiqPay працює (10.13a) |
 
