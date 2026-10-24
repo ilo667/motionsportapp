@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, ScheduleNext } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { SlotCard } from "@/components/SlotCard";
+import { kyivTime } from "@/lib/kyivTime";
 import { AssignedSlotCard } from "@/components/AssignedSlotCard";
 import { noopSubscribe } from "@/lib/clientStore";
 import { resyncExistingSubscription } from "@/lib/pushUtils";
@@ -142,8 +143,8 @@ export default function SchedulePage() {
       const raw = err instanceof Error ? err.message : "";
       const msg = raw.includes("Slot is full")
         ? "Місць вже немає, хтось встиг раніше"
-        : raw.includes("Booking opens at 14:00")
-          ? "Запис відкривається о 14:00"
+        : raw.includes("Booking is not open yet")
+          ? "Запис ще не відкрився"
           : raw.includes("Booking window has closed")
             ? "Час запису вже минув"
             : raw.includes("already have an active booking")
@@ -241,7 +242,7 @@ export default function SchedulePage() {
                 <div className="flex items-center">
                   {beforeWindow ? (
                     <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
-                      До 14:00
+                      До {kyivTime(schedule.bookingOpenAt!)}
                     </span>
                   ) : afterWindow ? (
                     <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
@@ -265,6 +266,7 @@ export default function SchedulePage() {
                     groupPassLeft={schedule.groupPassLeft ?? 0}
                     bookingWindowOpen={schedule.bookingWindowOpen}
                     afterWindow={afterWindow}
+                    bookingOpenAt={schedule.bookingOpenAt}
                     onMutate={handleMutate}
                     onRefresh={fetchSchedule}
                   />

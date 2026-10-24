@@ -4,14 +4,17 @@ import { api, SlotView } from "@/lib/api";
 import { ensurePushSubscribed } from "@/lib/pushUtils";
 import { CancellationReasonModal } from "./CancellationReasonModal";
 import { GroupPassModal } from "./GroupPassModal";
+import { kyivTime } from "@/lib/kyivTime";
 
-// Group slot (19:00 / 20:00, paid: a group pass, else «Записатись» offers to buy one). Assigned: AssignedSlotCard
+// Group slot (any time the trainer set; paid: a group pass, else «Записатись» offers to buy one). Booking,
+// cancelling and switching end when the training starts. Assigned: AssignedSlotCard
 interface SlotCardProps {
   slot: SlotView;
   allSlots: SlotView[];
   groupPassLeft: number;
   bookingWindowOpen: boolean;
   afterWindow: boolean;
+  bookingOpenAt: string | null;
   onMutate: (fn: () => Promise<unknown>) => void;
   onRefresh: () => void;
 }
@@ -22,13 +25,15 @@ export function SlotCard({
   groupPassLeft,
   bookingWindowOpen,
   afterWindow,
+  bookingOpenAt,
   onMutate,
   onRefresh,
 }: SlotCardProps) {
   const [modal, setModal] = useState<{ action: "cancel" } | { action: "switch"; targetSlot: SlotView } | null>(null);
   const [buying, setBuying] = useState(false);
 
-  const otherSlot = allSlots.find((s) => s.id !== slot.id && s.status === "ACTIVE");
+  // A move goes to another training of the day that has not started yet
+  const otherSlot = allSlots.find((s) => s.id !== slot.id && s.status === "ACTIVE" && !s.started);
   const canSwitch = !!otherSlot && otherSlot.bookedCount < otherSlot.capacity;
 
   const isFull = slot.bookedCount >= slot.capacity;
@@ -52,10 +57,12 @@ export function SlotCard({
 
         {slot.status === "CANCELLED" ? (
           <p className="text-danger text-sm font-medium">Скасовано</p>
-        ) : afterWindow ? (
+        ) : afterWindow || slot.started ? (
           <p className="text-muted text-sm">Запис закрито</p>
         ) : !bookingWindowOpen ? (
-          <p className="text-muted text-sm">Запис відкриється о 14:00</p>
+          <p className="text-muted text-sm">
+            {bookingOpenAt ? `Запис відкриється о ${kyivTime(bookingOpenAt)}` : "Запис ще не відкрився"}
+          </p>
         ) : slot.isMyBooking ? (
           <div className="flex flex-col space-y-2">
             {canSwitch && (

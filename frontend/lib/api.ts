@@ -234,6 +234,7 @@ export interface SlotView {
   bookedCount: number;
   isMyBooking: boolean;
   isMyVacancyAlert?: boolean;
+  started?: boolean; // the training began: booking, cancelling and switching are over
 }
 
 // Personal / split the trainer assigned to this member (any day, any time); paid, bookable until the start

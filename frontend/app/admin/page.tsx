@@ -1,4 +1,5 @@
 "use client";
+import { kyivTime } from "@/lib/kyivTime";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -163,7 +164,9 @@ export default function AdminPage() {
             Запис закрито
           </span>
         ) : (
-          <span className="text-xs text-muted bg-surface border border-line rounded-full px-2 py-0.5">До 14:00</span>
+          <span className="text-xs text-muted bg-surface border border-line rounded-full px-2 py-0.5">
+            До {kyivTime(schedule.bookingOpenAt)}
+          </span>
         )}
       </div>
 
