@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, Trainer, TrainerInvite } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
@@ -81,6 +81,7 @@ function InviteSection({ invites, onChange }: { invites: TrainerInvite[]; onChan
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  const linkRef = useRef<HTMLParagraphElement>(null);
 
   const create = async () => {
     setBusy(true);
@@ -97,15 +98,22 @@ function InviteSection({ invites, onChange }: { invites: TrainerInvite[]; onChan
     }
   };
 
+  // «Копіювати» always copies; on Mac browsers navigator.share exists too, so sharing is a separate button
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      // No clipboard access: select the link so it can be copied by hand
+      if (linkRef.current) window.getSelection()?.selectAllChildren(linkRef.current);
+    }
+  };
+
   const share = async () => {
     if (!link) return;
     try {
-      if (navigator.share) {
-        await navigator.share({ title: "Motion Gym", text: "Запрошення тренера в Motion Gym", url: link });
-      } else {
-        await navigator.clipboard.writeText(link);
-        setCopied(true);
-      }
+      await navigator.share({ title: "Motion Gym", text: "Запрошення тренера в Motion Gym", url: link });
     } catch {
       // The share sheet was closed; nothing to do
     }
@@ -131,12 +139,19 @@ function InviteSection({ invites, onChange }: { invites: TrainerInvite[]; onChan
 
       {link ? (
         <div className="bg-surface border border-line rounded-xl p-4 space-y-3">
-          <p className="text-body text-sm break-all select-all">{link}</p>
+          <p ref={linkRef} className="text-body text-sm break-all select-all">
+            {link}
+          </p>
           <p className="text-subtle text-sm">Скопіюйте його зараз: пізніше побачити посилання ще раз не вийде.</p>
           <div className="flex space-x-3">
-            <button onClick={share} className="btn-primary flex-1 py-3 rounded-lg font-medium text-sm">
+            <button onClick={copy} className="btn-primary flex-1 py-3 rounded-lg font-medium text-sm">
               {copied ? "Скопійовано" : "Копіювати"}
             </button>
+            {"share" in navigator && (
+              <button onClick={share} className="btn-secondary px-4 py-3 rounded-lg font-medium text-sm">
+                Поділитися
+              </button>
+            )}
             <button onClick={() => setLink(null)} className="btn-ghost px-4 py-3 rounded-lg text-sm">
               Готово
             </button>
