@@ -1,7 +1,6 @@
 import { Controller, Get, Headers, ForbiddenException } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { DateTime } from 'luxon';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { NotificationService } from './notification.service';
 import { AnnouncementsService } from '../ai/announcements.service';
@@ -9,7 +8,9 @@ import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
 import { trainingDays, trainingSlots, bookings, attendance } from '../database/schema';
-import { GROUP_TYPE, KY_ZONE } from '../schedule/training-types';
+import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
+import { bookingOpensAt } from '../trainer-schedule/rules';
+import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { getDefaultTrainerId } from '../schedule/default-trainer';
 
 // Vercel Cron invokes paths with GET and sends `Authorization: Bearer $CRON_SECRET`.
@@ -38,29 +39,29 @@ export class InternalCronController {
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
     }
-    // Only clients of trainers who have group trainings today get the push
-    const trainerIds = await this.groupTrainerIds(day.id);
-    if (trainerIds.length === 0) {
+    // Each trainer's clients get the push once that trainer's booking opens («Мій розклад»), and only until
+    // their first group training of the day starts. Runs every few minutes (cron-job.org); the dedupe key per
+    // trainer and day keeps it to one push
+    const trainers = await this.groupTrainersToday(day.id);
+    if (trainers.length === 0) {
       return { ok: true, skipped: 'no group trainings today' };
     }
+    const firstTrainerId = await getDefaultTrainerId(this.database.db);
 
-    const openAt = DateTime.fromISO(`${today}T14:00:00`, { zone: KY_ZONE });
-    const twoHoursAfterOpen = openAt.plus({ hours: 2 });
-
-    // Only send if we're within the 2-hour window after 14:00
-    if (now < openAt || now > twoHoursAfterOpen) {
-      return { ok: true, skipped: 'outside opening window' };
+    const sent: string[] = [];
+    for (const { trainerId, firstTime } of trainers) {
+      const { bookingOpensAt: opensAt } = await loadTrainerSchedule(this.database.db, trainerId);
+      if (now < bookingOpensAt(today, opensAt) || now >= slotStartsAt(today, firstTime)) continue;
+      await this.notifications.enqueueAndProcess('BOOKING_OPEN', `booking-open:${today}:${trainerId}`, {
+        localDate: today,
+        trainerIds: [trainerId],
+        // members without a trainer see the first trainer's group trainings
+        includeUnassigned: trainerId === firstTrainerId,
+      });
+      sent.push(trainerId);
     }
 
-    const dedupeKey = `booking-open:${today}`;
-    await this.notifications.enqueueAndProcess('BOOKING_OPEN', dedupeKey, {
-      localDate: today,
-      trainerIds,
-      // members without a trainer see the first trainer's group trainings
-      includeUnassigned: trainerIds.includes((await getDefaultTrainerId(this.database.db)) ?? ''),
-    });
-
-    return { ok: true, localDate: today };
+    return { ok: true, localDate: today, trainerIds: sent };
   }
 
   @Get('cron/generate-announcement')
@@ -79,7 +80,7 @@ export class InternalCronController {
       return { ok: true, skipped: 'no scheduled day today' };
     }
     // The announcement is shown with group slots only
-    if ((await this.groupTrainerIds(day.id)).length === 0) {
+    if ((await this.groupTrainersToday(day.id)).length === 0) {
       return { ok: true, skipped: 'no group trainings today' };
     }
 
@@ -138,9 +139,10 @@ export class InternalCronController {
   }
 
   // Trainers with an active group training on that day
-  private async groupTrainerIds(dayId: string) {
-    const rows = await this.database.db
-      .selectDistinct({ trainerId: trainingSlots.trainerId })
+  // Trainers with an active group training today, each with the time of their first one
+  private async groupTrainersToday(dayId: string) {
+    return this.database.db
+      .select({ trainerId: trainingSlots.trainerId, firstTime: sql<string>`min(${trainingSlots.slotTime})` })
       .from(trainingSlots)
       .where(
         and(
@@ -148,8 +150,8 @@ export class InternalCronController {
           eq(trainingSlots.trainingType, GROUP_TYPE),
           eq(trainingSlots.status, 'ACTIVE'),
         ),
-      );
-    return rows.map((r) => r.trainerId);
+      )
+      .groupBy(trainingSlots.trainerId);
   }
 
   private verifyCronSecret(auth: string | undefined) {

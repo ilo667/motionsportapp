@@ -2,6 +2,10 @@ import { ForbiddenException, RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA } from '@nestjs/common/constants';
 import { DateTime } from 'luxon';
 import { InternalCronController } from './internal-cron.controller';
+import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+
+jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
+const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
 
 function makeController(db: any = {}, entitlements: any = {}) {
   const paymentService = { expireStale: jest.fn().mockResolvedValue({ expired: 0 }) };
@@ -132,5 +136,72 @@ describe('InternalCronController — 22:00 auto-confirm', () => {
     const { controller } = makeController(db, entitlements);
     await controller.autoConfirmAttendance(undefined as any);
     expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b2', 'b1', 'b3']);
+  });
+});
+
+describe('InternalCronController — «Записуйтесь» at each trainer opening time', () => {
+  const env = { ...process.env };
+  afterEach(() => {
+    process.env = { ...env };
+  });
+
+  // t1 opens at 10:00 (first group 18:00) and is the first trainer; t2 opens at 16:00 (first group 19:00)
+  async function runAt(hour: number, minute = 5) {
+    process.env.NODE_ENV = 'development';
+    delete process.env.CRON_SECRET;
+    mockLoadSchedule.mockImplementation((_db: unknown, id: string) =>
+      Promise.resolve({ bookingOpensAt: id === 't1' ? '10:00' : '16:00', autoCreate: true, times: [] }),
+    );
+    // reads: today's day, each trainer's first group training today, the first trainer
+    const reads: unknown[][] = [
+      [{ id: 'day-1', status: 'SCHEDULED' }],
+      [
+        { trainerId: 't1', firstTime: '18:00' },
+        { trainerId: 't2', firstTime: '19:00' },
+      ],
+      [{ id: 't1' }],
+    ];
+    function link(): any {
+      const chain: any = { then: (r: (v: unknown) => void) => r(reads.shift() ?? []) };
+      for (const m of ['from', 'where', 'limit', 'orderBy', 'groupBy']) chain[m] = () => chain;
+      return chain;
+    }
+    const db: any = { select: () => link() };
+    const notifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
+    const clock = { now: () => DateTime.fromISO('2026-10-23T00:00:00', { zone: 'Europe/Kyiv' }).set({ hour, minute }) };
+    const controller = new InternalCronController(
+      { db } as any,
+      notifications as any,
+      {} as any,
+      clock,
+      {} as any,
+      {} as any,
+    );
+    await controller.bookingOpen(undefined as any);
+    return notifications.enqueueAndProcess.mock.calls;
+  }
+
+  it("at 10:05 only t1's clients, keyed per trainer and day; they include clients with no trainer", async () => {
+    expect(await runAt(10)).toEqual([
+      [
+        'BOOKING_OPEN',
+        'booking-open:2026-10-23:t1',
+        { localDate: '2026-10-23', trainerIds: ['t1'], includeUnassigned: true },
+      ],
+    ]);
+  });
+
+  it('at 16:05 both (t1 again is dropped by its dedupe key)', async () => {
+    expect((await runAt(16)).map((c) => c[1])).toEqual(['booking-open:2026-10-23:t1', 'booking-open:2026-10-23:t2']);
+  });
+
+  it("at 18:30 only t2: t1's first group training already started", async () => {
+    const calls = await runAt(18, 30);
+    expect(calls.map((c) => c[1])).toEqual(['booking-open:2026-10-23:t2']);
+    expect(calls[0][2]).toMatchObject({ trainerIds: ['t2'], includeUnassigned: false });
+  });
+
+  it('before anyone opens: nothing', async () => {
+    expect(await runAt(9)).toEqual([]);
   });
 });
