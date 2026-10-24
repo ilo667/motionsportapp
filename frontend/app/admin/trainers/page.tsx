@@ -78,6 +78,7 @@ export default function TrainersPage() {
 function InviteSection({ invites, onChange }: { invites: TrainerInvite[]; onChange: () => void }) {
   // The link is shown only right after it is made: the server keeps just a hash of it
   const [link, setLink] = useState<string | null>(null);
+  const [linkId, setLinkId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
@@ -88,8 +89,9 @@ function InviteSection({ invites, onChange }: { invites: TrainerInvite[]; onChan
     setError("");
     setCopied(false);
     try {
-      const { token } = await api.createTrainerInvite();
+      const { id, token } = await api.createTrainerInvite();
       setLink(`${window.location.origin}/admin/join?t=${token}`);
+      setLinkId(id);
       onChange();
     } catch {
       setError("Не вдалося створити посилання. Спробуйте ще раз.");
@@ -121,6 +123,8 @@ function InviteSection({ invites, onChange }: { invites: TrainerInvite[]; onChan
 
   const revoke = async (id: string) => {
     setError("");
+    // The link on screen is dead once its invite is revoked
+    if (id === linkId) setLink(null);
     try {
       await api.revokeTrainerInvite(id);
     } catch {
