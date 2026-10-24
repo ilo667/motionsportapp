@@ -163,7 +163,7 @@ export default function GroupSchedulePage() {
                             if (e.key === "Enter") addTime(n);
                             if (e.key === "Escape") setAdding(null);
                           }}
-                          className={`${TIME_FIELD} w-28`}
+                          className={`${TIME_FIELD} w-36`}
                         />
                         <button
                           onClick={() => addTime(n)}
@@ -200,7 +200,7 @@ export default function GroupSchedulePage() {
               step={900}
               value={schedule.bookingOpensAt}
               onChange={(e) => change({ ...schedule, bookingOpensAt: e.target.value })}
-              className={`${TIME_FIELD} w-28`}
+              className={`${TIME_FIELD} w-36`}
             />
           </div>
 
