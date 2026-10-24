@@ -504,7 +504,26 @@ export class AdminScheduleService {
       await this.database.db.transaction(async (tx) => {
         const dayId = await this.ensureDay(tx, date);
         const weekday = DateTime.fromISO(date, { zone: KY_ZONE }).weekday;
-        const times = (await loadTrainerSchedule(tx, adminId)).times.filter((t) => t.weekday === weekday);
+        const active = await tx
+          .select({ slotTime: trainingSlots.slotTime })
+          .from(trainingSlots)
+          .where(
+            and(
+              eq(trainingSlots.trainingDayId, dayId),
+              eq(trainingSlots.trainerId, adminId),
+              eq(trainingSlots.trainingType, GROUP_TYPE),
+              eq(trainingSlots.status, 'ACTIVE'),
+            ),
+          );
+        // Leave out a time within an hour of a group training already there that day
+        const times = (await loadTrainerSchedule(tx, adminId)).times.filter(
+          (t) =>
+            t.weekday === weekday &&
+            !groupTimeError(
+              t.slotTime,
+              active.map((a) => a.slotTime).filter((a) => a !== t.slotTime),
+            ),
+        );
         if (times.length === 0) return;
         await tx
           .insert(trainingSlots)

@@ -316,6 +316,22 @@ describe('Training day SCHEDULED — the trainer schedule of that weekday', () =
   });
 });
 
+describe('Training day SCHEDULED — no overlap with what is already there', () => {
+  it('leaves out a schedule time within an hour of an active group training that day', async () => {
+    mockLoadSchedule.mockResolvedValue({
+      bookingOpensAt: '08:00',
+      autoCreate: true,
+      times: [
+        { weekday: 3, slotTime: '10:00' },
+        { weekday: 3, slotTime: '19:30' },
+      ],
+    });
+    const { db, values } = makeDb([[{ slotTime: '19:00' }]]);
+    await makeService(db).upsertTrainingDay(TRAINER, '2026-10-21', { status: 'SCHEDULED' } as any);
+    expect(values).toContainEqual([expect.objectContaining({ slotTime: '10:00' })]);
+  });
+});
+
 describe('Calendar — assigned slot members', () => {
   it('returns assigned members with booking and trainings left (of that type) for assigned slots only', async () => {
     const rows = [

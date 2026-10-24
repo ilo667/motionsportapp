@@ -431,16 +431,23 @@ export const packageSpends = pgTable('package_spends', {
 
 // A trainer's regular group trainings («Мій розклад»). No row: the first trainer gets the old Mon/Wed/Fri
 // 19:00 / 20:00 schedule, any other trainer an empty one (`loadTrainerSchedule`)
-export const trainerSchedules = pgTable('trainer_schedules', {
-  trainerId: uuid('trainer_id')
-    .primaryKey()
-    .references(() => admins.id),
-  // 'HH:MM' on the training day; one time for every day
-  bookingOpensAt: text('booking_opens_at').notNull().default('14:00'),
-  // Create the group trainings 3 weeks ahead by themselves
-  autoCreate: boolean('auto_create').notNull().default(false),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+// 'HH:MM' on the 15-minute grid, as «Розклад групових» and the calendar use it
+const QUARTER_HOUR = "'^([01][0-9]|2[0-3]):(00|15|30|45)$'";
+
+export const trainerSchedules = pgTable(
+  'trainer_schedules',
+  {
+    trainerId: uuid('trainer_id')
+      .primaryKey()
+      .references(() => admins.id),
+    // 'HH:MM' on the training day; one time for every day
+    bookingOpensAt: text('booking_opens_at').notNull().default('14:00'),
+    // Create the group trainings 3 weeks ahead by themselves
+    autoCreate: boolean('auto_create').notNull().default(false),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [check('trainer_schedules_booking_opens_at_check', sql.raw(`booking_opens_at ~ ${QUARTER_HOUR}`))],
+);
 
 // One row per group training of the week: weekday as in Luxon (1 = Mon … 7 = Sun), 'HH:MM'
 export const trainerScheduleTimes = pgTable(
@@ -455,5 +462,6 @@ export const trainerScheduleTimes = pgTable(
   (table) => [
     primaryKey({ columns: [table.trainerId, table.weekday, table.slotTime] }),
     check('trainer_schedule_times_weekday_check', sql`weekday between 1 and 7`),
+    check('trainer_schedule_times_slot_time_check', sql.raw(`slot_time ~ ${QUARTER_HOUR}`)),
   ],
 );

@@ -329,7 +329,11 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
       { id: 'd-wed', localDate: '2026-10-21' },
       { id: 'd-mon', localDate: '2026-10-26' },
     ];
-    const { db } = makeDb([[{ id: 'trainer-2' }], days, [{ trainingDayId: 'd-wed', status: 'CANCELLED' }]]);
+    const { db } = makeDb([
+      [{ id: 'trainer-2' }],
+      days,
+      [{ trainingDayId: 'd-wed', status: 'CANCELLED', slotTime: '19:00' }],
+    ]);
     const values = recordInserts(db);
     await makeRealService(db).ensureGroupSlots();
     expect((values[1] as { trainingDayId: string }[]).map((v) => v.trainingDayId)).toEqual(['d-mon']);
@@ -342,13 +346,37 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
       [{ id: 'trainer-2' }],
       days,
       [
-        { trainingDayId: 'd-wed', status: 'CANCELLED' },
-        { trainingDayId: 'd-wed', status: 'ACTIVE' },
+        { trainingDayId: 'd-wed', status: 'CANCELLED', slotTime: '19:00' },
+        { trainingDayId: 'd-wed', status: 'ACTIVE', slotTime: '20:00' },
       ],
     ]);
     const values = recordInserts(db);
     await makeRealService(db).ensureGroupSlots();
     expect((values[1] as { trainingDayId: string }[]).map((v) => v.trainingDayId)).toEqual(['d-wed']);
+  });
+
+  // A changed time (Wed 19:00/20:00 → 19:30) must not put an overlapping training on days already created
+  it('skips a time within an hour of an active group training already on that day', async () => {
+    mockLoadSchedule.mockResolvedValue({
+      bookingOpensAt: '14:00',
+      autoCreate: true,
+      times: [{ weekday: 3, slotTime: '19:30' }],
+    });
+    const days = [
+      { id: 'd-wed', localDate: '2026-10-21' },
+      { id: 'd-wed2', localDate: '2026-10-28' },
+    ];
+    const { db } = makeDb([
+      [{ id: 'trainer-2' }],
+      days,
+      [
+        { trainingDayId: 'd-wed', status: 'ACTIVE', slotTime: '19:00' },
+        { trainingDayId: 'd-wed', status: 'ACTIVE', slotTime: '20:00' },
+      ],
+    ]);
+    const values = recordInserts(db);
+    await makeRealService(db).ensureGroupSlots();
+    expect((values[1] as { trainingDayId: string }[]).map((v) => v.trainingDayId)).toEqual(['d-wed2']);
   });
 
   it('runs once per day per instance, but force (a saved schedule) runs again for that trainer', async () => {

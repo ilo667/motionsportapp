@@ -18,7 +18,7 @@ import { EntitlementsService } from '../purchases/entitlements.service';
 import { GROUP_TYPE, KY_ZONE, ASSIGNED_TYPES, slotStartsAt } from './training-types';
 import { getMemberTrainerId } from './default-trainer';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
-import { bookingOpensAt } from '../trainer-schedule/rules';
+import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
 
 // An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
 const ASSIGNED_SHOWN_FOR_MINUTES = 60;
@@ -311,7 +311,11 @@ export class ScheduleService {
     if (days.length === 0) return;
 
     const own = await this.database.db
-      .select({ trainingDayId: trainingSlots.trainingDayId, status: trainingSlots.status })
+      .select({
+        trainingDayId: trainingSlots.trainingDayId,
+        status: trainingSlots.status,
+        slotTime: trainingSlots.slotTime,
+      })
       .from(trainingSlots)
       .where(
         and(
@@ -328,18 +332,29 @@ export class ScheduleService {
       return slots.some((s) => s.status === 'CANCELLED') && !slots.some((s) => s.status === 'ACTIVE');
     };
 
+    const overlapsActive = (dayId: string, slotTime: string) =>
+      !!groupTimeError(
+        slotTime,
+        own
+          .filter((o) => o.trainingDayId === dayId && o.status === 'ACTIVE' && o.slotTime !== slotTime)
+          .map((o) => o.slotTime),
+      );
+
     const rows = days
       .filter((day) => !cancelledByTrainer(day.id))
       .flatMap((day) =>
-        timesOn(DateTime.fromISO(day.localDate, { zone: KY_ZONE }).weekday).map((slotTime) => ({
-          trainingDayId: day.id,
-          slotTime,
-          status: 'ACTIVE' as const,
-          trainingType: GROUP_TYPE,
-          capacity: GROUP_CAPACITY,
-          bookedCount: 0,
-          trainerId,
-        })),
+        timesOn(DateTime.fromISO(day.localDate, { zone: KY_ZONE }).weekday)
+          // A changed time must not overlap a group training already created that day (an hour apart)
+          .filter((slotTime) => !overlapsActive(day.id, slotTime))
+          .map((slotTime) => ({
+            trainingDayId: day.id,
+            slotTime,
+            status: 'ACTIVE' as const,
+            trainingType: GROUP_TYPE,
+            capacity: GROUP_CAPACITY,
+            bookedCount: 0,
+            trainerId,
+          })),
       );
     if (rows.length > 0) await this.database.db.insert(trainingSlots).values(rows).onConflictDoNothing();
   }

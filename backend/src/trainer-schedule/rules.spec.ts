@@ -1,4 +1,6 @@
+import { getTableConfig } from 'drizzle-orm/pg-core';
 import { bookingOpensAt, groupTimeError, LEGACY_DEFAULT, scheduleError } from './rules';
+import { trainerSchedules, trainerScheduleTimes } from '../database/schema';
 
 describe('Trainer schedule rules', () => {
   it('group trainings are from 06:00 to 21:00', () => {
@@ -71,5 +73,14 @@ describe('Trainer schedule rules', () => {
 
   it('booking opens on the training day at the trainer time, in Kyiv', () => {
     expect(bookingOpensAt('2026-10-26', '14:00').toISO()).toBe('2026-10-26T14:00:00.000+02:00');
+  });
+});
+
+describe('Trainer schedule tables', () => {
+  // The DB itself refuses a time that is not 'HH:MM' on the 15-minute grid, whatever writes it
+  it('both time columns carry a format CHECK', () => {
+    const checks = (table: Parameters<typeof getTableConfig>[0]) => getTableConfig(table).checks.map((c) => c.name);
+    expect(checks(trainerScheduleTimes)).toContain('trainer_schedule_times_slot_time_check');
+    expect(checks(trainerSchedules)).toContain('trainer_schedules_booking_opens_at_check');
   });
 });
