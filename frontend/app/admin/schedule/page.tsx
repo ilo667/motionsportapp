@@ -33,7 +33,7 @@ function savedText(autoCreate: boolean, added?: number, skipped?: number) {
   if (!autoCreate || added === undefined || skipped === undefined) return "Збережено";
   if (added === 0 && skipped === 0) return "Збережено. Усі тренування вже в календарі";
   const left = skipped
-    ? `. ${skipped} ${plural(skipped, ["дату", "дати", "дат"])} пропущено — там уже є тренування або групові скасовані, перевірте календар`
+    ? `. ${skipped} ${plural(skipped, ["тренування", "тренування", "тренувань"])} пропущено — там уже є тренування або групові скасовані, перевірте календар`
     : "";
   return `Збережено. Додано в календар: ${added} ${plural(added, ["тренування", "тренування", "тренувань"])}${left}`;
 }
