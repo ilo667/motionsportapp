@@ -18,6 +18,7 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
+import { DisableTrainerDto } from './dto/disable-trainer.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
@@ -60,6 +61,16 @@ export class AdminScheduleController {
   @Get('trainers')
   getTrainers() {
     return this.adminScheduleService.getTrainers();
+  }
+
+  @Post('trainers/:trainerId/disable')
+  @HttpCode(HttpStatus.OK)
+  disableTrainer(
+    @Param('trainerId', ParseUUIDPipe) trainerId: string,
+    @Body() dto: DisableTrainerDto,
+    @CurrentUser() user: SessionUser,
+  ) {
+    return this.adminScheduleService.disableTrainer(user.id, trainerId, dto.transferToId);
   }
 
   @Patch('members/:memberId/trainer')
