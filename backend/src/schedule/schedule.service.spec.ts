@@ -432,8 +432,10 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
       ],
     ]);
     const values = recordInserts(db);
-    await makeRealService(db).ensureGroupSlots();
-    expect((values[1] as { trainingDayId: string }[]).map((v) => v.trainingDayId)).toEqual(['d-wed']);
+    const result = await makeRealService(db).ensureGroupSlots();
+    // Only the training day upsert: the cancelled 19:00 is not created again (a new row would bring it back)
+    expect(values).toHaveLength(1);
+    expect(result.skipped).toContainEqual({ date: '2026-10-21', slotTime: '19:00', reason: 'cancelled' });
   });
 
   // A changed time (Wed 19:00/20:00 → 19:30) must not put an overlapping training on days already created

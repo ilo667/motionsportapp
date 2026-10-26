@@ -421,18 +421,17 @@ export class AdminScheduleService {
           bookedCount: 0,
           trainerId: adminId,
         })
+        // A new training (a cancelled one at that time stays as it was); this trainer's active group one there
+        // stays as is, their own active assigned training there is not taken over
         .onConflictDoUpdate({
           target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.trainerId],
-          set: { trainingType: GROUP_TYPE, status: 'ACTIVE', capacity: 8, cancelledAt: null },
-          // this trainer's slot at that time: a cancelled one is re-used, an active group one stays as is;
-          // their own active assigned training there is not taken over
-          setWhere: or(eq(trainingSlots.status, 'CANCELLED'), eq(trainingSlots.trainingType, GROUP_TYPE)),
+          targetWhere: sql`status = 'ACTIVE'`,
+          set: { trainingType: GROUP_TYPE },
+          setWhere: eq(trainingSlots.trainingType, GROUP_TYPE),
         })
         .returning({ id: trainingSlots.id });
 
       if (!slot) throw new ConflictException('Time is already taken');
-      // A re-used cancelled assigned slot must not stay visible only to its old members
-      await tx.delete(slotMembers).where(eq(slotMembers.slotId, slot.id));
     });
 
     return { ok: true };
@@ -462,23 +461,15 @@ export class AdminScheduleService {
           bookedCount: dto.memberIds.length,
           trainerId: adminId,
         })
-        .onConflictDoUpdate({
+        // Always a new training: an active one of this trainer at that time has the time
+        .onConflictDoNothing({
           target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.trainerId],
-          set: {
-            trainingType: dto.trainingType,
-            status: 'ACTIVE',
-            capacity,
-            bookedCount: dto.memberIds.length,
-            cancelledAt: null,
-          },
-          // Only a cancelled slot may be re-used (its bookings are all cancelled)
-          setWhere: eq(trainingSlots.status, 'CANCELLED'),
+          where: sql`status = 'ACTIVE'`,
         })
         .returning({ id: trainingSlots.id });
 
       if (!slot) throw new ConflictException('Time is already taken');
 
-      await tx.delete(slotMembers).where(eq(slotMembers.slotId, slot.id));
       await tx.insert(slotMembers).values(dto.memberIds.map((memberId) => ({ slotId: slot.id, memberId })));
       // Assigning is booking: the members are on the training right away. It is paid from their package
       // when the trainer marks attendance, not per training

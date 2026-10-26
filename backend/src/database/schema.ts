@@ -107,9 +107,12 @@ export const trainingSlots = pgTable(
       .notNull()
       .references((): AnyPgColumn => admins.id),
   },
-  // Many halls: trainers work in parallel, so one training per time per trainer
+  // Many halls: trainers work in parallel, so one active training per time per trainer. A cancelled one stays as
+  // history: a training added again at that time is a new row (its bookings, cancellations and fees are its own)
   (table) => [
-    uniqueIndex('training_slots_day_time_trainer_idx').on(table.trainingDayId, table.slotTime, table.trainerId),
+    uniqueIndex('training_slots_day_time_trainer_idx')
+      .on(table.trainingDayId, table.slotTime, table.trainerId)
+      .where(sql`status = 'ACTIVE'`),
     oneOf('training_slots_status_check', 'status', ['ACTIVE', 'CANCELLED']),
     oneOf('training_slots_training_type_check', 'training_type', [GROUP_TYPE, ...ASSIGNED_TYPES]),
     // Safety net for the seat counter: never below zero, never more people than seats

@@ -407,6 +407,11 @@ export class ScheduleService {
           continue;
         }
         if (ownAt(dayId, slotTime).some((o) => o.status === 'ACTIVE')) continue;
+        // The trainer cancelled the group training at that time: it is not brought back
+        if (ownAt(dayId, slotTime).length > 0) {
+          skipped.push({ date, slotTime, reason: 'cancelled' });
+          continue;
+        }
         // A changed time must not overlap a group training already created that day (an hour apart)
         if (overlapsActive(dayId, slotTime)) skipped.push({ date, slotTime, reason: 'taken' });
         else toInsert.push({ trainingDayId: dayId, slotTime, date });
@@ -431,12 +436,10 @@ export class ScheduleService {
             .onConflictDoNothing()
             .returning({ trainingDayId: trainingSlots.trainingDayId, slotTime: trainingSlots.slotTime })
         : [];
-    // Not created = the conflict: this trainer's cancelled group at that time stays cancelled, any other training
-    // of theirs there (an assigned one) has the time
+    // Not created = the conflict: another active training of theirs there (an assigned one) has the time
     for (const row of toInsert) {
       if (created.some((c) => c.trainingDayId === row.trainingDayId && c.slotTime === row.slotTime)) continue;
-      const cancelled = ownAt(row.trainingDayId, row.slotTime).some((o) => o.status === 'CANCELLED');
-      skipped.push({ date: row.date, slotTime: row.slotTime, reason: cancelled ? 'cancelled' : 'taken' });
+      skipped.push({ date: row.date, slotTime: row.slotTime, reason: 'taken' });
     }
     skipped.sort((a, b) => a.date.localeCompare(b.date) || a.slotTime.localeCompare(b.slotTime));
     return { added: created.length, skipped };
