@@ -11,6 +11,6 @@ Key files:
 - `lib/trainingTypes.ts` — `TYPE_COLORS` for training types (calendar, history)
 - `lib/liqpay.ts` — `submitLiqPay(checkout)` (form POST to LiqPay); prices come from the API, nothing hard-coded
 
-Page container (`max-w-xl`, `px-5`, bottom padding `3rem` + the iPhone safe area) is defined once in `app/layout.tsx`. Pages return content directly without wrapper `<main>` tags.
+Page container (`max-w-xl`, `px-5`) is defined once in `app/layout.tsx`. `PageLayout variant="top"` adds the bottom padding (`3rem` + the iPhone safe area); centered pages have none. Pages return content directly without wrapper `<main>` tags.
 
 Auth state: `mg_authed` key in `localStorage` — set on login, cleared on logout or 401. Used on `/` to skip the API call for unauthenticated users (avoids 401 in console).
