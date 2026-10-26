@@ -41,8 +41,8 @@ export function FreezeRequests({ requests, onDecided }: { requests: FreezeReques
             </div>
             {confirmId === r.id ? (
               <p className="text-body text-sm mt-3">
-                Записи клієнта на тренування до {ddmm(r.until)} буде скасовано, строки клубної карти й тренувань
-                подовжаться на 30 днів.
+                Заморозка до {ddmm(r.until)}. Записи на ці дні скасуються, а клубна карта й тренування не згорять:
+                строки подовжаться на час заморозки.
               </p>
             ) : null}
             <button
