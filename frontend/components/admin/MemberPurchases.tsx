@@ -95,8 +95,12 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
       await api.activateClubCard(memberId, id);
       await load();
       onChanged();
-    } catch {
-      setError("Не вдалося активувати клубну карту");
+    } catch (err) {
+      setError(
+        (err as Error).message === "Member is frozen"
+          ? "Клієнт заморожений: активуйте після розморозки"
+          : "Не вдалося активувати клубну карту",
+      );
     } finally {
       setSaving(false);
     }
@@ -112,8 +116,12 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
       setCardId("");
       await load();
       onChanged();
-    } catch {
-      setError("Не вдалося додати клубну карту");
+    } catch (err) {
+      setError(
+        (err as Error).message === "Member is frozen"
+          ? "Клієнт заморожений: додайте клубну карту після розморозки"
+          : "Не вдалося додати клубну карту",
+      );
     } finally {
       setSaving(false);
     }

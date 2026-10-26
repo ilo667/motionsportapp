@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { api, AdminMember, MemberVisit, Trainer } from "@/lib/api";
+import { api, AdminMember, MemberFreeze, MemberVisit, Trainer } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { MemberPurchases } from "@/components/admin/MemberPurchases";
@@ -53,6 +53,52 @@ function Visits({ memberId }: { memberId: string }) {
         </div>
       ))}
     </div>
+  );
+}
+
+const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+
+const FREEZE_STATUS: Record<MemberFreeze["status"], string> = {
+  REQUESTED: "чекає підтвердження",
+  ACTIVE: "триває",
+  ENDED: "закінчилась",
+  REJECTED: "відхилено",
+  CANCELLED: "клієнт скасував запит",
+};
+
+// The client's freezes: dates, state, who approved. Hidden when there were none
+function Freezes({ memberId, headingClass }: { memberId: string; headingClass: string }) {
+  const [items, setItems] = useState<MemberFreeze[] | null>(null);
+
+  useEffect(() => {
+    api
+      .getMemberFreezes(memberId)
+      .then(setItems)
+      .catch(() => setItems([]));
+  }, [memberId]);
+
+  if (!items?.length) return null;
+  return (
+    <section>
+      <h2 className={headingClass}>Заморозки</h2>
+      <div className="flex flex-col">
+        {items.map((f) => (
+          <div key={f.id} className="flex justify-between space-x-3 py-1.5 border-b border-line last:border-0">
+            <span className="text-heading">
+              {f.startedOn && f.until
+                ? f.until < f.startedOn
+                  ? `${ddmm(f.startedOn)}, розморожено того ж дня`
+                  : `${ddmm(f.startedOn)} – ${ddmm(f.until)}`
+                : `Запит ${visitDay(f.requestedAt.slice(0, 10))}`}
+              {f.decidedBy && <span className="block text-subtle text-xs">{f.decidedBy}</span>}
+            </span>
+            <span className="text-xs whitespace-nowrap text-subtle">
+              {f.status === "ACTIVE" && f.unfreezeRequested ? "просить розморозити" : FREEZE_STATUS[f.status]}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -128,6 +174,8 @@ export default function ClientPage() {
           <section className="bg-surface border border-line rounded-xl p-4">
             <MemberPurchases memberId={member.id} onChanged={load} />
           </section>
+
+          <Freezes memberId={member.id} headingClass={sectionTitle} />
 
           <section>
             <h2 className={sectionTitle}>Відвідування</h2>

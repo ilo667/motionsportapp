@@ -54,6 +54,7 @@ const ERROR_TEXTS: [string, string][] = [
   ["15-minute steps", "Вкажіть час з кроком 15 хвилин"],
   ["in the past", "Цей час уже минув"],
   ["Attendance already marked", "Цій людині вже поставили відмітку, її не можна прибрати"],
+  ["Member is frozen", "Абонемент клієнта заморожено на цей день"],
   ["Booking must open before the first training", "Запис має відкриватися раніше за тренування"],
 ];
 

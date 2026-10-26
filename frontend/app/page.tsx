@@ -20,6 +20,12 @@ function formatLocalDate(localDate: string): string {
   }).format(date);
 }
 
+// «24.11»: the last frozen day
+function formatShortDate(localDate: string): string {
+  const [, m, d] = localDate.split("-");
+  return `${d}.${m}`;
+}
+
 const POLL_OPEN_MS = 5_000; // booking window open: seats change fast
 const POLL_IDLE_MAX_MS = 5 * 60_000; // outside the window: safety refresh (missed timers, trainer changes)
 const POLL_ERROR_MS = 30_000;
@@ -162,7 +168,9 @@ export default function SchedulePage() {
                     ? "Цей час скасовано тренером"
                     : raw.includes("Group pass required")
                       ? "Потрібен абонемент на групові: натисніть «Записатись» ще раз"
-                      : raw || "Помилка. Спробуйте ще раз.";
+                      : raw.includes("Membership frozen")
+                        ? "Абонемент заморожено"
+                        : raw || "Помилка. Спробуйте ще раз.";
       setMutateError(msg);
     }
   };
@@ -231,6 +239,15 @@ export default function SchedulePage() {
             Наступне тренування
           </h1>
 
+          {schedule.frozenUntil && (
+            <Link
+              href="/purchases"
+              className="block bg-warn-bg border border-warn-line rounded-xl px-4 py-3 mb-4 text-sm text-warn"
+            >
+              Абонемент заморожено до {formatShortDate(schedule.frozenUntil)} включно
+            </Link>
+          )}
+
           {!schedule.localDate ? (
             <p className="text-muted text-sm mb-4">Групових тренувань поки не заплановано.</p>
           ) : (
@@ -272,6 +289,7 @@ export default function SchedulePage() {
                     bookingWindowOpen={schedule.bookingWindowOpen}
                     afterWindow={afterWindow}
                     bookingOpenAt={schedule.bookingOpenAt}
+                    frozen={!!schedule.frozenUntil && schedule.localDate! <= schedule.frozenUntil}
                     onMutate={handleMutate}
                     onRefresh={fetchSchedule}
                   />

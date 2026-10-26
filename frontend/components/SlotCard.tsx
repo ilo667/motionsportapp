@@ -15,6 +15,7 @@ interface SlotCardProps {
   bookingWindowOpen: boolean;
   afterWindow: boolean;
   bookingOpenAt: string | null;
+  frozen: boolean; // the member's membership is frozen on this day: no booking
   onMutate: (fn: () => Promise<unknown>) => void;
   onRefresh: () => void;
 }
@@ -26,6 +27,7 @@ export function SlotCard({
   bookingWindowOpen,
   afterWindow,
   bookingOpenAt,
+  frozen,
   onMutate,
   onRefresh,
 }: SlotCardProps) {
@@ -57,6 +59,8 @@ export function SlotCard({
 
         {slot.status === "CANCELLED" ? (
           <p className="text-danger text-sm font-medium">Скасовано</p>
+        ) : frozen ? (
+          <p className="text-muted text-sm">Абонемент заморожено</p>
         ) : afterWindow || slot.started ? (
           <p className="text-muted text-sm">Запис закрито</p>
         ) : !bookingWindowOpen ? (

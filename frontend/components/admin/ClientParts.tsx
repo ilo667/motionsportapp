@@ -26,8 +26,8 @@ function trainingsLeft(n: number, forms: [string, string, string]) {
 
 const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 
-// Under the client's name, one badge per line: the club card («Клубна карта чекає активації»),
-// then one per type of trainings left («8 персональних», «9 групових»)
+// Under the client's name, one badge per line: frozen («Заморожено до DD.MM»), the club card («Клубна карта
+// чекає активації»), then one per type of trainings left («8 персональних», «9 групових»)
 export function PurchaseSummary({ m, className = "" }: { m: AdminMember; className?: string }) {
   const [text, cardClass] = !m.clubCard
     ? ["Без клубної карти", "text-subtle border-line"]
@@ -37,6 +37,11 @@ export function PurchaseSummary({ m, className = "" }: { m: AdminMember; classNa
   const badge = "border rounded-full px-2.5 py-1";
   return (
     <div className={`flex flex-col items-start space-y-1.5 text-xs ${className}`}>
+      {m.frozenUntil && (
+        <span className={`font-semibold text-warn bg-warn-bg border-warn-line ${badge}`}>
+          Заморожено до {ddmm(m.frozenUntil)}
+        </span>
+      )}
       <span className={`font-semibold ${badge} ${cardClass}`}>{text}</span>
       {m.packagesLeft.map((p) => (
         <span key={p.trainingType} className={`text-body border-line ${badge}`}>

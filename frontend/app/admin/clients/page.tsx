@@ -2,11 +2,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, AdminMember, Trainer, CashRequest } from "@/lib/api";
+import { api, AdminMember, Trainer, CashRequest, FreezeRequest } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { CashRequests } from "@/components/admin/CashRequests";
 import { StrayPayments } from "@/components/admin/StrayPayments";
+import { FreezeRequests } from "@/components/admin/FreezeRequests";
 import { FREQUENT_CANCELLATIONS, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
 
 export default function ClientsPage() {
@@ -16,12 +17,17 @@ export default function ClientsPage() {
   const [myId, setMyId] = useState("");
   const [loadError, setLoadError] = useState(false);
   const [cash, setCash] = useState<CashRequest[]>([]);
+  const [freezes, setFreezes] = useState<FreezeRequest[]>([]);
 
-  // After a cash decision: the request list and the summaries change
+  // After a cash or freeze decision: the request lists and the summaries change
   const reloadPurchases = () => {
     api
       .getPendingCash()
       .then(setCash)
+      .catch(() => {});
+    api
+      .getPendingFreezes()
+      .then(setFreezes)
       .catch(() => {});
     api
       .getMembers()
@@ -30,12 +36,13 @@ export default function ClientsPage() {
   };
 
   useEffect(() => {
-    Promise.all([api.getMembers(), api.getTrainers(), api.me(), api.getPendingCash()])
-      .then(([memberList, trainerList, me, cashList]) => {
+    Promise.all([api.getMembers(), api.getTrainers(), api.me(), api.getPendingCash(), api.getPendingFreezes()])
+      .then(([memberList, trainerList, me, cashList, freezeList]) => {
         setMembers(memberList);
         setTrainers(trainerList);
         setMyId(me.id);
         setCash(cashList);
+        setFreezes(freezeList);
       })
       .catch((err: unknown) => {
         const status = (err as { status?: number }).status;
@@ -113,6 +120,7 @@ export default function ClientsPage() {
         <div className="flex flex-col space-y-8">
           <StrayPayments />
           <CashRequests requests={cash} onDecided={reloadPurchases} />
+          <FreezeRequests requests={freezes} onDecided={reloadPurchases} />
 
           {unassigned.length > 0 && (
             <section>

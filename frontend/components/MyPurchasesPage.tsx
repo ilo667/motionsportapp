@@ -2,10 +2,11 @@
 import { ReactNode, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, AssignedType, CatalogItem, MyPurchases } from "@/lib/api";
+import { api, AssignedType, CatalogItem, MyFreeze, MyPurchases } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
 import { PageLayout } from "./PageLayout";
 import { PurchaseFlow, PurchaseMode, formatUah, lineName } from "./PurchaseFlow";
+import { FreezeBlock } from "./FreezeBlock";
 
 const formatDate = (isoDate: string) => {
   const [, m, d] = isoDate.split("-");
@@ -151,6 +152,7 @@ function TrainingDots({ done, total }: { done: number; total: number }) {
 export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
   const router = useRouter();
   const [data, setData] = useState<MyPurchases | null>(null);
+  const [freeze, setFreeze] = useState<MyFreeze | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [buying, setBuying] = useState<PurchaseMode | null>(startType ? "service" : null);
   const [busy, setBusy] = useState(false);
@@ -158,9 +160,11 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
 
   const load = useCallback(
     () =>
-      api
-        .getPurchases()
-        .then(setData)
+      Promise.all([api.getPurchases(), api.getMyFreeze()])
+        .then(([purchases, myFreeze]) => {
+          setData(purchases);
+          setFreeze(myFreeze);
+        })
         .catch((err: unknown) => {
           const status = (err as { status?: number }).status;
           // 403 = signed in as a trainer: their panel, not the member login
@@ -237,6 +241,8 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
   const canBuyService = !hasUnused(["персональні", "спліт"]);
   const canBuyGroup = !hasUnused(["групові"]);
   const canBuyCard = !data?.card;
+  // Nothing new while frozen or asking to: the freeze moves the dates of what the member has
+  const frozen = !!freeze?.freeze;
   return (
     <PageLayout variant="top" loading={!data && !loadError} action={action}>
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">
@@ -324,7 +330,9 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
 
           {error && <p className="text-danger text-sm">{error}</p>}
 
-          {!pending && (canBuyService || canBuyGroup || canBuyCard) && (
+          {freeze && (frozen || !pending) && <FreezeBlock data={freeze} onChanged={load} />}
+
+          {!pending && !frozen && (canBuyService || canBuyGroup || canBuyCard) && (
             <>
               <h2 className={`${sectionTitle} pt-3`}>Купити</h2>
               {canBuyService && (

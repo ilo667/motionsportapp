@@ -46,6 +46,7 @@ export interface AdminMember {
   // The card the client has: active until `until`, or waiting for «Активувати» until `until` (then it burns)
   clubCard: { state: "waiting" | "active"; until: string } | null;
   packagesLeft: { trainingType: TrainingType; left: number }[]; // usable packages only, types with trainings left
+  frozenUntil: string | null; // frozen today: the last frozen day
 }
 
 // A training the client was booked on (up to today) and the trainer's mark
@@ -220,6 +221,38 @@ export interface MyPurchases {
   canPayCash: boolean; // cash goes to the member's trainer
 }
 
+// «Заморозити абонемент»: until = the last frozen day (null while the trainer hasn't approved)
+export interface MyFreeze {
+  freeze: {
+    id: string;
+    state: "requested" | "active" | "unfreeze_requested";
+    startedOn: string | null;
+    until: string | null;
+  } | null;
+  canFreeze: boolean; // a card or trainings to freeze, and no open freeze
+}
+
+// A freeze or unfreeze waiting for the trainer. until: the last frozen day (for a request: if approved today)
+export interface FreezeRequest {
+  id: string;
+  memberId: string;
+  displayName: string;
+  kind: "freeze" | "unfreeze";
+  requestedAt: string;
+  startedOn: string | null;
+  until: string;
+}
+
+export interface MemberFreeze {
+  id: string;
+  status: "REQUESTED" | "ACTIVE" | "ENDED" | "REJECTED" | "CANCELLED";
+  requestedAt: string;
+  startedOn: string | null;
+  until: string | null; // the last frozen day
+  unfreezeRequested: boolean;
+  decidedBy: string | null;
+}
+
 // A booking the member cancelled or moved themselves, with the reason they wrote
 export interface Cancellation {
   bookingId: string;
@@ -280,6 +313,7 @@ export interface ScheduleNext {
   slots: SlotView[]; // group slots of the next group day
   assignedSlots?: AssignedSlotView[];
   groupPassLeft: number; // group trainings the member's pass holds for that day; 0 → «Записатися» offers to buy
+  frozenUntil: string | null; // frozen (today or that day): the last frozen day, no «Записатись»
   serverTime: string;
   announcement?: string | null;
 }
@@ -473,6 +507,20 @@ export const api = {
     }),
 
   getPurchases: () => request<MyPurchases>("/purchases"),
+
+  // «Заморозити абонемент»: the member asks, the trainer approves (the same for «Розморозити»)
+  getMyFreeze: () => request<MyFreeze>("/freezes"),
+  requestFreeze: () => request<{ ok: boolean }>("/freezes", { method: "POST" }),
+  cancelFreezeRequest: () => request<{ ok: boolean }>("/freezes/cancel", { method: "POST" }),
+  requestUnfreeze: () => request<{ ok: boolean }>("/freezes/unfreeze", { method: "POST" }),
+
+  getPendingFreezes: () => request<FreezeRequest[]>("/admin/freezes/pending"),
+  decideFreeze: (freeze: FreezeRequest, approve: boolean) =>
+    request<{ ok: boolean }>(
+      `/admin/freezes/${freeze.id}/${freeze.kind === "unfreeze" ? "unfreeze/" : ""}${approve ? "approve" : "reject"}`,
+      { method: "POST" },
+    ),
+  getMemberFreezes: (memberId: string) => request<MemberFreeze[]>(`/admin/members/${memberId}/freezes`),
 
   // Trainer: cash requests of own clients, a client's cards / packages / purchases
   getPendingCash: () => request<CashRequest[]>("/admin/purchases/pending"),
