@@ -33,7 +33,7 @@ const SKIP_REASONS: Record<SkippedTraining["reason"], string> = {
 };
 
 // After «Зберегти»: what went into the calendar, and the trainings left out, one line per date and reason
-// («вт 27.10 — 15:00, 17:00: скасовано в календарі»). No counts: the trainings could not be added right now
+// («вт 27.10 о 15:00 і 17:00 (скасовано в календарі)»). No counts: the trainings could not be added right now
 // (they appear on the next schedule load)
 function savedText(autoCreate: boolean, added?: number, skipped?: SkippedTraining[]) {
   if (!autoCreate || added === undefined || skipped === undefined) return { text: "Збережено", skipped: [] };
@@ -47,8 +47,13 @@ function savedText(autoCreate: boolean, added?: number, skipped?: SkippedTrainin
   }
   return {
     text: `Збережено. У календар додано ${added} ${plural(added, ["тренування", "тренування", "тренувань"])}`,
-    skipped: lines.map((l) => `${shortDate(l.date)} — ${l.times.join(", ")}: ${l.reason}`),
+    skipped: lines.map((l) => `${shortDate(l.date)} о ${listTimes(l.times)} (${l.reason})`),
   };
+}
+
+// «15:00», «15:00 і 17:00», «10:00, 15:00 і 17:00»
+function listTimes(times: string[]) {
+  return times.length > 1 ? `${times.slice(0, -1).join(", ")} і ${times[times.length - 1]}` : times[0];
 }
 
 // «вт 27.10»
