@@ -514,7 +514,7 @@ export default function CalendarPage() {
                       key={o.label}
                       onClick={() => setWeekly(o.value)}
                       aria-pressed={weekly === o.value}
-                      className={`flex-1 px-3 py-2 rounded-xl border text-sm transition-colors ${weekly === o.value ? "border-accent text-accent" : "border-line text-muted"}`}
+                      className={`flex-1 px-2 py-2 rounded-lg border text-xs whitespace-nowrap transition-colors ${weekly === o.value ? "border-accent text-accent" : "border-line text-muted"}`}
                     >
                       {o.label}
                     </button>
