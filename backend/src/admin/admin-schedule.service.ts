@@ -178,7 +178,8 @@ export class AdminScheduleService {
 
   // The slot if it belongs to this trainer; another trainer's slot answers 404 like a missing one
   // A cancelled training costs nothing: its attendance marks go, and with them the trainings they took from
-  // packages (activation stays, as with «—»). Called in the transaction that cancels the bookings, before it
+  // packages (activation stays, as with «—»). Called in the transaction that cancels the bookings, before it.
+  // A member's own late cancellation stays as it was: they cancelled before the trainer did
   private async releaseMarks(tx: Tx, slotIds: string[]) {
     if (slotIds.length === 0) return;
     const ofSlots = () =>
@@ -188,27 +189,6 @@ export class AdminScheduleService {
         .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')));
     await tx.delete(packageSpends).where(inArray(packageSpends.bookingId, ofSlots()));
     await tx.delete(attendance).where(inArray(attendance.bookingId, ofSlots()));
-    // Late cancellations of these trainings cost nothing either: their spends go back, a half refund still to
-    // return is dropped, and the fee goes (one already returned stays as it was)
-    const charged = await tx
-      .select({ id: bookings.id })
-      .from(bookings)
-      .where(
-        and(
-          inArray(bookings.slotId, slotIds),
-          eq(bookings.status, 'CANCELLED'),
-          isNotNull(bookings.cancelFee),
-          sql`not exists (select 1 from cancel_refunds cr where cr.booking_id = "bookings"."id" and cr.status = 'DONE')`,
-        ),
-      );
-    if (charged.length === 0) return;
-    const ids = charged.map((b) => b.id);
-    await tx.delete(packageSpends).where(inArray(packageSpends.bookingId, ids));
-    await tx
-      .update(cancelRefunds)
-      .set({ status: 'CANCELLED' })
-      .where(and(inArray(cancelRefunds.bookingId, ids), eq(cancelRefunds.status, 'DUE')));
-    await tx.update(bookings).set({ cancelFee: null }).where(inArray(bookings.id, ids));
   }
 
   // Cancels these slots and every active booking on them (a system cancellation, no reason); their marks and spends
