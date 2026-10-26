@@ -52,7 +52,11 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                   <span className={`text-body text-sm${p.guestOf ? " pl-4" : ""}`}>
                     {p.displayName}
                     {p.switchedFromTime && <span className="ml-2 text-xs text-amber-400">з {p.switchedFromTime}</span>}
-                    {p.guestOf && <span className="ml-2 text-xs text-subtle">гість · {p.guestOf}</span>}
+                    {p.guestOf && (
+                      <span className="ml-2 text-xs text-subtle border border-line rounded-full px-2 py-0.5">
+                        гість
+                      </span>
+                    )}
                   </span>
                   {/* Editable after "Підтвердити всіх" too: the trainer can fix a mistake */}
                   <AttendanceButton
