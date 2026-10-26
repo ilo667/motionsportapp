@@ -334,7 +334,7 @@ function PasswordSection() {
     e.preventDefault();
     setError("");
     setDone(false);
-    if (next.length < MIN_PASSWORD) return setError(`Новий пароль — щонайменше ${MIN_PASSWORD} символів.`);
+    if (next.length < MIN_PASSWORD) return setError(`Новий пароль: щонайменше ${MIN_PASSWORD} символів.`);
     if (next !== repeat) return setError("Паролі не збігаються.");
     setBusy(true);
     try {

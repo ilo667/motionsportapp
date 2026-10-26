@@ -24,7 +24,7 @@ const ERROR_TEXTS: [string, string][] = [
   ["Booking must open before the first training", "Запис має відкриватися раніше за перше тренування"],
   ["Group trainings are from 06:00 to 21:00", "Групові можна ставити з 06:00 до 21:00"],
   ["at least an hour apart", "Між груповими має бути щонайменше година"],
-  ["15-minute steps", "Час — кроком 15 хвилин"],
+  ["15-minute steps", "Час кроком 15 хвилин"],
 ];
 
 const SKIP_REASONS: Record<SkippedTraining["reason"], string> = {
@@ -111,7 +111,7 @@ export default function GroupSchedulePage() {
 
   const addTime = (weekday: number) => {
     if (!schedule) return;
-    if (!TIME_RE.test(draft)) return setError("Час — кроком 15 хвилин, наприклад 18:30");
+    if (!TIME_RE.test(draft)) return setError("Час кроком 15 хвилин, наприклад 18:30");
     if (!timesOf(weekday).includes(draft)) {
       change({ ...schedule, times: [...schedule.times, { weekday, slotTime: draft }] });
     }

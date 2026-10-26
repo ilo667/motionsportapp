@@ -56,7 +56,7 @@ export default function ForgotPage() {
     return (
       <PageLayout>
         <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">PIN змінено</h1>
-        <p className="text-muted text-sm mb-6">Збережіть новий код відновлення — він більше не буде показаний.</p>
+        <p className="text-muted text-sm mb-6">Збережіть новий код відновлення. Він більше не покажеться.</p>
 
         <div className="bg-surface rounded-xl p-5 mb-4">
           <p className="text-muted text-xs mb-1">Новий код відновлення</p>

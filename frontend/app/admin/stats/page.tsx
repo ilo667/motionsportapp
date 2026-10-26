@@ -245,7 +245,7 @@ export default function StatsPage() {
           <section>
             <h2 className={sectionTitle}>Завантаженість</h2>
             <p className="text-subtle text-xs mb-3">
-              Скільки людей прийшло (✓) на ваші тренування, гості теж. Сьогоднішні дні — з завтрашнього дня.
+              Скільки людей прийшло (✓) на ваші тренування, гості теж. Сьогоднішній день з'явиться завтра.
             </p>
 
             {stats.busiestDays.length === 0 ? (

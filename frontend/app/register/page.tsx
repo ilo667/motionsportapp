@@ -51,7 +51,7 @@ export default function RegisterPage() {
     return (
       <PageLayout>
         <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">Вітаємо!</h1>
-        <p className="text-muted text-sm mb-6">Збережіть ці дані — ви більше не побачите код відновлення.</p>
+        <p className="text-muted text-sm mb-6">Збережіть ці дані. Код відновлення більше не покажеться.</p>
 
         <div className="bg-surface rounded-xl p-5 mb-4 space-y-4">
           <div>

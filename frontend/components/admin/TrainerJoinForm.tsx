@@ -31,8 +31,8 @@ export function TrainerJoinForm({ token }: { token: string }) {
     e.preventDefault();
     setError("");
     if (!/^[a-z0-9._-]{3,32}$/.test(username))
-      return setError("Логін — від 3 до 32 символів: латинські літери, цифри, крапка, _ або -.");
-    if (password.length < MIN_PASSWORD) return setError(`Пароль — щонайменше ${MIN_PASSWORD} символів.`);
+      return setError("Логін: від 3 до 32 символів, латинські літери, цифри, крапка, _ або -.");
+    if (password.length < MIN_PASSWORD) return setError(`Пароль: щонайменше ${MIN_PASSWORD} символів.`);
     if (password !== repeat) return setError("Паролі не збігаються.");
     setLoading(true);
     try {

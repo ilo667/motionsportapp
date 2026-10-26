@@ -431,7 +431,7 @@ export default function CalendarPage() {
               )}
               {editing && repeatsWeekly(editing) && (
                 <p className="text-muted text-xs mt-1">
-                  ↻ Повторюється щотижня. «Скасувати» прибере лише цей день; щоб прибрати щотижневе —{" "}
+                  ↻ Повторюється щотижня. «Скасувати» прибере лише цей день; щоб прибрати щотижневе, відкрийте{" "}
                   <Link href="/admin/schedule" className="text-accent hover:underline">
                     «Розклад групових»
                   </Link>
@@ -498,7 +498,7 @@ export default function CalendarPage() {
                 />
                 {!assigned && opensAt && TIME_RE.test(time) && time <= opensAt && (
                   <p className="text-warn text-xs mt-2">
-                    Запис відкривається о {opensAt} — на це тренування записатися не вийде
+                    Запис відкривається о {opensAt}, тож на це тренування записатися не вийде
                   </p>
                 )}
               </div>
