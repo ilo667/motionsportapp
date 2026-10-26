@@ -40,25 +40,47 @@ export function FreezeRequests({ requests, onDecided }: { requests: FreezeReques
                 : `Просить розморозити (заморожено до ${ddmm(r.until)})`}
             </div>
             {confirmId === r.id ? (
-              <p className="text-body text-sm mt-3">
-                Заморозка до {ddmm(r.until)}. Записи на ці дні скасуються, а клубна карта й тренування не згорять:
-                строки подовжаться на час заморозки.
-              </p>
-            ) : null}
-            <button
-              onClick={() => (r.kind === "freeze" && confirmId !== r.id ? setConfirmId(r.id) : decide(r, true))}
-              disabled={busyId === r.id}
-              className="btn-primary w-full py-3.5 rounded-xl font-semibold mt-4 transition-colors disabled:opacity-60"
-            >
-              {r.kind === "unfreeze" ? "Розморозити з сьогодні" : confirmId === r.id ? "Так, заморозити" : "Заморозити"}
-            </button>
-            <button
-              onClick={() => (confirmId === r.id ? setConfirmId(null) : decide(r, false))}
-              disabled={busyId === r.id}
-              className="block mx-auto text-subtle text-xs underline hover:text-body py-2 mt-1 transition-colors disabled:opacity-60"
-            >
-              {confirmId === r.id ? "Назад" : "Відхилити"}
-            </button>
+              // Same confirmation as «Скасувати мої тренування цього дня»: the action and «Ні» side by side
+              <div className="rounded-lg border border-line bg-background p-4 space-y-3 mt-4">
+                <p className="text-body text-sm">
+                  Заморозка до {ddmm(r.until)}. Записи на ці дні скасуються, а клубна карта й тренування не згорять:
+                  строки подовжаться на час заморозки.
+                </p>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => decide(r, true)}
+                    disabled={busyId === r.id}
+                    className="btn-primary flex-1 py-2.5 rounded-md text-sm font-medium transition-colors disabled:opacity-60"
+                  >
+                    Заморозити
+                  </button>
+                  <button
+                    onClick={() => setConfirmId(null)}
+                    disabled={busyId === r.id}
+                    className="btn-ghost flex-1 py-2.5 rounded-md border text-sm transition-colors disabled:opacity-60"
+                  >
+                    Ні
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => (r.kind === "freeze" ? setConfirmId(r.id) : decide(r, true))}
+                  disabled={busyId === r.id}
+                  className="btn-primary w-full py-3.5 rounded-xl font-semibold mt-4 transition-colors disabled:opacity-60"
+                >
+                  {r.kind === "unfreeze" ? "Розморозити з сьогодні" : "Заморозити"}
+                </button>
+                <button
+                  onClick={() => decide(r, false)}
+                  disabled={busyId === r.id}
+                  className="block mx-auto text-subtle text-xs underline hover:text-body py-2 mt-1 transition-colors disabled:opacity-60"
+                >
+                  Відхилити
+                </button>
+              </>
+            )}
           </div>
         ))}
       </div>
