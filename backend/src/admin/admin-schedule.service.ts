@@ -15,6 +15,7 @@ import {
   sessions,
   purchases,
   trainerSchedules,
+  adminPushSubscriptions,
 } from '../database/schema';
 import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
@@ -821,30 +822,9 @@ export class AdminScheduleService {
     if (!trainer) throw new NotFoundException('Trainer not found');
 
     const now = this.clock.now();
-    const fromToday = await this.database.db
-      .select({ id: trainingSlots.id, localDate: trainingDays.localDate, slotTime: trainingSlots.slotTime })
-      .from(trainingSlots)
-      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
-      .where(
-        and(
-          eq(trainingSlots.trainerId, trainerId),
-          eq(trainingSlots.status, 'ACTIVE'),
-          gte(trainingDays.localDate, now.toISODate()!),
-        ),
-      );
-    const toCancel = fromToday.filter((s) => slotStartsAt(s.localDate, s.slotTime).plus({ hours: 1 }) > now);
-    const slotIds = toCancel.map((s) => s.id);
-    // Read before the transaction, for the pushes after it (as «Скасувати мої тренування цього дня» does)
-    const affected =
-      slotIds.length > 0
-        ? await this.database.db
-            .select({ memberId: bookings.memberId, slotId: bookings.slotId })
-            .from(bookings)
-            .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')))
-        : [];
     const schedule = await loadTrainerSchedule(this.database.db, trainerId);
 
-    const movedClients = await this.database.db.transaction(async (tx) => {
+    const { movedClients, toCancel, affected } = await this.database.db.transaction(async (tx) => {
       const at = now.toJSDate();
       // Both trainers' rows locked in id order (two disables at once wait for each other, no deadlock), then the
       // chosen one checked again: it may have been disabled since the check above
@@ -878,13 +858,43 @@ export class AdminScheduleService {
         .update(purchases)
         .set({ trainerId: transferToId })
         .where(and(eq(purchases.trainerId, trainerId), eq(purchases.status, 'PENDING'), eq(purchases.method, 'CASH')));
-      await this.cancelSlotsTx(tx, slotIds);
+      // Their phones get no trainer pushes any more
+      await tx
+        .update(adminPushSubscriptions)
+        .set({ disabledAt: at })
+        .where(and(eq(adminPushSubscriptions.adminId, trainerId), isNull(adminPushSubscriptions.disabledAt)));
       const settings = { bookingOpensAt: schedule.bookingOpensAt, autoCreate: false, updatedAt: at };
       await tx
         .insert(trainerSchedules)
         .values({ trainerId, ...settings })
         .onConflictDoUpdate({ target: trainerSchedules.trainerId, set: settings });
-      return moved.length;
+
+      // Read here, after the above: a training auto-added a moment ago is cancelled too, and the slot rows are
+      // locked, so a member booking at this moment waits and then finds the training cancelled (or was booked
+      // already and is among those told)
+      const fromToday = await tx
+        .select({ id: trainingSlots.id, localDate: trainingDays.localDate, slotTime: trainingSlots.slotTime })
+        .from(trainingSlots)
+        .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
+        .where(
+          and(
+            eq(trainingSlots.trainerId, trainerId),
+            eq(trainingSlots.status, 'ACTIVE'),
+            gte(trainingDays.localDate, now.toISODate()!),
+          ),
+        )
+        .for('update', { of: trainingSlots });
+      const slots = fromToday.filter((s) => slotStartsAt(s.localDate, s.slotTime).plus({ hours: 1 }) > now);
+      const ids = slots.map((s) => s.id);
+      const booked =
+        ids.length > 0
+          ? await tx
+              .select({ memberId: bookings.memberId, slotId: bookings.slotId })
+              .from(bookings)
+              .where(and(inArray(bookings.slotId, ids), eq(bookings.status, 'ACTIVE')))
+          : [];
+      await this.cancelSlotsTx(tx, ids);
+      return { movedClients: moved.length, toCancel: slots, affected: booked };
     });
 
     for (const slot of toCancel) {
@@ -898,7 +908,7 @@ export class AdminScheduleService {
       }
     }
 
-    return { movedClients, cancelledTrainings: slotIds.length };
+    return { movedClients, cancelledTrainings: toCancel.length };
   }
 
   // Calendar modal: who cancelled or moved away from this slot and why

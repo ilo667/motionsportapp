@@ -7,6 +7,7 @@ import { AdminScheduleController } from './admin-schedule.controller';
 import { SessionGuard } from '../auth/session.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 import {
+  adminPushSubscriptions,
   admins,
   bookings,
   members,
@@ -33,6 +34,8 @@ function makeDb(reads: unknown[][], writes: unknown[][] = []) {
   let r = 0;
   let w = 0;
   const log: { op: string; table: unknown; payload?: unknown; where?: { sql: string; params: unknown[] } }[] = [];
+  // Reads and writes in the order they ran ('select', or the written table)
+  const order: unknown[] = [];
 
   function readLink(): any {
     const chain: any = { then: (res: (v: unknown) => void) => res(reads[r++] ?? []) };
@@ -56,16 +59,17 @@ function makeDb(reads: unknown[][], writes: unknown[][] = []) {
   const write = (op: string) => (table: unknown) => {
     const entry = { op, table };
     log.push(entry);
+    order.push(table);
     return writeLink(entry);
   };
   const db: any = {
-    select: jest.fn(() => readLink()),
+    select: jest.fn(() => (order.push('select'), readLink())),
     update: jest.fn(write('update')),
     insert: jest.fn(write('insert')),
     delete: jest.fn(write('delete')),
     transaction: jest.fn(async (cb: (tx: any) => Promise<unknown>) => cb(db)),
   };
-  return { db, log };
+  return { db, log, order };
 }
 
 function makeService(db: any) {
@@ -119,7 +123,6 @@ describe('Disabling a trainer — refusals', () => {
         [{ id: FIRST }],
         [{ id: NEW }],
         [{ id: GONE }],
-        [],
         [
           { id: GONE, disabledAt: null },
           { id: NEW, disabledAt: null },
@@ -140,7 +143,6 @@ describe('Disabling a trainer — refusals', () => {
       [{ id: FIRST }],
       [{ id: NEW }],
       [{ id: GONE }],
-      [],
       [
         { id: GONE, disabledAt: null },
         { id: NEW, disabledAt: new Date() },
@@ -170,23 +172,23 @@ describe('Disabling a trainer', () => {
   ];
 
   async function disable() {
-    const { db, log } = makeDb(
+    const { db, log, order } = makeDb(
       [
         [{ id: FIRST }],
         [{ id: NEW }],
         [{ id: GONE }],
-        slots,
-        booked,
         [
           { id: GONE, disabledAt: null },
           { id: NEW, disabledAt: null },
         ],
+        slots,
+        booked,
       ],
       [[{ id: GONE }], [], [{ id: 'm-1' }, { id: 'm-2' }, { id: 'm-3' }]],
     );
     const { service, notifications } = makeService(db);
     const result = await service.disableTrainer(ME, GONE, NEW);
-    return { result, log, notifications };
+    return { result, log, notifications, order };
   }
   const writesTo = (log: any[], table: unknown) => log.filter((e) => e.table === table);
 
@@ -227,6 +229,24 @@ describe('Disabling a trainer', () => {
     const bookingWrite = writesTo(log, bookings).find((e: any) => e.payload?.status === 'CANCELLED');
     expect(bookingWrite.where.params).toEqual(expect.arrayContaining(['s-now', 's-tomorrow']));
     expect(writesTo(log, trainingDays)).toEqual([]);
+  });
+
+  // A member booking in the same moment waits for the slot lock and then finds it cancelled, or is booked
+  // already and is told: either way the trainings are read inside the transaction, after the trainer is disabled
+  // and the automatic trainings switched off
+  it('reads the trainings to cancel inside the transaction, after disabling and switching auto-add off', async () => {
+    const { order } = await disable();
+    const selects = order.map((t, i) => (t === 'select' ? i : -1)).filter((i) => i >= 0);
+    const slotsRead = selects[4]; // default trainer, target, trainer, row lock, then the slots
+    expect(order.indexOf(admins)).toBeLessThan(slotsRead);
+    expect(order.indexOf(trainerSchedules)).toBeLessThan(slotsRead);
+  });
+
+  it("switches the trainer's push subscriptions off (no trainer pushes on that phone any more)", async () => {
+    const { log } = await disable();
+    const [p] = writesTo(log, adminPushSubscriptions);
+    expect(p.payload).toEqual({ disabledAt: NOW.toJSDate() });
+    expect(p.where.params).toEqual([GONE]);
   });
 
   it('switches automatic group trainings off, keeping the opening time', async () => {

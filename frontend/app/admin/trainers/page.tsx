@@ -102,6 +102,8 @@ export default function TrainersPage() {
             .filter((t) => !t.disabledAt && t.id !== disabling.id)
             .sort((a, b) => Number(b.username === me) - Number(a.username === me))}
           onClose={() => setDisabling(null)}
+          // Someone disabled this trainer first: the list shows it
+          onConflict={load}
           onDone={(text) => {
             setDisabling(null);
             setDisabledText(text);
@@ -122,11 +124,13 @@ function DisableDialog({
   trainer,
   targets,
   onClose,
+  onConflict,
   onDone,
 }: {
   trainer: Trainer;
   targets: Trainer[];
   onClose: () => void;
+  onConflict: () => void;
   onDone: (text: string) => void;
 }) {
   const [transferToId, setTransferToId] = useState(targets[0]?.id ?? "");
@@ -142,6 +146,7 @@ function DisableDialog({
     } catch (err) {
       const status = (err as { status?: number }).status;
       setError(status === 409 ? "Цього тренера вже вимкнули" : "Не вдалося вимкнути. Спробуйте ще раз.");
+      if (status === 409) onConflict();
     } finally {
       setBusy(false);
     }
