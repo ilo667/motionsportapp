@@ -93,6 +93,13 @@ export interface TrainerSchedule {
   times: { weekday: number; slotTime: string }[];
 }
 
+// A schedule training left out of the calendar on «Зберегти»: cancelled there, or the time is taken
+export interface SkippedTraining {
+  date: string; // "YYYY-MM-DD"
+  slotTime: string;
+  reason: "cancelled" | "taken";
+}
+
 // One option of the public price list (no trainer names)
 export type PriceListItem = Omit<PriceItem, "updatedBy" | "updatedAt">;
 
@@ -540,9 +547,9 @@ export const api = {
   // «Мій розклад»: the signed-in trainer's regular group trainings
   getMySchedule: () => request<TrainerSchedule>("/admin/my-schedule"),
 
-  // Saved, plus what was put in the calendar: trainings added, schedule dates left out (taken or cancelled)
+  // Saved, plus what was put in the calendar: trainings added, and the ones left out with a reason
   saveMySchedule: (schedule: TrainerSchedule) =>
-    request<TrainerSchedule & { added?: number; skipped?: number }>("/admin/my-schedule", {
+    request<TrainerSchedule & { added?: number; skipped?: SkippedTraining[] }>("/admin/my-schedule", {
       method: "PUT",
       body: JSON.stringify(schedule),
     }),

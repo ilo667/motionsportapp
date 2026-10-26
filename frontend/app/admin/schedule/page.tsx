@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, TrainerSchedule } from "@/lib/api";
+import { api, SkippedTraining, TrainerSchedule } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 
@@ -27,15 +27,35 @@ const ERROR_TEXTS: [string, string][] = [
   ["15-minute steps", "Час — кроком 15 хвилин"],
 ];
 
-// One line after «Зберегти»: what went into the calendar
-// No counts: the trainings could not be added right now (they appear on the next schedule load)
-function savedText(autoCreate: boolean, added?: number, skipped?: number) {
-  if (!autoCreate || added === undefined || skipped === undefined) return "Збережено";
-  if (added === 0 && skipped === 0) return "Збережено. Усі тренування вже в календарі";
-  const left = skipped
-    ? `. ${skipped} ${plural(skipped, ["тренування", "тренування", "тренувань"])} пропущено — там уже є тренування або групові скасовані, перевірте календар`
-    : "";
-  return `Збережено. Додано в календар: ${added} ${plural(added, ["тренування", "тренування", "тренувань"])}${left}`;
+const SKIP_REASONS: Record<SkippedTraining["reason"], string> = {
+  cancelled: "скасовано в календарі",
+  taken: "час зайнятий іншим тренуванням",
+};
+
+// After «Зберегти»: what went into the calendar, and the trainings left out, one line per date and reason
+// («вт 27.10 — 15:00, 17:00: скасовано в календарі»). No counts: the trainings could not be added right now
+// (they appear on the next schedule load)
+function savedText(autoCreate: boolean, added?: number, skipped?: SkippedTraining[]) {
+  if (!autoCreate || added === undefined || skipped === undefined) return { text: "Збережено", skipped: [] };
+  if (added === 0 && skipped.length === 0) return { text: "Збережено. Усі тренування вже в календарі", skipped: [] };
+  const lines: { key: string; date: string; times: string[]; reason: string }[] = [];
+  for (const s of skipped) {
+    const key = `${s.date}|${s.reason}`;
+    const line = lines.find((l) => l.key === key);
+    if (line) line.times.push(s.slotTime);
+    else lines.push({ key, date: s.date, times: [s.slotTime], reason: SKIP_REASONS[s.reason] });
+  }
+  return {
+    text: `Збережено. У календар додано ${added} ${plural(added, ["тренування", "тренування", "тренувань"])}`,
+    skipped: lines.map((l) => `${shortDate(l.date)} — ${l.times.join(", ")}: ${l.reason}`),
+  };
+}
+
+// «вт 27.10»
+function shortDate(date: string) {
+  const d = new Date(date + "T12:00:00");
+  const weekday = d.toLocaleDateString("uk-UA", { weekday: "short" });
+  return `${weekday} ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 // Ukrainian forms for 1, 2–4 and 5+ («1 тренування», «3 дати», «21 дату»)
@@ -59,7 +79,7 @@ export default function GroupSchedulePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   // What the last save put in the calendar; null until saved (or after an edit)
-  const [saved, setSaved] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ text: string; skipped: string[] } | null>(null);
 
   useEffect(() => {
     api
@@ -229,7 +249,21 @@ export default function GroupSchedulePage() {
           </div>
 
           {error && <p className="text-danger text-sm">{error}</p>}
-          {saved && <p className="text-accent text-sm">{saved}</p>}
+          {saved && (
+            <div className="space-y-2">
+              <p className="text-accent text-sm">{saved.text}</p>
+              {saved.skipped.length > 0 && (
+                <div className="text-sm">
+                  <p className="text-heading">Не додано:</p>
+                  <ul className="text-muted space-y-1 mt-1">
+                    {saved.skipped.map((line) => (
+                      <li key={line}>• {line}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           <button
             onClick={save}
