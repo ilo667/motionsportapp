@@ -23,6 +23,9 @@ export default function TrainersPage() {
   const [invites, setInvites] = useState<TrainerInvite[]>([]);
   const [me, setMe] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  // «Вимкнути»: the trainer in the dialog, and what the last one did
+  const [disabling, setDisabling] = useState<Trainer | null>(null);
+  const [disabledText, setDisabledText] = useState("");
 
   const load = useCallback(() => {
     Promise.all([api.getTrainers(), api.getTrainerInvites(), api.me()])
@@ -52,17 +55,36 @@ export default function TrainersPage() {
 
           <section>
             <h2 className="font-geologica font-semibold text-heading uppercase mb-3">Усі тренери</h2>
+            {disabledText && <p className="text-accent text-sm mb-3">{disabledText}</p>}
             <ul className="border-t border-line">
               {trainers.map((t) => (
-                <li key={t.id} className="py-3 border-b border-line">
-                  <p className="text-heading">
-                    {t.username}
-                    {t.username === me && <span className="text-subtle"> · це ви</span>}
-                  </p>
-                  <p className="text-subtle text-sm">
-                    з {formatDate(t.createdAt)}
-                    {t.invitedBy && ` · запросив(ла) ${t.invitedBy}`}
-                  </p>
+                <li key={t.id} className="flex items-center justify-between space-x-3 py-3 border-b border-line">
+                  <div className="min-w-0">
+                    <p className={t.disabledAt ? "text-subtle" : "text-heading"}>
+                      {t.username}
+                      {t.username === me && <span className="text-subtle"> · це ви</span>}
+                    </p>
+                    <p className="text-subtle text-sm">
+                      з {formatDate(t.createdAt)}
+                      {t.invitedBy && ` · запросив(ла) ${t.invitedBy}`}
+                    </p>
+                    {t.disabledAt && (
+                      <p className="text-danger text-sm">
+                        вимкнено{t.disabledBy && ` · ${t.disabledBy}`} · {formatDate(t.disabledAt)}
+                      </p>
+                    )}
+                  </div>
+                  {!t.disabledAt && t.username !== me && t.id !== firstId(trainers) && (
+                    <button
+                      onClick={() => {
+                        setDisabledText("");
+                        setDisabling(t);
+                      }}
+                      className="shrink-0 text-sm text-muted hover:text-danger transition-colors"
+                    >
+                      Вимкнути
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -71,7 +93,105 @@ export default function TrainersPage() {
           <PasswordSection />
         </div>
       )}
+
+      {disabling && trainers && (
+        <DisableDialog
+          trainer={disabling}
+          // Clients can go to any trainer still working, me first
+          targets={trainers
+            .filter((t) => !t.disabledAt && t.id !== disabling.id)
+            .sort((a, b) => Number(b.username === me) - Number(a.username === me))}
+          onClose={() => setDisabling(null)}
+          onDone={(text) => {
+            setDisabling(null);
+            setDisabledText(text);
+            load();
+          }}
+        />
+      )}
     </PageLayout>
+  );
+}
+
+// The first trainer (clients without a trainer see their group trainings) can't be disabled
+function firstId(trainers: Trainer[]) {
+  return [...trainers].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]?.id;
+}
+
+function DisableDialog({
+  trainer,
+  targets,
+  onClose,
+  onDone,
+}: {
+  trainer: Trainer;
+  targets: Trainer[];
+  onClose: () => void;
+  onDone: (text: string) => void;
+}) {
+  const [transferToId, setTransferToId] = useState(targets[0]?.id ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const disable = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const { movedClients, cancelledTrainings } = await api.disableTrainer(trainer.id, transferToId);
+      onDone(`Вимкнено. Клієнтів передано: ${movedClients}, тренувань скасовано: ${cancelledTrainings}`);
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      setError(status === 409 ? "Цього тренера вже вимкнули" : "Не вдалося вимкнути. Спробуйте ще раз.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-5 space-y-4 max-h-full overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="font-geologica font-semibold text-heading">Вимкнути {trainer.username}?</p>
+        <div>
+          <label htmlFor="transfer-to" className="block text-muted text-xs mb-2 uppercase tracking-wide">
+            Клієнти перейдуть до
+          </label>
+          <select
+            id="transfer-to"
+            value={transferToId}
+            onChange={(e) => setTransferToId(e.target.value)}
+            className={FIELD}
+          >
+            {targets.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.username}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="text-body text-sm">
+          {trainer.username} більше не зможе увійти. Усі його клієнти перейдуть до обраного тренера, готівкові оплати,
+          що чекають, — теж. Тренування, що ще не закінчились, буде скасовано, записаним прийде сповіщення. Скасувати
+          вимкнення не можна.
+        </p>
+        {error && <p className="text-danger text-sm">{error}</p>}
+        <div className="flex flex-col space-y-2">
+          <button
+            onClick={disable}
+            disabled={busy || !transferToId}
+            className="btn-ghost hover-danger w-full py-3 rounded-xl border border-danger text-danger text-sm transition-colors disabled:opacity-60"
+          >
+            {busy ? "Зачекайте..." : "Вимкнути"}
+          </button>
+          <button onClick={onClose} className="text-muted text-sm py-2 transition-colors hover:text-body">
+            Закрити
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

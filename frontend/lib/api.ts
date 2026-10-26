@@ -62,6 +62,8 @@ export interface Trainer {
   username: string;
   createdAt: string;
   invitedBy: string | null; // null = added by the seed script
+  disabledAt: string | null; // null = works
+  disabledBy: string | null;
 }
 
 // An invite link still waiting to be used (any trainer's)
@@ -437,6 +439,13 @@ export const api = {
   getTrainerInvites: () => request<TrainerInvite[]>("/admin/trainer-invites"),
 
   revokeTrainerInvite: (id: string) => request<{ ok: boolean }>(`/admin/trainer-invites/${id}`, { method: "DELETE" }),
+
+  // Clients (and cash requests waiting) go to `transferToId`; trainings not over yet are cancelled
+  disableTrainer: (id: string, transferToId: string) =>
+    request<{ movedClients: number; cancelledTrainings: number }>(`/admin/trainers/${id}/disable`, {
+      method: "POST",
+      body: JSON.stringify({ transferToId }),
+    }),
 
   getAdminSchedule: () => request<AdminSchedule | null>("/admin/schedule"),
 

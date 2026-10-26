@@ -228,11 +228,14 @@ export function TrainerPicker({
           className="bg-transparent text-body border-b border-line focus:outline-none focus:border-accent"
         >
           {!member.trainerId && <option value="">не вибрано</option>}
-          {trainers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.id === myId ? `${c.username} (я)` : c.username}
-            </option>
-          ))}
+          {/* A disabled trainer can't get clients */}
+          {trainers
+            .filter((c) => !c.disabledAt)
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.id === myId ? `${c.username} (я)` : c.username}
+              </option>
+            ))}
         </select>
       </label>
       {error && <span className="text-danger text-xs">{error}</span>}
