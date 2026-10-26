@@ -9,6 +9,12 @@ import { attendance, packageSpends } from '../database/schema';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
 
+// No guests unless a test says so (the drizzle mocks here don't answer UPDATE … RETURNING)
+jest.mock('../booking/group-booking', () => ({
+  ...jest.requireActual('../booking/group-booking'),
+  cancelGuests: jest.fn().mockResolvedValue(new Set()),
+}));
+
 // No member is frozen unless a test says so
 jest.mock('../freezes/freeze.store', () => ({
   loadFreezes: jest.fn(),
@@ -564,6 +570,8 @@ describe('History of past trainings', () => {
         { bookingId: 'b1', slotId: 's1', memberId: M1, displayName: 'Катя', attendanceStatus: 'PRESENT' },
         { bookingId: 'b2', slotId: 's1', memberId: M2, displayName: 'Ліза', attendanceStatus: null },
       ],
+      // Катя brought a guest
+      [{ id: 'g1', bookingId: 'b1', name: 'Марія', attendance: null }],
       [
         {
           bookingId: 'b3',
@@ -582,7 +590,11 @@ describe('History of past trainings', () => {
     const { days, nextBefore } = await makeService(db).getHistory(TRAINER);
     expect(nextBefore).toBeNull();
     expect(days).toHaveLength(1);
-    expect(days[0].slots[0].participants.map((p) => p.attendanceStatus)).toEqual(['PRESENT', 'UNMARKED']);
+    expect(days[0].slots[0].participants.map((p) => [p.displayName, p.attendanceStatus, p.guestOf])).toEqual([
+      ['Катя', 'PRESENT', null],
+      ['Марія', 'UNMARKED', 'Катя'],
+      ['Ліза', 'UNMARKED', null],
+    ]);
     expect(days[0].slots[0].cancellations).toEqual([
       expect.objectContaining({ displayName: 'Оля', reason: 'Захворіла' }),
     ]);

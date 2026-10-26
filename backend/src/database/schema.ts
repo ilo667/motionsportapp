@@ -176,6 +176,34 @@ export const attendance = pgTable(
   () => [oneOf('attendance_status_check', 'status', ['PRESENT', 'ABSENT'])],
 );
 
+// A guest a member brings to a group training they are booked on: free, a name only, one per booking. Takes a
+// seat (counted in training_slots.booked_count) and goes with the booking: cancelled with it, moved with it.
+// The trainer may mark them (✓ / ✗, nothing is spent)
+export const bookingGuests = pgTable(
+  'booking_guests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    bookingId: uuid('booking_id')
+      .notNull()
+      .references(() => bookings.id),
+    name: text('name').notNull(),
+    status: text('status').notNull().default('ACTIVE'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    attendance: text('attendance'), // null = not marked
+    markedAt: timestamp('marked_at', { withTimezone: true }),
+    markedByAdminId: uuid('marked_by_admin_id').references(() => admins.id),
+  },
+  (table) => [
+    uniqueIndex('booking_guests_booking_active_idx')
+      .on(table.bookingId)
+      .where(sql`${table.status} = 'ACTIVE'`),
+    oneOf('booking_guests_status_check', 'status', ['ACTIVE', 'CANCELLED']),
+    oneOf('booking_guests_attendance_check', 'attendance', ['PRESENT', 'ABSENT']),
+    check('booking_guests_name_check', sql`char_length(name) between 1 and 40`),
+  ],
+);
+
 export const pushSubscriptions = pgTable('push_subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   memberId: uuid('member_id')

@@ -7,7 +7,7 @@ import { AnnouncementsService } from '../ai/announcements.service';
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
-import { trainingDays, trainingSlots, bookings, attendance } from '../database/schema';
+import { trainingDays, trainingSlots, bookings, attendance, bookingGuests } from '../database/schema';
 import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
 import { bookingOpensAt } from '../trainer-schedule/rules';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
@@ -126,9 +126,10 @@ export class InternalCronController {
     // Only trainings that are over (an hour after the start): Vercel runs crons in UTC, so this job comes at a
     // different Kyiv hour in winter and summer, and must not mark a training that is still going on
     const unmarkedBookings = unmarked.filter((b) => now >= slotStartsAt(today, b.slotTime).plus({ hours: 1 }));
+    const guestsMarked = await this.markGuests(day.id, today, now);
 
     if (unmarkedBookings.length === 0) {
-      return { ok: true, marked: 0 };
+      return { ok: true, marked: 0, guestsMarked };
     }
 
     const markedAt = now.toJSDate();
@@ -143,7 +144,33 @@ export class InternalCronController {
       }
     });
 
-    return { ok: true, marked: unmarkedBookings.length, slots: slots.length };
+    return { ok: true, marked: unmarkedBookings.length, guestsMarked, slots: slots.length };
+  }
+
+  // Guests on trainings that are over and still unmarked: ✓ like their hosts, in the trainer's name (nothing to spend)
+  private async markGuests(dayId: string, today: string, now: ReturnType<ClockService['now']>) {
+    const guests = await this.database.db
+      .select({ id: bookingGuests.id, trainerId: trainingSlots.trainerId, slotTime: trainingSlots.slotTime })
+      .from(bookingGuests)
+      .innerJoin(bookings, eq(bookings.id, bookingGuests.bookingId))
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
+      .where(
+        and(
+          eq(trainingSlots.trainingDayId, dayId),
+          eq(trainingSlots.status, 'ACTIVE'),
+          eq(bookings.status, 'ACTIVE'),
+          eq(bookingGuests.status, 'ACTIVE'),
+          isNull(bookingGuests.attendance),
+        ),
+      );
+    const over = guests.filter((g) => now >= slotStartsAt(today, g.slotTime).plus({ hours: 1 }));
+    for (const g of over) {
+      await this.database.db
+        .update(bookingGuests)
+        .set({ attendance: 'PRESENT', markedAt: now.toJSDate(), markedByAdminId: g.trainerId })
+        .where(and(eq(bookingGuests.id, g.id), isNull(bookingGuests.attendance)));
+    }
+    return over.length;
   }
 
   @Get('cron/expire-payments')

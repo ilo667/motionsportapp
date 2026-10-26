@@ -6,6 +6,7 @@ import type { SessionUser } from '../auth/session.guard';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { SwitchBookingDto } from './dto/switch-booking.dto';
+import { AddGuestDto } from './dto/add-guest.dto';
 
 @Controller('bookings')
 @UseGuards(SessionGuard)
@@ -30,5 +31,20 @@ export class BookingController {
   async switchSlot(@CurrentUser() user: SessionUser, @Body() dto: SwitchBookingDto) {
     if (user.type !== 'member') throw new Error('Members only');
     return this.bookingService.switchSlot(user.id, dto.newSlotId, dto.reason);
+  }
+
+  // A free guest on the member's group booking (one per booking)
+  @Post('guest')
+  @HttpCode(HttpStatus.OK)
+  async addGuest(@CurrentUser() user: SessionUser, @Body() dto: AddGuestDto) {
+    if (user.type !== 'member') throw new Error('Members only');
+    return this.bookingService.addGuest(user.id, dto.slotId, dto.name);
+  }
+
+  @Delete('guest')
+  @HttpCode(HttpStatus.OK)
+  async removeGuest(@CurrentUser() user: SessionUser, @Body() dto: CreateBookingDto) {
+    if (user.type !== 'member') throw new Error('Members only');
+    return this.bookingService.removeGuest(user.id, dto.slotId);
   }
 }

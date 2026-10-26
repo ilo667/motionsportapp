@@ -16,6 +16,7 @@ import {
   purchases,
   trainerSchedules,
   adminPushSubscriptions,
+  bookingGuests,
 } from '../database/schema';
 import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
@@ -30,6 +31,7 @@ import { getDefaultTrainerId } from '../schedule/default-trainer';
 import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
 import { GROUP_TYPE, KY_ZONE, ASSIGNED_MEMBER_LIMITS, isAssignedType, slotStartsAt } from '../schedule/training-types';
 import { loadFreezes } from '../freezes/freeze.store';
+import { cancelGuests } from '../booking/group-booking';
 import { frozenOn, plusDays } from '../freezes/rules';
 
 // Member-initiated cancellations / moves shown to the trainer (with the reason they wrote)
@@ -179,6 +181,15 @@ export class AdminScheduleService {
   private async cancelSlotsTx(tx: Tx, slotIds: string[]) {
     if (slotIds.length === 0) return;
     await this.releaseMarks(tx, slotIds);
+    const active = await tx
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')));
+    await cancelGuests(
+      tx,
+      active.map((b) => b.id),
+      new Date(),
+    );
     await tx
       .update(bookings)
       .set({ status: 'CANCELLED', cancelledAt: new Date() })
@@ -216,6 +227,27 @@ export class AdminScheduleService {
       .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')))
       .orderBy(bookings.createdAt);
 
+    // Guests of these bookings, each listed right under the member who brought them
+    const guestRows = participantRows.length
+      ? await this.database.db
+          .select({
+            id: bookingGuests.id,
+            bookingId: bookingGuests.bookingId,
+            name: bookingGuests.name,
+            attendance: bookingGuests.attendance,
+          })
+          .from(bookingGuests)
+          .where(
+            and(
+              inArray(
+                bookingGuests.bookingId,
+                participantRows.map((p) => p.bookingId),
+              ),
+              eq(bookingGuests.status, 'ACTIVE'),
+            ),
+          )
+      : [];
+
     // Cancelled from these slots, and moved here from another slot
     const cancellations = await this.memberCancellations(
       or(inArray(bookings.slotId, slotIds), inArray(bookings.switchedToSlotId, slotIds))!,
@@ -231,13 +263,30 @@ export class AdminScheduleService {
       bookedCount: s.bookedCount,
       participants: participantRows
         .filter((p) => p.slotId === s.id)
-        .map((p) => ({
-          bookingId: p.bookingId,
-          displayName: p.displayName,
-          attendanceStatus: (p.attendanceStatus ?? 'UNMARKED') as 'PRESENT' | 'ABSENT' | 'UNMARKED',
-          switchedFromTime:
-            cancellations.find((c) => c.switchedToSlotId === s.id && c.memberId === p.memberId)?.slotTime ?? null,
-        })),
+        .flatMap((p) => {
+          const member = {
+            bookingId: p.bookingId,
+            displayName: p.displayName,
+            attendanceStatus: (p.attendanceStatus ?? 'UNMARKED') as 'PRESENT' | 'ABSENT' | 'UNMARKED',
+            switchedFromTime:
+              cancellations.find((c) => c.switchedToSlotId === s.id && c.memberId === p.memberId)?.slotTime ?? null,
+            guestOf: null as string | null,
+          };
+          // A guest: bookingId is the guest's own id, marked through PATCH /admin/guests/:id/attendance
+          const guest = guestRows.find((g) => g.bookingId === p.bookingId);
+          return guest
+            ? [
+                member,
+                {
+                  bookingId: guest.id,
+                  displayName: guest.name,
+                  attendanceStatus: (guest.attendance ?? 'UNMARKED') as 'PRESENT' | 'ABSENT' | 'UNMARKED',
+                  switchedFromTime: null,
+                  guestOf: p.displayName,
+                },
+              ]
+            : [member];
+        }),
       // Someone who moved away and came back is a participant again, not one who cancelled
       cancellations: cancellations
         .filter(
@@ -689,6 +738,19 @@ export class AdminScheduleService {
           });
         await this.entitlements.syncSpend(tx, booking.id);
       }
+      // Their guests too (nothing to spend)
+      await tx
+        .update(bookingGuests)
+        .set({ attendance: 'PRESENT', markedAt: now, markedByAdminId: adminId })
+        .where(
+          and(
+            inArray(
+              bookingGuests.bookingId,
+              activeBookings.map((b) => b.id),
+            ),
+            eq(bookingGuests.status, 'ACTIVE'),
+          ),
+        );
     });
 
     return { marked: activeBookings.length };
@@ -722,6 +784,28 @@ export class AdminScheduleService {
       await this.entitlements.syncSpend(tx, bookingId);
     });
 
+    return { ok: true };
+  }
+
+  // A guest's mark: for the trainer's count only, nothing is spent. Only guests on this trainer's trainings
+  async updateGuestAttendance(guestId: string, dto: UpdateAttendanceDto, adminId: string) {
+    const [guest] = await this.database.db
+      .select({ id: bookingGuests.id })
+      .from(bookingGuests)
+      .innerJoin(bookings, eq(bookings.id, bookingGuests.bookingId))
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
+      .where(and(eq(bookingGuests.id, guestId), eq(trainingSlots.trainerId, adminId)))
+      .limit(1);
+    if (!guest) throw new NotFoundException('Guest not found');
+    const marked = dto.status !== 'UNMARKED';
+    await this.database.db
+      .update(bookingGuests)
+      .set({
+        attendance: marked ? dto.status : null,
+        markedAt: marked ? new Date() : null,
+        markedByAdminId: marked ? adminId : null,
+      })
+      .where(eq(bookingGuests.id, guestId));
     return { ok: true };
   }
 

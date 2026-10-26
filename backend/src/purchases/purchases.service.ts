@@ -19,7 +19,7 @@ import { EntitlementsService } from './entitlements.service';
 import { PaymentService } from '../payment/payment.service';
 import { NotificationService } from '../notifications/notification.service';
 import type { CreatePurchaseDto } from './dto/create-purchase.dto';
-import { tryBookGroup, type GroupBookingResult } from '../booking/group-booking';
+import { cancelGuests, tryBookGroup, type GroupBookingResult } from '../booking/group-booking';
 import { cardState } from './validity';
 import { GROUP_TYPE } from '../schedule/training-types';
 import { memberFrozenOn, openFreeze } from '../freezes/freeze.store';
@@ -362,9 +362,11 @@ export class PurchasesService {
         .where(and(eq(bookings.id, bookingId), eq(bookings.status, 'ACTIVE')))
         .returning({ slotId: bookings.slotId });
       if (!cancelled) return; // the member already cancelled it
+      // Their guest goes with the booking
+      const seats = 1 + (await cancelGuests(tx, [bookingId], this.clock.now().toJSDate())).size;
       await tx
         .update(trainingSlots)
-        .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - 1, 0)` })
+        .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - ${seats}, 0)` })
         .where(eq(trainingSlots.id, cancelled.slotId));
     });
     return { ok: true };

@@ -1,7 +1,7 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { DatabaseService } from '../database/database.service';
-import { bookings, members, trainingDays, trainingSlots, vacancyAlerts } from '../database/schema';
+import { bookingGuests, bookings, members, trainingDays, trainingSlots, vacancyAlerts } from '../database/schema';
 import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
 import { bookingOpensAt } from '../trainer-schedule/rules';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
@@ -103,4 +103,16 @@ export async function tryBookGroup(
     .set({ active: false })
     .where(and(eq(vacancyAlerts.memberId, memberId), eq(vacancyAlerts.slotId, slotId)));
   return { ok: true, bookingId: booking.id };
+}
+
+// A booking that goes takes its guest along: cancels the active guests of these bookings and returns the ids of
+// the bookings that had one, so the caller frees one more seat for each (training_slots.booked_count)
+export async function cancelGuests(tx: Tx, bookingIds: string[], at: Date): Promise<Set<string>> {
+  if (bookingIds.length === 0) return new Set();
+  const rows = await tx
+    .update(bookingGuests)
+    .set({ status: 'CANCELLED', cancelledAt: at })
+    .where(and(inArray(bookingGuests.bookingId, bookingIds), eq(bookingGuests.status, 'ACTIVE')))
+    .returning({ bookingId: bookingGuests.bookingId });
+  return new Set(rows.map((r) => r.bookingId));
 }

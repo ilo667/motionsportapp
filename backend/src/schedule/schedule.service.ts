@@ -11,6 +11,7 @@ import {
   slotMembers,
   packageSpends,
   admins,
+  bookingGuests,
 } from '../database/schema';
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
@@ -126,11 +127,12 @@ export class ScheduleService {
       .orderBy(trainingSlots.slotTime);
 
     let myBookingSlotId: string | null = null;
+    let myGuest: { name: string } | null = null;
     const myVacancyAlertSlotIds = new Set<string>();
 
     if (memberId && slots.length > 0) {
       const [mine] = await this.database.db
-        .select({ slotId: bookings.slotId })
+        .select({ id: bookings.id, slotId: bookings.slotId })
         .from(bookings)
         .where(
           and(
@@ -144,6 +146,14 @@ export class ScheduleService {
         )
         .limit(1);
       myBookingSlotId = mine?.slotId ?? null;
+      if (mine) {
+        const [guest] = await this.database.db
+          .select({ name: bookingGuests.name })
+          .from(bookingGuests)
+          .where(and(eq(bookingGuests.bookingId, mine.id), eq(bookingGuests.status, 'ACTIVE')))
+          .limit(1);
+        myGuest = guest ?? null;
+      }
 
       const slotIds = slots.map((s) => s.id);
       if (slotIds.length > 0) {
@@ -187,6 +197,8 @@ export class ScheduleService {
         bookedCount: s.bookedCount,
         isMyBooking: s.id === myBookingSlotId,
         isMyVacancyAlert: myVacancyAlertSlotIds.has(s.id),
+        // The guest the member brings to this training (only on their own booking)
+        myGuest: s.id === myBookingSlotId ? myGuest : null,
         // Booking, cancelling and switching for this training are over
         started: now >= slotStartsAt(targetDay.localDate, s.slotTime),
       })),

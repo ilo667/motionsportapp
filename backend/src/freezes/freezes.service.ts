@@ -20,6 +20,7 @@ import { cardState, passState } from '../purchases/validity';
 import { NotificationService } from '../notifications/notification.service';
 import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
 import { openFreeze } from './freeze.store';
+import { cancelGuests } from '../booking/group-booking';
 import { FREEZE_DAYS, daysBetween, plusDays } from './rules';
 
 type Db = DatabaseService['db'];
@@ -239,10 +240,17 @@ export class FreezesService {
               eq(bookings.status, 'ACTIVE'),
             ),
           );
+        // Guests go with the bookings: one more seat each
+        const withGuest = await cancelGuests(
+          tx,
+          ahead.map((b) => b.id),
+          now.toJSDate(),
+        );
         for (const b of ahead) {
+          const seats = withGuest.has(b.id) ? 2 : 1;
           await tx
             .update(trainingSlots)
-            .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - 1, 0)` })
+            .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - ${seats}, 0)` })
             .where(eq(trainingSlots.id, b.slotId));
         }
       }

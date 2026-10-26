@@ -1,14 +1,14 @@
 import { Injectable, Logger, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { eq, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { bookings, trainingSlots, trainingDays, members } from '../database/schema';
+import { bookingGuests, bookings, trainingSlots, trainingDays, members } from '../database/schema';
 import { NotificationService } from '../notifications/notification.service';
 import { VacancyAlertsService } from '../notifications/vacancy-alerts.service';
 import { ClockService } from '../clock/clock.service';
 import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
 import { getMemberTrainerId } from '../schedule/default-trainer';
 import { EntitlementsService } from '../purchases/entitlements.service';
-import { findGroupBooking, groupBookingWindow } from './group-booking';
+import { cancelGuests, findGroupBooking, groupBookingWindow } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { memberFrozenOn } from '../freezes/freeze.store';
 
@@ -136,14 +136,17 @@ export class BookingService {
     const wasAtCapacity = slotBefore?.trainingType === GROUP_TYPE && slotBefore.bookedCount >= slotBefore.capacity;
 
     await this.database.db.transaction(async (tx) => {
+      const now = new Date();
       await tx
         .update(bookings)
-        .set({ status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason })
+        .set({ status: 'CANCELLED', cancelledAt: now, cancellationReason: reason })
         .where(and(eq(bookings.id, booking.id), eq(bookings.status, 'ACTIVE')));
+      // Their guest goes too: two seats free
+      const seats = 1 + (await cancelGuests(tx, [booking.id], now)).size;
 
       await tx
         .update(trainingSlots)
-        .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - 1, 0)` })
+        .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - ${seats}, 0)` })
         .where(eq(trainingSlots.id, booking.slotId));
     });
 
@@ -245,9 +248,16 @@ export class BookingService {
         if (!slot1 || !slot2) throw new NotFoundException('Slot not found');
 
         const newSlot = slot1.id === newSlotId ? slot1 : slot2;
+        // A guest moves along: the new training needs a seat for them too
+        const [guest] = await tx
+          .select({ id: bookingGuests.id })
+          .from(bookingGuests)
+          .where(and(eq(bookingGuests.bookingId, current.id), eq(bookingGuests.status, 'ACTIVE')))
+          .limit(1);
+        const seats = guest ? 2 : 1;
 
         if (newSlot.status !== 'ACTIVE') throw new ConflictException('Target slot is cancelled');
-        if (newSlot.bookedCount >= newSlot.capacity) throw new ConflictException('Target slot is full');
+        if (newSlot.bookedCount + seats > newSlot.capacity) throw new ConflictException('Target slot is full');
 
         const [moved] = await tx
           .update(bookings)
@@ -261,20 +271,24 @@ export class BookingService {
           .returning({ id: bookings.id });
         if (!moved) throw new ConflictException('Booking has changed, refresh and try again');
 
-        await tx.insert(bookings).values({
-          memberId,
-          slotId: newSlotId,
-          status: 'ACTIVE',
-        });
+        const [created] = await tx
+          .insert(bookings)
+          .values({
+            memberId,
+            slotId: newSlotId,
+            status: 'ACTIVE',
+          })
+          .returning({ id: bookings.id });
+        if (guest) await tx.update(bookingGuests).set({ bookingId: created.id }).where(eq(bookingGuests.id, guest.id));
 
         await tx
           .update(trainingSlots)
-          .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - 1, 0)` })
+          .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - ${seats}, 0)` })
           .where(eq(trainingSlots.id, oldSlotId));
 
         await tx
           .update(trainingSlots)
-          .set({ bookedCount: sql`${trainingSlots.bookedCount} + 1` })
+          .set({ bookedCount: sql`${trainingSlots.bookedCount} + ${seats}` })
           .where(eq(trainingSlots.id, newSlotId));
       });
     } catch (err: unknown) {
@@ -310,6 +324,91 @@ export class BookingService {
     }
 
     return { ok: true };
+  }
+
+  // «+ Гість»: a member booked on a group training brings one guest, free, a name only. The guest takes a seat;
+  // added and removed only while booking is open for that training (from the trainer's opening to its start)
+  async addGuest(memberId: string, slotId: string, name: string) {
+    const guestName = name.trim();
+    if (!guestName) throw new BadRequestException('Guest name required');
+    const slot = await this.groupSlotOf(slotId);
+    await this.validateBookingWindow(slot.localDate, slot.slotTime, slot.trainerId);
+
+    await this.database.db.transaction(async (tx) => {
+      await this.lockMember(tx, memberId);
+      const [locked] = await tx.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).for('update').limit(1);
+      if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
+      const booking = await this.activeBooking(tx, memberId, slotId);
+      if (!booking) throw new NotFoundException('No active booking found');
+      const [already] = await tx
+        .select({ id: bookingGuests.id })
+        .from(bookingGuests)
+        .where(and(eq(bookingGuests.bookingId, booking.id), eq(bookingGuests.status, 'ACTIVE')))
+        .limit(1);
+      if (already) throw new ConflictException('Guest already added');
+      if (locked.bookedCount >= locked.capacity) throw new ConflictException('Slot is full');
+
+      await tx.insert(bookingGuests).values({ bookingId: booking.id, name: guestName });
+      await tx
+        .update(trainingSlots)
+        .set({ bookedCount: sql`${trainingSlots.bookedCount} + 1` })
+        .where(eq(trainingSlots.id, slotId));
+    });
+    return { ok: true };
+  }
+
+  async removeGuest(memberId: string, slotId: string) {
+    const slot = await this.groupSlotOf(slotId);
+    this.validateBeforeStart(slot.localDate, slot.slotTime);
+
+    const wasFull = await this.database.db.transaction(async (tx) => {
+      const [locked] = await tx.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).for('update').limit(1);
+      const booking = await this.activeBooking(tx, memberId, slotId);
+      if (!locked || !booking) throw new NotFoundException('No active booking found');
+      if ((await cancelGuests(tx, [booking.id], new Date())).size === 0) throw new NotFoundException('No guest');
+      await tx
+        .update(trainingSlots)
+        .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - 1, 0)` })
+        .where(eq(trainingSlots.id, slotId));
+      return locked.bookedCount >= locked.capacity;
+    });
+
+    // A seat freed in a full group training: «З'явилось місце» to those waiting
+    if (wasFull) {
+      await this.notifications.enqueueAndProcess('VACANCY', `vacancy:${slotId}:guest:${Date.now()}`, {
+        slotId,
+        slotTime: slot.slotTime,
+        localDate: slot.localDate,
+        excludeMemberId: memberId,
+      });
+    }
+    return { ok: true };
+  }
+
+  // A group slot of the member's trainer with its date (guests come only to group trainings)
+  private async groupSlotOf(slotId: string) {
+    const [slot] = await this.database.db
+      .select({
+        slotTime: trainingSlots.slotTime,
+        trainingType: trainingSlots.trainingType,
+        trainerId: trainingSlots.trainerId,
+        localDate: trainingDays.localDate,
+      })
+      .from(trainingSlots)
+      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
+      .where(eq(trainingSlots.id, slotId))
+      .limit(1);
+    if (!slot || slot.trainingType !== GROUP_TYPE) throw new NotFoundException('Slot not found');
+    return slot;
+  }
+
+  private async activeBooking(tx: Tx, memberId: string, slotId: string) {
+    const [booking] = await tx
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
+      .limit(1);
+    return booking ?? null;
   }
 
   // Push to the trainer whose training it is, with the member's reason. A failed push must not fail the member's action

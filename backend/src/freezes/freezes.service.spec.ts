@@ -69,7 +69,7 @@ function shiftOf(set: Record<string, unknown>) {
   return chunks.find((c) => typeof c === 'number');
 }
 
-function makeService(db: any, { card = null, packs = [] as unknown[] } = {}) {
+function makeService(db: any, { card = null, packs = [] }: { card?: unknown; packs?: unknown[] } = {}) {
   const entitlements = {
     usableCard: jest.fn().mockResolvedValue(card),
     packagesOf: jest.fn().mockResolvedValue(packs),

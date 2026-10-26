@@ -167,4 +167,15 @@ export class AdminScheduleController {
   ) {
     return this.adminScheduleService.updateBookingAttendance(bookingId, dto, user.id);
   }
+
+  // A guest a member brought to a group training: ✓ / ✗ for the count, nothing is spent
+  @Patch('guests/:guestId/attendance')
+  @HttpCode(HttpStatus.OK)
+  updateGuestAttendance(
+    @Param('guestId', ParseUUIDPipe) guestId: string,
+    @Body() dto: UpdateAttendanceDto,
+    @CurrentUser() user: SessionUser,
+  ) {
+    return this.adminScheduleService.updateGuestAttendance(guestId, dto, user.id);
+  }
 }

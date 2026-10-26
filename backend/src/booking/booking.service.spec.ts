@@ -1,8 +1,15 @@
 import { NotFoundException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { BookingService } from './booking.service';
+import { cancelGuests } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
+
+// No guests unless a test says so (the drizzle mocks here don't answer UPDATE … RETURNING)
+jest.mock('./group-booking', () => ({
+  ...jest.requireActual('./group-booking'),
+  cancelGuests: jest.fn().mockResolvedValue(new Set()),
+}));
 
 // No member is frozen unless a test says so
 jest.mock('../freezes/freeze.store', () => ({
@@ -365,6 +372,7 @@ describe('BookingService — trainer push with the reason', () => {
         MEMBER,
         [slot1],
         [slot2],
+        [], // no guest to move along
         [{ displayName: 'Іра' }],
       ],
       () => [{ id: 'booking-1' }], // the old booking's conditional UPDATE … RETURNING wins
@@ -383,5 +391,108 @@ describe('BookingService — trainer push with the reason', () => {
     );
     // waited for this slot → no vacancy push about the slot they now hold
     expect((service as any).vacancyAlerts.unsubscribe).toHaveBeenCalledWith('member-1', 'slot-2');
+  });
+});
+
+// The number of seats a counter update moves: `booked_count - ${seats}`
+function seatsIn(set: Record<string, unknown>) {
+  const chunks = (set.bookedCount as { queryChunks: unknown[] }).queryChunks;
+  return chunks.find((c) => typeof c === 'number');
+}
+
+describe('BookingService — guests', () => {
+  // groupSlotOf: the slot with its date
+  const GROUP_SLOT = [{ slotTime: '19:00', trainingType: 'групові', trainerId: 'trainer-1', localDate: TODAY }];
+  const BOOKING = [{ id: 'booking-1' }];
+  const at15 = kyivAt(15);
+
+  it('a member booked on the training adds one guest, who takes a seat', async () => {
+    const { db, sets } = makeDb([GROUP_SLOT, MEMBER, [validSlot], BOOKING, []]);
+    await expect(makeService(db, at15).addGuest('member-1', 'slot-1', '  Марія ')).resolves.toEqual({ ok: true });
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(seatsIn(sets[0])).toBeUndefined(); // `booked_count + 1`
+  });
+
+  it('only on their own booking', async () => {
+    const { db } = makeDb([GROUP_SLOT, MEMBER, [validSlot], []]);
+    await expect(makeService(db, at15).addGuest('member-1', 'slot-1', 'Марія')).rejects.toThrow(NotFoundException);
+  });
+
+  it('one guest per booking', async () => {
+    const { db } = makeDb([GROUP_SLOT, MEMBER, [validSlot], BOOKING, [{ id: 'g1' }]]);
+    await expect(makeService(db, at15).addGuest('member-1', 'slot-1', 'Марія')).rejects.toThrow('Guest already added');
+  });
+
+  it('needs a free seat', async () => {
+    const { db } = makeDb([GROUP_SLOT, MEMBER, [{ ...validSlot, bookedCount: 8 }], BOOKING, []]);
+    await expect(makeService(db, at15).addGuest('member-1', 'slot-1', 'Марія')).rejects.toThrow('Slot is full');
+  });
+
+  it('only while booking is open for that training', async () => {
+    const early = makeDb([GROUP_SLOT]);
+    await expect(makeService(early.db, kyivAt(13)).addGuest('member-1', 'slot-1', 'Марія')).rejects.toThrow(
+      'Booking is not open yet',
+    );
+    const started = makeDb([GROUP_SLOT]);
+    await expect(makeService(started.db, kyivAt(19)).addGuest('member-1', 'slot-1', 'Марія')).rejects.toThrow(
+      'Booking window has closed',
+    );
+  });
+
+  it('not on an assigned training', async () => {
+    const { db } = makeDb([[{ ...GROUP_SLOT[0], trainingType: 'персональні' }]]);
+    await expect(makeService(db, at15).addGuest('member-1', 'slot-1', 'Марія')).rejects.toThrow(NotFoundException);
+  });
+
+  it('removing the guest from a full training tells those waiting', async () => {
+    (cancelGuests as jest.Mock).mockResolvedValueOnce(new Set(['booking-1']));
+    const { db } = makeDb([GROUP_SLOT, [{ ...validSlot, bookedCount: 8 }], BOOKING]);
+    const service = makeService(db, at15);
+    await service.removeGuest('member-1', 'slot-1');
+    expect((service as any).notifications.enqueueAndProcess).toHaveBeenCalledWith(
+      'VACANCY',
+      expect.stringMatching(/^vacancy:slot-1:guest:/),
+      expect.objectContaining({ slotId: 'slot-1', excludeMemberId: 'member-1' }),
+    );
+  });
+
+  it('cancelling the booking takes the guest along: two seats free', async () => {
+    (cancelGuests as jest.Mock).mockResolvedValueOnce(new Set(['booking-1']));
+    const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '20:00', trainingType: 'групові' };
+    const { db, sets } = makeDb([
+      [{ id: 'booking-1', memberId: 'member-1', slotId: 'slot-1', status: 'ACTIVE' }],
+      [validDay],
+      [groupSlot],
+      [{ displayName: 'Оля' }],
+    ]);
+    await makeService(db, at15).cancel('member-1', 'slot-1', 'reason');
+    expect(seatsIn(sets.find((x) => 'bookedCount' in x)!)).toBe(2);
+  });
+
+  it('a move takes the guest along and needs two seats there', async () => {
+    const current = { id: 'booking-1', slotId: 'slot-1', trainingDayId: 'day-1', memberId: 'member-1' };
+    const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '20:00', trainerId: 'trainer-1' };
+    const slot1 = { id: 'slot-1', status: 'ACTIVE', capacity: 8, bookedCount: 3 };
+    const reads = (slot2Booked: number) => [
+      [target],
+      MEMBER_TRAINER,
+      [current],
+      [validDay],
+      [{ bookedCount: 3, capacity: 8, slotTime: '19:00' }],
+      MEMBER,
+      [slot1],
+      [{ id: 'slot-2', status: 'ACTIVE', capacity: 8, bookedCount: slot2Booked }],
+      [{ id: 'g1' }],
+      [{ displayName: 'Іра' }],
+    ];
+    const full = makeDb(reads(7), () => [{ id: 'booking-1' }]);
+    await expect(makeService(full.db, at15).switchSlot('member-1', 'slot-2', 'reason')).rejects.toThrow(
+      'Target slot is full',
+    );
+
+    const ok = makeDb(reads(6), () => [{ id: 'booking-2' }]);
+    await makeService(ok.db, at15).switchSlot('member-1', 'slot-2', 'reason');
+    expect(ok.sets).toContainEqual({ bookingId: 'booking-2' });
+    expect(ok.sets.filter((x) => 'bookedCount' in x).map(seatsIn)).toEqual([2, 2]);
   });
 });
