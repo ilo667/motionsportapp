@@ -7,6 +7,19 @@ import { AdminScheduleService } from './admin-schedule.service';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { attendance, packageSpends } from '../database/schema';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
+
+// No member is frozen unless a test says so
+jest.mock('../freezes/freeze.store', () => ({
+  loadFreezes: jest.fn(),
+  memberFrozenOn: jest.fn(),
+  openFreeze: jest.fn(),
+}));
+beforeEach(() => {
+  (loadFreezes as jest.Mock).mockResolvedValue([]);
+  (memberFrozenOn as jest.Mock).mockResolvedValue(false);
+  (openFreeze as jest.Mock).mockResolvedValue(null);
+});
 
 jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
 const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
@@ -123,6 +136,20 @@ describe('Assigned slots — createAssignedSlot', () => {
         memberIds: [M1, M2],
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('a member frozen on that day cannot be put on it', async () => {
+    (loadFreezes as jest.Mock).mockResolvedValue([
+      { id: 'f1', memberId: M2, status: 'ACTIVE', startedOn: '2026-10-20', endsOn: '2026-11-19' },
+    ]);
+    const { db } = makeDb([[{ id: M1 }, { id: M2 }]]);
+    await expect(
+      makeService(db).createAssignedSlot(TRAINER, '2026-10-21', {
+        slotTime: '10:30',
+        trainingType: 'спліт',
+        memberIds: [M1, M2],
+      }),
+    ).rejects.toThrow('Member is frozen');
   });
 
   it('throws NotFound when a member does not exist', async () => {

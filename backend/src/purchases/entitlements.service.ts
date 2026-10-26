@@ -7,6 +7,7 @@ import {
   attendance,
   bookings,
   clubCards,
+  freezeItems,
   packages,
   packageSpends,
   priceItems,
@@ -18,6 +19,8 @@ import {
 import { GROUP_TYPE, KY_ZONE, PASS_TYPES } from '../schedule/training-types';
 import { tryBookGroup } from '../booking/group-booking';
 import { activateByFor, cardState, passState, PassState, passUsableOn, validUntilFor } from './validity';
+import { loadFreezes } from '../freezes/freeze.store';
+import { daysBetween, frozenOn, plusDays } from '../freezes/rules';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -292,6 +295,9 @@ export class EntitlementsService {
       return;
     }
     if (booking.spentFrom) return;
+    // Nothing is spent on a frozen day (the freeze cancels those bookings; this is for any left over)
+    const memberFreezes = await loadFreezes(tx, [booking.memberId]);
+    if (memberFreezes.some((f) => frozenOn(f, booking.localDate))) return;
 
     // Lock first, count after: a mark waiting on the lock must see the other mark's spend. A count inside the
     // locking statement would use that statement's snapshot, taken before the wait, and both could take the
@@ -330,9 +336,18 @@ export class EntitlementsService {
 
     await tx.insert(packageSpends).values({ bookingId, packageId: from.id }).onConflictDoNothing();
     if (!from.activatedOn) {
+      // Activated by a mark from before a freeze (a fix in «Історія»): it was waiting when the freeze started, so
+      // its month also skips the frozen days, and an early unfreeze moves it back like the rest
+      let validUntil = validUntilFor(booking.localDate, from.durationMonths);
+      const later = memberFreezes.filter((f) => f.status === 'ACTIVE' && f.startedOn! >= booking.localDate);
+      for (const f of later) {
+        if (f.startedOn! > validUntil) continue;
+        validUntil = plusDays(validUntil, daysBetween(f.startedOn!, f.endsOn!));
+        await tx.insert(freezeItems).values({ freezeId: f.id, packageId: from.id, field: 'valid_until' });
+      }
       await tx
         .update(packages)
-        .set({ activatedOn: booking.localDate, validUntil: validUntilFor(booking.localDate, from.durationMonths) })
+        .set({ activatedOn: booking.localDate, validUntil })
         .where(and(eq(packages.id, from.id), isNull(packages.activatedOn)));
     }
   }

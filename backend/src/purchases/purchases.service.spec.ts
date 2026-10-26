@@ -10,6 +10,19 @@ import { MemberGuard } from '../common/guards/member.guard';
 import { payments, purchases, purchaseItems } from '../database/schema';
 import { KY_ZONE } from '../schedule/training-types';
 import { tryBookGroup } from '../booking/group-booking';
+import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
+
+// No member is frozen unless a test says so
+jest.mock('../freezes/freeze.store', () => ({
+  loadFreezes: jest.fn(),
+  memberFrozenOn: jest.fn(),
+  openFreeze: jest.fn(),
+}));
+beforeEach(() => {
+  (loadFreezes as jest.Mock).mockResolvedValue([]);
+  (memberFrozenOn as jest.Mock).mockResolvedValue(false);
+  (openFreeze as jest.Mock).mockResolvedValue(null);
+});
 
 jest.mock('../booking/group-booking', () => ({ tryBookGroup: jest.fn() }));
 const mockTryBook = tryBookGroup as jest.Mock;

@@ -1,9 +1,22 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { EntitlementsService } from './entitlements.service';
-import { clubCards, packages, packageSpends, purchases } from '../database/schema';
+import { clubCards, freezeItems, packages, packageSpends, purchases } from '../database/schema';
 import { KY_ZONE } from '../schedule/training-types';
 import { tryBookGroup } from '../booking/group-booking';
+import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
+
+// No member is frozen unless a test says so
+jest.mock('../freezes/freeze.store', () => ({
+  loadFreezes: jest.fn(),
+  memberFrozenOn: jest.fn(),
+  openFreeze: jest.fn(),
+}));
+beforeEach(() => {
+  (loadFreezes as jest.Mock).mockResolvedValue([]);
+  (memberFrozenOn as jest.Mock).mockResolvedValue(false);
+  (openFreeze as jest.Mock).mockResolvedValue(null);
+});
 
 jest.mock('../booking/group-booking', () => ({ tryBookGroup: jest.fn() }));
 const mockTryBook = tryBookGroup as jest.Mock;
@@ -240,6 +253,31 @@ describe('Entitlements — spends', () => {
     const { db, updates } = makeDb([[booking({})], [pack({})], []]);
     await makeService(db).syncSpend(db, 'b1');
     expect(updates).toEqual([{ table: packages, set: { activatedOn: '2026-10-25', validUntil: '2026-11-25' } }]);
+  });
+
+  it('nothing is spent on a frozen day', async () => {
+    (loadFreezes as jest.Mock).mockResolvedValue([
+      { id: 'f1', status: 'ACTIVE', startedOn: '2026-10-20', endsOn: '2026-11-19' },
+    ]);
+    const { db, inserts, updates } = makeDb([[booking({})], [pack({})], []]);
+    await makeService(db).syncSpend(db, 'b1');
+    expect(inserts).toEqual([]);
+    expect(updates).toEqual([]);
+  });
+
+  // A fix in «Історія» on a training from before the freeze: the package was waiting when the freeze started,
+  // so its month skips the frozen days too, and an early unfreeze will move it back
+  it('activated from a date before a freeze: the month also skips the frozen days', async () => {
+    (loadFreezes as jest.Mock).mockResolvedValue([
+      { id: 'f1', status: 'ACTIVE', startedOn: '2026-10-26', endsOn: '2026-11-25' },
+    ]);
+    const { db, inserts, updates } = makeDb([[booking({})], [pack({})], []]);
+    await makeService(db).syncSpend(db, 'b1');
+    expect(inserts).toContainEqual({
+      table: freezeItems,
+      values: { freezeId: 'f1', packageId: 'p', field: 'valid_until' },
+    });
+    expect(updates).toEqual([{ table: packages, set: { activatedOn: '2026-10-25', validUntil: '2026-12-25' } }]);
   });
 
   it('a package already activated is not activated again', async () => {

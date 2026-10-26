@@ -10,6 +10,7 @@ import { getMemberTrainerId } from '../schedule/default-trainer';
 import { EntitlementsService } from '../purchases/entitlements.service';
 import { findGroupBooking, groupBookingWindow } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+import { memberFrozenOn } from '../freezes/freeze.store';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -46,6 +47,9 @@ export class BookingService {
     if (!day || day.status !== 'SCHEDULED') throw new ConflictException('Training day is not scheduled');
 
     await this.validateBookingWindow(day.localDate, slot.slotTime, slot.trainerId);
+    if (await memberFrozenOn(this.database.db, memberId, day.localDate)) {
+      throw new ConflictException('Membership frozen');
+    }
     // Group trainings are paid: a pass usable that day with a training left (else «Записатися» offers to buy one)
     if ((await this.entitlements.groupPassLeft(memberId, day.localDate)) === 0) {
       throw new ConflictException('Group pass required');
@@ -54,6 +58,8 @@ export class BookingService {
     try {
       await this.database.db.transaction(async (tx) => {
         await this.lockMember(tx, memberId);
+        // Again under the member lock: a freeze approved at this moment cancels bookings under the same lock
+        if (await memberFrozenOn(tx, memberId, day.localDate)) throw new ConflictException('Membership frozen');
 
         const [locked] = await tx
           .select()

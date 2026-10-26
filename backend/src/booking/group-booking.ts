@@ -6,6 +6,7 @@ import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
 import { bookingOpensAt } from '../trainer-schedule/rules';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { getMemberTrainerId } from '../schedule/default-trainer';
+import { memberFrozenOn } from '../freezes/freeze.store';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -41,11 +42,14 @@ export async function findGroupBooking(db: Db | Tx, memberId: string, trainingDa
 
 export type GroupBookingResult =
   | { ok: true; bookingId: string }
-  | { ok: false; reason: 'NOT_FOUND' | 'CANCELLED' | 'NOT_SCHEDULED' | 'WINDOW' | 'FULL' | 'ALREADY_BOOKED' };
+  | {
+      ok: false;
+      reason: 'NOT_FOUND' | 'CANCELLED' | 'NOT_SCHEDULED' | 'WINDOW' | 'FULL' | 'ALREADY_BOOKED' | 'FROZEN';
+    };
 
 // Books a group training inside a transaction that must not fail because of it (a payment being confirmed, a cash
 // purchase): every rule is checked before the insert, so no unique violation can abort the caller's transaction.
-// Same rules as BookingService.book, except the group pass (the caller is the one paying for it)
+// Same rules as BookingService.book (the freeze too), except the group pass (the caller is the one paying for it)
 export async function tryBookGroup(
   tx: Tx,
   now: DateTime,
@@ -83,6 +87,7 @@ export async function tryBookGroup(
   if (now < openAt || now >= closeAt) return { ok: false, reason: 'WINDOW' };
   if (slot.bookedCount >= slot.capacity) return { ok: false, reason: 'FULL' };
   if (await findGroupBooking(tx, memberId, slot.trainingDayId)) return { ok: false, reason: 'ALREADY_BOOKED' };
+  if (await memberFrozenOn(tx, memberId, slot.localDate)) return { ok: false, reason: 'FROZEN' };
 
   const [booking] = await tx
     .insert(bookings)

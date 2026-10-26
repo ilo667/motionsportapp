@@ -1,3 +1,4 @@
+import { DateTime } from 'luxon';
 import { NotFoundException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { plainToInstance } from 'class-transformer';
@@ -6,6 +7,19 @@ import { AdminScheduleService } from './admin-schedule.service';
 import { AdminScheduleController } from './admin-schedule.controller';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { UpdateMemberNoteDto } from './dto/update-member-note.dto';
+import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
+
+// No member is frozen unless a test says so
+jest.mock('../freezes/freeze.store', () => ({
+  loadFreezes: jest.fn(),
+  memberFrozenOn: jest.fn(),
+  openFreeze: jest.fn(),
+}));
+beforeEach(() => {
+  (loadFreezes as jest.Mock).mockResolvedValue([]);
+  (memberFrozenOn as jest.Mock).mockResolvedValue(false);
+  (openFreeze as jest.Mock).mockResolvedValue(null);
+});
 
 // Minimal drizzle chain mock: every await resolves to `result`; `.set()` payloads are recorded
 function makeDb(result: unknown[]) {
@@ -26,7 +40,8 @@ function makeDb(result: unknown[]) {
 
 function makeService(db: any, summaries = new Map()) {
   const entitlements = { summaries: jest.fn().mockResolvedValue(summaries) };
-  return new AdminScheduleService({ db } as any, {} as any, {} as any, entitlements as any);
+  const clock = { now: () => DateTime.fromISO('2026-10-26T12:00:00', { zone: 'Europe/Kyiv' }) };
+  return new AdminScheduleService({ db } as any, {} as any, clock, entitlements as any);
 }
 
 describe('Admin members — trainer note', () => {
@@ -42,7 +57,7 @@ describe('Admin members — trainer note', () => {
     ];
     const { db } = makeDb(rows);
     await expect(makeService(db).getMembers('trainer-1')).resolves.toEqual([
-      { ...rows[0], clubCard: null, packagesLeft: [] },
+      { ...rows[0], clubCard: null, packagesLeft: [], frozenUntil: null },
     ]);
   });
 
@@ -63,6 +78,7 @@ describe('Admin members — trainer note', () => {
         displayName: 'Катя',
         clubCard: { state: 'active', until: '2026-12-15' },
         packagesLeft: [{ trainingType: 'персональні', left: 5 }],
+        frozenUntil: null,
       },
     ]);
   });
@@ -98,6 +114,17 @@ describe('Admin members — trainer note', () => {
   });
 });
 
+describe('Admin members — freeze', () => {
+  it('a client frozen today shows the last frozen day', async () => {
+    (loadFreezes as jest.Mock).mockResolvedValue([
+      { id: 'f1', memberId: 'm1', status: 'ACTIVE', startedOn: '2026-10-20', endsOn: '2026-11-19' },
+    ]);
+    const { db } = makeDb([{ id: 'm1', displayName: 'Катя' }]);
+    const [row] = await makeService(db).getMembers('trainer-1');
+    expect(row.frozenUntil).toBe('2026-11-18');
+  });
+});
+
 describe('Admin members — client page', () => {
   it('one client, the same row as in the list', async () => {
     const { db } = makeDb([{ id: 'm1', displayName: 'Катя' }]);
@@ -106,6 +133,7 @@ describe('Admin members — client page', () => {
       displayName: 'Катя',
       clubCard: null,
       packagesLeft: [],
+      frozenUntil: null,
     });
   });
 

@@ -2,6 +2,19 @@ import { NotFoundException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { BookingService } from './booking.service';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
+
+// No member is frozen unless a test says so
+jest.mock('../freezes/freeze.store', () => ({
+  loadFreezes: jest.fn(),
+  memberFrozenOn: jest.fn(),
+  openFreeze: jest.fn(),
+}));
+beforeEach(() => {
+  (loadFreezes as jest.Mock).mockResolvedValue([]);
+  (memberFrozenOn as jest.Mock).mockResolvedValue(false);
+  (openFreeze as jest.Mock).mockResolvedValue(null);
+});
 
 jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
 const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
@@ -118,6 +131,20 @@ describe('BookingService — booking window', () => {
     await expect(makeService(db, kyivAt(19, 0)).book('member-1', 'slot-1')).rejects.toThrow(
       'Booking window has closed',
     );
+  });
+});
+
+describe('BookingService — freeze', () => {
+  it('a member frozen on that day cannot book', async () => {
+    (memberFrozenOn as jest.Mock).mockResolvedValue(true);
+    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay]]);
+    await expect(makeService(db, kyivAt(15)).book('member-1', 'slot-1')).rejects.toThrow('Membership frozen');
+  });
+
+  it('checked again under the member lock (a freeze approved at that moment)', async () => {
+    (memberFrozenOn as jest.Mock).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER]);
+    await expect(makeService(db, kyivAt(15)).book('member-1', 'slot-1')).rejects.toThrow('Membership frozen');
   });
 });
 

@@ -6,6 +6,19 @@ jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSche
 const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
 beforeEach(() => mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '14:00', autoCreate: true, times: [] }));
 import { vacancyAlerts } from '../database/schema';
+import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
+
+// No member is frozen unless a test says so
+jest.mock('../freezes/freeze.store', () => ({
+  loadFreezes: jest.fn(),
+  memberFrozenOn: jest.fn(),
+  openFreeze: jest.fn(),
+}));
+beforeEach(() => {
+  (loadFreezes as jest.Mock).mockResolvedValue([]);
+  (memberFrozenOn as jest.Mock).mockResolvedValue(false);
+  (openFreeze as jest.Mock).mockResolvedValue(null);
+});
 
 const at = (hour: number) => DateTime.fromObject({ year: 2026, month: 10, day: 20, hour }, { zone: 'Europe/Kyiv' });
 
@@ -71,6 +84,13 @@ describe('tryBookGroup — booking inside someone else’s transaction, never th
     const { tx, updates } = makeTx([MEMBER, [slot], TRAINER, []]);
     await tryBookGroup(tx, at(15), 'member-1', 'slot-1');
     expect(updates).toContainEqual({ table: vacancyAlerts, set: { active: false } });
+  });
+
+  it('a member frozen on that day: FROZEN, nothing inserted', async () => {
+    (memberFrozenOn as jest.Mock).mockResolvedValue(true);
+    const { tx, inserts } = makeTx([MEMBER, [slot], TRAINER, []]);
+    expect(await tryBookGroup(tx, at(15), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'FROZEN' });
+    expect(inserts).toEqual([]);
   });
 
   it('a full slot: FULL, nothing inserted', async () => {

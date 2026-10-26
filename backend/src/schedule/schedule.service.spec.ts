@@ -2,6 +2,19 @@ import { DateTime } from 'luxon';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { ScheduleService } from './schedule.service';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
+import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
+
+// No member is frozen unless a test says so
+jest.mock('../freezes/freeze.store', () => ({
+  loadFreezes: jest.fn(),
+  memberFrozenOn: jest.fn(),
+  openFreeze: jest.fn(),
+}));
+beforeEach(() => {
+  (loadFreezes as jest.Mock).mockResolvedValue([]);
+  (memberFrozenOn as jest.Mock).mockResolvedValue(false);
+  (openFreeze as jest.Mock).mockResolvedValue(null);
+});
 
 jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
 const mockLoadSchedule = loadTrainerSchedule as jest.Mock;

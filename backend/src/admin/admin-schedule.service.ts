@@ -29,6 +29,8 @@ import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store'
 import { getDefaultTrainerId } from '../schedule/default-trainer';
 import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
 import { GROUP_TYPE, KY_ZONE, ASSIGNED_MEMBER_LIMITS, isAssignedType, slotStartsAt } from '../schedule/training-types';
+import { loadFreezes } from '../freezes/freeze.store';
+import { frozenOn, plusDays } from '../freezes/rules';
 
 // Member-initiated cancellations / moves shown to the trainer (with the reason they wrote)
 const CANCELLATION_STATS_DAYS = 30;
@@ -380,6 +382,7 @@ export class AdminScheduleService {
     if (!startsAt.isValid) throw new BadRequestException('Invalid date');
     const now = this.clock.now();
     if (startsAt <= now) throw new BadRequestException('Training time is in the past');
+    await this.rejectFrozen(this.database.db, dto.memberIds, date);
 
     const capacity = ASSIGNED_MEMBER_LIMITS[dto.trainingType].max;
     const slotId = await this.database.db.transaction(async (tx) => {
@@ -448,6 +451,12 @@ export class AdminScheduleService {
       if (removed.some((b) => b.marked)) throw new ConflictException('Attendance already marked');
       // Only members new to the slot are booked: one who cancelled themselves stays cancelled
       const added = memberIds.filter((id) => !onSlot.some((m) => m.memberId === id));
+      const [day] = await tx
+        .select({ localDate: trainingDays.localDate })
+        .from(trainingDays)
+        .where(eq(trainingDays.id, slot.trainingDayId))
+        .limit(1);
+      if (day) await this.rejectFrozen(tx, added, day.localDate);
 
       await tx.delete(slotMembers).where(eq(slotMembers.slotId, slotId));
       await tx.insert(slotMembers).values(memberIds.map((memberId) => ({ slotId, memberId })));
@@ -503,6 +512,12 @@ export class AdminScheduleService {
         ),
       );
     if (found.length !== new Set(memberIds).size) throw new NotFoundException('Member not found');
+  }
+
+  // A frozen member can't be put on a training on a frozen day (members already on the slot may stay)
+  private async rejectFrozen(db: Db | Tx, memberIds: string[], date: string) {
+    const frozen = (await loadFreezes(db, memberIds)).some((f) => frozenOn(f, date));
+    if (frozen) throw new ConflictException('Member is frozen');
   }
 
   // Training day row for the date, (re)scheduled. Returns its id
@@ -745,7 +760,22 @@ export class AdminScheduleService {
 
     // «карта до DD.MM», «Перс. 5 · Спліт 2» under each client
     const summaries = await this.entitlements.summaries(rows.map((r) => r.id));
-    return rows.map((r) => ({ ...r, clubCard: null, packagesLeft: [], ...summaries.get(r.id) }));
+    // «❄ до DD.MM» (last frozen day) under a frozen client
+    const today = this.clock.now().toISODate()!;
+    const freezes = await loadFreezes(
+      this.database.db,
+      rows.map((r) => r.id),
+    );
+    return rows.map((r) => {
+      const f = freezes.find((x) => x.memberId === r.id && frozenOn(x, today));
+      return {
+        ...r,
+        clubCard: null,
+        packagesLeft: [],
+        ...summaries.get(r.id),
+        frozenUntil: f ? plusDays(f.endsOn!, -1) : null,
+      };
+    });
   }
 
   // For the reassign picker. Usernames only, never password hashes

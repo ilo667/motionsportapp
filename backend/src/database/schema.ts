@@ -485,3 +485,49 @@ export const trainerScheduleTimes = pgTable(
     check('trainer_schedule_times_slot_time_check', sql.raw(`slot_time ~ ${QUARTER_HOUR}`)),
   ],
 );
+
+// «Заморозити абонемент»: the member asks, a trainer approves. Everything the member has (card and packages,
+// waiting or active) is frozen from started_on until ends_on (exclusive: the first day back). On approval the
+// dates are pushed 30 days ahead at once (`freeze_items`), so a freeze nobody ends finishes by itself; an early
+// unfreeze moves them back by the days left. Whether it is over is computed from ends_on, not stored
+export const freezes = pgTable(
+  'freezes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id),
+    status: text('status').notNull().default('REQUESTED'),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    decidedBy: uuid('decided_by').references(() => admins.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    startedOn: date('started_on'),
+    endsOn: date('ends_on'),
+    unfreezeRequestedAt: timestamp('unfreeze_requested_at', { withTimezone: true }),
+    unfreezeDecidedBy: uuid('unfreeze_decided_by').references(() => admins.id),
+    unfreezeDecidedAt: timestamp('unfreeze_decided_at', { withTimezone: true }),
+  },
+  () => [
+    oneOf('freezes_status_check', 'status', ['REQUESTED', 'ACTIVE', 'REJECTED', 'CANCELLED']),
+    check('freezes_dates_check', sql`status <> 'ACTIVE' or (started_on is not null and ends_on >= started_on)`),
+  ],
+);
+
+// A date a freeze pushed ahead: a card's or package's valid_until (active) or activate_by (waiting).
+// An early unfreeze moves exactly these back
+export const freezeItems = pgTable(
+  'freeze_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    freezeId: uuid('freeze_id')
+      .notNull()
+      .references(() => freezes.id),
+    clubCardId: uuid('club_card_id').references(() => clubCards.id),
+    packageId: uuid('package_id').references(() => packages.id),
+    field: text('field').notNull(),
+  },
+  () => [
+    oneOf('freeze_items_field_check', 'field', ['valid_until', 'activate_by']),
+    check('freeze_items_target_check', sql`(club_card_id is null) <> (package_id is null)`),
+  ],
+);

@@ -22,6 +22,7 @@ import type { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { tryBookGroup, type GroupBookingResult } from '../booking/group-booking';
 import { cardState } from './validity';
 import { GROUP_TYPE } from '../schedule/training-types';
+import { memberFrozenOn, openFreeze } from '../freezes/freeze.store';
 
 // Same answers as BookingService.book gives for the same reasons
 function bookingError(reason: Extract<GroupBookingResult, { ok: false }>['reason']) {
@@ -38,6 +39,8 @@ function bookingError(reason: Extract<GroupBookingResult, { ok: false }>['reason
       return new ConflictException('Slot is full');
     case 'ALREADY_BOOKED':
       return new ConflictException('You already have an active booking for this day');
+    case 'FROZEN':
+      return new ConflictException('Membership frozen');
   }
 }
 
@@ -201,6 +204,10 @@ export class PurchasesService {
         .where(and(eq(purchases.memberId, memberId), eq(purchases.status, 'PENDING')))
         .limit(1);
       if (open) throw new ConflictException('You have an unpaid purchase');
+      // Nothing new while frozen or asking to: the freeze pushes the dates of what the member has on approval
+      if (await openFreeze(tx, memberId, this.clock.now().toISODate()!)) {
+        throw new ConflictException('Membership frozen');
+      }
       if (dto.method === 'CASH' && !member.trainerId) throw new BadRequestException('No trainer to pay cash to');
 
       const [created] = await tx
@@ -417,6 +424,7 @@ export class PurchasesService {
   // «Додати карту вручну»: a card bought at the reception, waiting or (activate) active from today
   async addCard(trainerId: string, memberId: string, priceItemId: string, activate: boolean) {
     await this.visibleMember(trainerId, memberId);
+    await this.rejectFrozen(memberId);
     // One club card at a time: a new one only once the current card has ended or burned
     if (await this.entitlements.usableCard(memberId)) throw new ConflictException('Member already has a club card');
     await this.entitlements.addManualCard(this.database.db, memberId, trainerId, priceItemId, activate);
@@ -426,8 +434,16 @@ export class PurchasesService {
   // «Активувати з сьогодні»
   async activateCard(trainerId: string, memberId: string, cardId: string) {
     await this.visibleMember(trainerId, memberId);
+    await this.rejectFrozen(memberId);
     await this.entitlements.activateCard(this.database.db, memberId, cardId);
     return { ok: true };
+  }
+
+  // A card added or started during a freeze would miss the pushed dates: after the unfreeze
+  private async rejectFrozen(memberId: string) {
+    if (await memberFrozenOn(this.database.db, memberId, this.clock.now().toISODate()!)) {
+      throw new ConflictException('Member is frozen');
+    }
   }
 
   // Same rule as the rest of the admin: own clients plus unassigned ones; anyone else's answers 404

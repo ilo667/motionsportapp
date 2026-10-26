@@ -19,6 +19,8 @@ import { GROUP_TYPE, KY_ZONE, ASSIGNED_TYPES, slotStartsAt } from './training-ty
 import { getMemberTrainerId } from './default-trainer';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
+import { loadFreezes } from '../freezes/freeze.store';
+import { frozenOn, plusDays } from '../freezes/rules';
 
 // An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
 const ASSIGNED_SHOWN_FOR_MINUTES = 60;
@@ -79,6 +81,14 @@ export class ScheduleService {
     // The next day with a group training of this trainer that has not started yet
     const targetDay = upcoming.find((day) => now < slotStartsAt(day.localDate, day.lastTime));
 
+    // Frozen today or on that day: «Записатись» gives way to «Абонемент заморожено до …» (last frozen day)
+    const freeze = memberId
+      ? (await loadFreezes(this.database.db, [memberId])).find(
+          (f) => frozenOn(f, today) || (!!targetDay && frozenOn(f, targetDay.localDate)),
+        )
+      : undefined;
+    const frozenUntil = freeze ? plusDays(freeze.endsOn!, -1) : null;
+
     // No group day ahead (e.g. the trainer cancelled them): the member still gets their assigned trainings
     if (!targetDay) {
       return {
@@ -90,6 +100,7 @@ export class ScheduleService {
         slots: [],
         assignedSlots,
         groupPassLeft: 0,
+        frozenUntil,
         serverTime: now.toUTC().toISO(),
         announcement: null,
       };
@@ -182,6 +193,7 @@ export class ScheduleService {
       assignedSlots,
       // Group trainings are paid: 0 → «Записатися» offers to buy a pass
       groupPassLeft: memberId ? await this.entitlements.groupPassLeft(memberId, targetDay.localDate) : 0,
+      frozenUntil,
       serverTime: now.toUTC().toISO(),
       announcement,
     };

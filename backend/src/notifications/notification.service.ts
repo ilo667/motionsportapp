@@ -8,7 +8,14 @@ import { VacancyAlertsService } from './vacancy-alerts.service';
 
 const ICON = '/motion-gym-logo-app.png';
 
-type EventType = 'BOOKING_OPEN' | 'SLOT_CANCELLED' | 'VACANCY' | 'MEMBER_CANCELLED' | 'CASH_REQUESTED';
+type EventType =
+  | 'BOOKING_OPEN'
+  | 'SLOT_CANCELLED'
+  | 'VACANCY'
+  | 'MEMBER_CANCELLED'
+  | 'CASH_REQUESTED'
+  | 'FREEZE_REQUESTED'
+  | 'FREEZE_DECIDED';
 
 @Injectable()
 export class NotificationService {
@@ -49,6 +56,8 @@ export class NotificationService {
       else if (event.eventType === 'VACANCY') await this.sendVacancy(p);
       else if (event.eventType === 'MEMBER_CANCELLED') await this.sendMemberCancelled(p);
       else if (event.eventType === 'CASH_REQUESTED') await this.sendCashRequested(p);
+      else if (event.eventType === 'FREEZE_REQUESTED') await this.sendFreezeRequested(p);
+      else if (event.eventType === 'FREEZE_DECIDED') await this.sendFreezeDecided(p);
 
       await this.database.db
         .update(notificationEvents)
@@ -136,6 +145,39 @@ export class NotificationService {
       const result = await this.push.send(sub, { title: 'Оплата готівкою', body, icon: ICON, url: '/admin/clients' });
       if (result === 'expired') await this.subs.disableAdminByEndpoint(sub.endpoint);
     }
+  }
+
+  // To the member's trainer: a freeze or unfreeze to approve on «Клієнти». A client without a trainer: nobody
+  // (every trainer sees the request there)
+  private async sendFreezeRequested(payload: Record<string, unknown>) {
+    const trainerId = payload.trainerId as string | null;
+    if (!trainerId) return;
+    const subscriptions = await this.subs.findAdminByAdminId(trainerId);
+    const title = payload.kind === 'unfreeze' ? 'Запит на розморозку' : 'Запит на заморозку';
+    for (const sub of subscriptions) {
+      const result = await this.push.send(sub, {
+        title,
+        body: payload.displayName as string,
+        icon: ICON,
+        url: '/admin/clients',
+      });
+      if (result === 'expired') await this.subs.disableAdminByEndpoint(sub.endpoint);
+    }
+  }
+
+  // To the member: the trainer approved or rejected their freeze / unfreeze
+  private async sendFreezeDecided(payload: Record<string, unknown>) {
+    const subscriptions = await this.subs.findActiveByMemberIds([payload.memberId as string]);
+    const approved = payload.approved === true;
+    const body =
+      payload.kind === 'unfreeze'
+        ? approved
+          ? 'Абонемент розморожено, можна записуватись'
+          : 'Тренер не підтвердив розморозку'
+        : approved
+          ? `Абонемент заморожено до ${this.fmtDate(payload.until as string)}`
+          : 'Тренер не підтвердив заморозку';
+    await this.sendToSubs(subscriptions, { title: 'Мій абонемент', body, icon: ICON, url: '/purchases' });
   }
 
   private async sendToSubs(subs: Array<{ endpoint: string; p256dh: string; auth: string }>, payload: PushPayload) {
