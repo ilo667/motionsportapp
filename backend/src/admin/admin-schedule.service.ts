@@ -193,7 +193,14 @@ export class AdminScheduleService {
     const charged = await tx
       .select({ id: bookings.id })
       .from(bookings)
-      .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'CANCELLED'), isNotNull(bookings.cancelFee)));
+      .where(
+        and(
+          inArray(bookings.slotId, slotIds),
+          eq(bookings.status, 'CANCELLED'),
+          isNotNull(bookings.cancelFee),
+          sql`not exists (select 1 from cancel_refunds cr where cr.booking_id = "bookings"."id" and cr.status = 'DONE')`,
+        ),
+      );
     if (charged.length === 0) return;
     const ids = charged.map((b) => b.id);
     await tx.delete(packageSpends).where(inArray(packageSpends.bookingId, ids));
