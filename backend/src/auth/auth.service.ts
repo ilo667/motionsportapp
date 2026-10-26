@@ -93,7 +93,8 @@ export class AuthService {
   async loginAdmin(dto: LoginAdminDto) {
     const [admin] = await this.database.db.select().from(admins).where(eq(admins.username, dto.username)).limit(1);
 
-    if (!admin) throw new UnauthorizedException('Invalid credentials');
+    // A disabled trainer gets the same answer as a wrong password
+    if (!admin || admin.disabledAt) throw new UnauthorizedException('Invalid credentials');
 
     const valid = await bcrypt.compare(dto.password, admin.passwordHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');

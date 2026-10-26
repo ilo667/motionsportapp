@@ -43,6 +43,9 @@ export const admins = pgTable('admins', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   // Who sent the invite link; null = added by `npm run seed:admin`
   invitedByAdminId: uuid('invited_by_admin_id').references((): AnyPgColumn => admins.id),
+  // Disabled on «Тренери» (can't sign in, clients moved to another trainer); null = works
+  disabledAt: timestamp('disabled_at', { withTimezone: true }),
+  disabledByAdminId: uuid('disabled_by_admin_id').references((): AnyPgColumn => admins.id),
 });
 
 // One-time link that lets a new trainer sign up («Запросити тренера»). Only the SHA-256 of the token is stored,

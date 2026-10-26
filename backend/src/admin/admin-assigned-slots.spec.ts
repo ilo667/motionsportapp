@@ -479,10 +479,27 @@ describe('Clients per trainer', () => {
     await expect(makeService(db).assignTrainer('trainer-1', M1, 'trainer-2')).rejects.toThrow('Member not found');
   });
 
-  it('trainer list never selects password hashes', async () => {
+  it('only an enabled trainer can get a client (a disabled one answers 404 like a missing one)', async () => {
+    const { db } = makeDb();
+    const where = jest.fn(() => ({ limit: () => Promise.resolve([]) }));
+    db.select = jest.fn(() => ({ from: () => ({ where }) }));
+    await expect(makeService(db).assignTrainer('trainer-1', M1, 'trainer-2')).rejects.toThrow('Trainer not found');
+    const cond = new PgDialect().sqlToQuery((where.mock.calls[0] as unknown[])[0] as any);
+    expect(cond.sql).toContain('"admins"."disabled_at" is null');
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it('trainer list never selects password hashes, and says who disabled whom', async () => {
     const { db } = makeDb([[{ id: 'trainer-1', username: 'ilona' }]]);
     await expect(makeService(db).getTrainers()).resolves.toEqual([{ id: 'trainer-1', username: 'ilona' }]);
-    expect(Object.keys(db.select.mock.calls[0][0]).sort()).toEqual(['createdAt', 'id', 'invitedBy', 'username']);
+    expect(Object.keys(db.select.mock.calls[0][0]).sort()).toEqual([
+      'createdAt',
+      'disabledAt',
+      'disabledBy',
+      'id',
+      'invitedBy',
+      'username',
+    ]);
   });
 });
 

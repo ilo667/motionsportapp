@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DateTime } from 'luxon';
-import { and, eq, gte, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import {
   trainingDays,
@@ -292,7 +292,9 @@ export class ScheduleService {
 
     const trainerIds = trainerId
       ? [trainerId]
-      : (await this.database.db.select({ id: admins.id }).from(admins)).map((a) => a.id);
+      : (await this.database.db.select({ id: admins.id }).from(admins).where(isNull(admins.disabledAt))).map(
+          (a) => a.id,
+        );
     for (const id of trainerIds) {
       const one = await this.ensureTrainerGroupSlots(id, now);
       total.added += one.added;

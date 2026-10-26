@@ -149,3 +149,14 @@ describe('Trainer password change', () => {
     expect(sets).toEqual([]);
   });
 });
+
+describe('Trainer sign-in', () => {
+  it('a disabled trainer gets the same «Invalid credentials» even with the right password', async () => {
+    const passwordHash = await bcrypt.hash('long-enough-pass', 4);
+    const { db, inserts } = makeDb([[{ id: 'trainer-2', username: 'olena', passwordHash, disabledAt: new Date() }]]);
+    await expect(auth(db).loginAdmin({ username: 'olena', password: 'long-enough-pass' })).rejects.toThrow(
+      new UnauthorizedException('Invalid credentials'),
+    );
+    expect(inserts).toEqual([]); // no session
+  });
+});

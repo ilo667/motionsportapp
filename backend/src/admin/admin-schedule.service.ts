@@ -751,26 +751,32 @@ export class AdminScheduleService {
 
   // For the reassign picker. Usernames only, never password hashes
   // All trainers (reassigning a client, the «Тренери» page): who invited whom, null = added by seed:admin
+  // Disabled trainers stay in the list (with who disabled them); the pickers leave them out
   async getTrainers() {
     const inviter = alias(admins, 'inviter');
+    const disabler = alias(admins, 'disabler');
     return this.database.db
       .select({
         id: admins.id,
         username: admins.username,
         createdAt: admins.createdAt,
         invitedBy: inviter.username,
+        disabledAt: admins.disabledAt,
+        disabledBy: disabler.username,
       })
       .from(admins)
       .leftJoin(inviter, eq(inviter.id, admins.invitedByAdminId))
+      .leftJoin(disabler, eq(disabler.id, admins.disabledByAdminId))
       .orderBy(asc(admins.username));
   }
 
-  // Hand a client to a trainer (or claim an unassigned one). Only the current trainer can do it
+  // Hand a client to a trainer (or claim an unassigned one). Only the current trainer can do it; a disabled
+  // trainer answers 404 like a missing one
   async assignTrainer(adminId: string, memberId: string, trainerId: string) {
     const [trainer] = await this.database.db
       .select({ id: admins.id })
       .from(admins)
-      .where(eq(admins.id, trainerId))
+      .where(and(eq(admins.id, trainerId), isNull(admins.disabledAt)))
       .limit(1);
     if (!trainer) throw new NotFoundException('Trainer not found');
 

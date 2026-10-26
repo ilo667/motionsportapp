@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { ScheduleService } from './schedule.service';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 
@@ -370,6 +371,16 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
       }),
       expect.objectContaining({ trainingDayId: 'd-mon', slotTime: '10:00', trainerId: 'trainer-2' }),
     ]);
+  });
+
+  it('the daily run goes through enabled trainers only', async () => {
+    const { db } = makeDb();
+    const where = jest.fn(() => Promise.resolve([]));
+    db.select = jest.fn(() => ({ from: () => ({ where }) }));
+    await makeRealService(db).ensureGroupSlots();
+    const cond = new PgDialect().sqlToQuery((where.mock.calls[0] as unknown[])[0] as any);
+    expect(cond.sql).toBe('"admins"."disabled_at" is null');
+    expect(mockLoadSchedule).not.toHaveBeenCalled();
   });
 
   it('a trainer with automatic creation off gets nothing', async () => {
