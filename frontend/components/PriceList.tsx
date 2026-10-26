@@ -49,18 +49,27 @@ export function PriceList<T extends PriceListItem>({
             <h2 className="font-geologica font-semibold text-heading uppercase mb-1">{section.title}</h2>
             {section.note && <p className="text-muted text-xs mb-2">{section.note}</p>}
             <div className="border-t border-line">
-              {groups.map((group) => (
-                <div key={group.title} className="py-3 border-b border-line">
-                  <div className="text-heading font-medium mb-1">{group.title}</div>
-                  {group.options.map((item) =>
-                    renderOption ? (
-                      <div key={item.id}>{renderOption(item)}</div>
-                    ) : (
-                      <ReadOnlyOption key={item.id} item={item} />
-                    ),
-                  )}
-                </div>
-              ))}
+              {groups.map((group) => {
+                const option = (item: T) =>
+                  renderOption ? (
+                    <div key={item.id}>{renderOption(item)}</div>
+                  ) : (
+                    <ReadOnlyOption key={item.id} item={item} />
+                  );
+                // One price with no option («Разове відвідування»): the title and the price on one line
+                const single = group.options.length === 1 && !group.options[0].optionLabel;
+                return single ? (
+                  <div key={group.title} className="py-3 border-b border-line flex items-center space-x-3">
+                    <div className="text-heading font-medium">{group.title}</div>
+                    <div className="flex-1 min-w-0">{option(group.options[0])}</div>
+                  </div>
+                ) : (
+                  <div key={group.title} className="py-3 border-b border-line">
+                    <div className="text-heading font-medium mb-1">{group.title}</div>
+                    {group.options.map(option)}
+                  </div>
+                );
+              })}
             </div>
           </section>
         );
