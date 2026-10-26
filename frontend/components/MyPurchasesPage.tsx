@@ -163,7 +163,9 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
         .then(setData)
         .catch((err: unknown) => {
           const status = (err as { status?: number }).status;
-          if (status === 401 || status === 403) router.push("/login");
+          // 403 = signed in as a trainer: their panel, not the member login
+          if (status === 401) router.push("/login");
+          else if (status === 403) router.push("/admin");
           else setLoadError(true);
         }),
     [router],

@@ -81,6 +81,11 @@ export default function SchedulePage() {
       data = await api.getScheduleNext();
       setSchedule(data);
     } catch (err: unknown) {
+      // Signed in as a trainer: the schedule here is the members', the trainer's is in the panel
+      if ((err as { status?: number }).status === 403) {
+        router.replace("/admin");
+        throw err;
+      }
       if ((err as { status?: number }).status === 401 && !authedRef.current) {
         try {
           localStorage.removeItem("mg_authed");
@@ -96,7 +101,7 @@ export default function SchedulePage() {
         fetchRef.current?.().catch(() => {});
       }, nextPollDelay(data));
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     fetchRef.current = fetchSchedule;

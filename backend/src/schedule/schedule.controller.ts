@@ -1,6 +1,7 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ScheduleService } from './schedule.service';
 import { SessionGuard } from '../auth/session.guard';
+import { MemberGuard } from '../common/guards/member.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { SessionUser } from '../auth/session.guard';
 
@@ -8,10 +9,10 @@ import type { SessionUser } from '../auth/session.guard';
 export class ScheduleController {
   constructor(private readonly scheduleService: ScheduleService) {}
 
+  // The member's home page; a trainer gets 403 and goes to their own panel
   @Get('next')
-  @UseGuards(SessionGuard)
+  @UseGuards(SessionGuard, MemberGuard)
   async getNext(@CurrentUser() user: SessionUser) {
-    const memberId = user.type === 'member' ? user.id : undefined;
-    return this.scheduleService.getNext(memberId);
+    return this.scheduleService.getNext(user.id);
   }
 }

@@ -7,25 +7,27 @@ import { PriceList } from "@/components/PriceList";
 
 // Straight to the backend (the same address the /api rewrite uses): the browser's /api path means nothing on the
 // server, and the browser's session cookie has to be passed on by hand. Only `session`, nothing else the browser sent
-async function getPrices(session: string): Promise<PriceListItem[] | "signed-out" | null> {
+async function getPrices(session: string): Promise<PriceListItem[] | "signed-out" | "trainer" | null> {
   try {
     const res = await fetch(`${process.env.BACKEND_URL ?? "http://localhost:3001"}/prices`, {
       headers: { Cookie: `session=${session}` },
       cache: "no-store",
     });
-    if (res.status === 401 || res.status === 403) return "signed-out";
+    if (res.status === 401) return "signed-out";
+    if (res.status === 403) return "trainer";
     return res.ok ? ((await res.json()) as PriceListItem[]) : null;
   } catch {
     return null;
   }
 }
 
-// The gym's prices for a signed-in client (a visitor or a trainer goes to the client login). Rendered on the
+// The gym's prices for a signed-in client (a visitor goes to the client login, a trainer to their panel). Rendered on the
 // server per request: the same list the trainer edits in «Ціни», always current
 export default async function PricesPage() {
   const session = (await cookies()).get("session")?.value;
   const items = session ? await getPrices(session) : "signed-out";
   if (items === "signed-out") redirect("/login");
+  if (items === "trainer") redirect("/admin");
 
   const back = (
     <Link href="/purchases" className="text-muted text-sm hover:text-body transition-colors">
