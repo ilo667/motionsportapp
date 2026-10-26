@@ -32,7 +32,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="text-base sm:text-sm min-h-full flex flex-col">
         <OfflineBanner />
-        <main className="flex-1 flex flex-col px-5">
+        {/* Room at the bottom of every page, plus the iPhone home indicator in the installed app */}
+        <main className="flex-1 flex flex-col px-5 pb-[calc(3rem+env(safe-area-inset-bottom))]">
           <div className="w-full max-w-xl mx-auto flex-1 flex flex-col">{children}</div>
         </main>
         <SwRegister />
