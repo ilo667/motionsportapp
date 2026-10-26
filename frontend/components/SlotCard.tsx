@@ -37,7 +37,7 @@ export function SlotCard({
   const [guestName, setGuestName] = useState<string | null>(null);
 
   // A move goes to another training of the day that has not started yet
-  const otherSlot = allSlots.find((s) => s.id !== slot.id && s.status === "ACTIVE" && !s.started);
+  const otherSlot = allSlots.find((s) => s.id !== slot.id && s.status === "ACTIVE" && !s.started && !s.lateCancelled);
   // A guest moves along and needs a seat there too
   const seatsNeeded = slot.myGuest ? 2 : 1;
   const canSwitch = !!otherSlot && otherSlot.bookedCount + seatsNeeded <= otherSlot.capacity;
@@ -146,6 +146,8 @@ export function SlotCard({
               Скасувати
             </button>
           </div>
+        ) : slot.lateCancelled ? (
+          <p className="text-muted text-sm">Ви скасували це тренування пізно, записатися знову не можна</p>
         ) : hasAnyBooking && !isFull ? (
           <p className="text-muted text-sm">Ви вже записані на інший час</p>
         ) : !isFull ? (

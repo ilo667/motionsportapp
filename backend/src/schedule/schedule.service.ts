@@ -22,6 +22,7 @@ import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store'
 import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
 import { loadFreezes } from '../freezes/freeze.store';
 import { frozenOn, plusDays } from '../freezes/rules';
+import { lateCancelledSlotIds } from '../booking/group-booking';
 
 // An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
 const ASSIGNED_SHOWN_FOR_MINUTES = 60;
@@ -129,6 +130,7 @@ export class ScheduleService {
     let myBookingSlotId: string | null = null;
     let myGuest: { name: string } | null = null;
     const myVacancyAlertSlotIds = new Set<string>();
+    let lateCancelled = new Set<string>();
 
     if (memberId && slots.length > 0) {
       const [mine] = await this.database.db
@@ -156,6 +158,7 @@ export class ScheduleService {
       }
 
       const slotIds = slots.map((s) => s.id);
+      lateCancelled = await lateCancelledSlotIds(this.database.db, memberId, slotIds);
       if (slotIds.length > 0) {
         const alerts = await this.database.db
           .select({ slotId: vacancyAlerts.slotId })
@@ -199,6 +202,8 @@ export class ScheduleService {
         isMyVacancyAlert: myVacancyAlertSlotIds.has(s.id),
         // The guest the member brings to this training (only on their own booking)
         myGuest: s.id === myBookingSlotId ? myGuest : null,
+        // The member cancelled it late (and paid): no booking it again
+        lateCancelled: lateCancelled.has(s.id),
         // Booking, cancelling and switching for this training are over
         started: now >= slotStartsAt(targetDay.localDate, s.slotTime),
       })),

@@ -43,6 +43,8 @@ function bookingError(reason: Extract<GroupBookingResult, { ok: false }>['reason
       return new ConflictException('You already have an active booking for this day');
     case 'FROZEN':
       return new ConflictException('Membership frozen');
+    case 'LATE_CANCELLED':
+      return new ConflictException('Cancelled late');
   }
 }
 
@@ -356,14 +358,15 @@ export class PurchasesService {
     await this.database.db.transaction(async (tx) => {
       const { bookingId } = await this.decideCash(tx, trainerId, purchaseId, 'REJECTED');
       if (!bookingId) return;
-      await tx.delete(packageSpends).where(eq(packageSpends.bookingId, bookingId));
-      await tx.delete(attendance).where(eq(attendance.bookingId, bookingId));
       const [cancelled] = await tx
         .update(bookings)
         .set({ status: 'CANCELLED', cancelledAt: this.clock.now().toJSDate() })
         .where(and(eq(bookings.id, bookingId), eq(bookings.status, 'ACTIVE')))
         .returning({ slotId: bookings.slotId });
-      if (!cancelled) return; // the member already cancelled it
+      // The member already cancelled it: a late cancellation keeps what it spent (booking/cancel-fee.ts)
+      if (!cancelled) return;
+      await tx.delete(packageSpends).where(eq(packageSpends.bookingId, bookingId));
+      await tx.delete(attendance).where(eq(attendance.bookingId, bookingId));
       // Their guest goes with the booking
       const seats = 1 + (await cancelGuests(tx, [bookingId], this.clock.now().toJSDate())).size;
       await tx

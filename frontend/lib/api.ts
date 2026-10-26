@@ -325,6 +325,7 @@ export interface SlotView {
   isMyVacancyAlert?: boolean;
   started?: boolean; // the training began: booking, cancelling and switching are over
   myGuest?: { name: string } | null; // the guest the member brings (on their own booking only)
+  lateCancelled?: boolean; // the member cancelled it late and paid for it: no booking it again
 }
 
 // Personal / split the trainer assigned to this member (any day, any time); paid, bookable until the start

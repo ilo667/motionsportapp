@@ -172,7 +172,9 @@ export default function SchedulePage() {
                         ? "Гостя вже додано"
                         : raw.includes("Membership frozen")
                           ? "Абонемент заморожено"
-                          : raw || "Помилка. Спробуйте ще раз.";
+                          : raw.includes("Cancelled late")
+                            ? "Ви скасували це тренування пізно, записатися знову не можна"
+                            : raw || "Помилка. Спробуйте ще раз.";
       setMutateError(msg);
     }
   };

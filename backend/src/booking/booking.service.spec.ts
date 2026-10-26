@@ -1,7 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { BookingService } from './booking.service';
-import { cancelGuests } from './group-booking';
+import { cancelGuests, lateCancelledSlotIds } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
 
@@ -9,7 +9,10 @@ import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store
 jest.mock('./group-booking', () => ({
   ...jest.requireActual('./group-booking'),
   cancelGuests: jest.fn().mockResolvedValue(new Set()),
+  lateCancelledSlotIds: jest.fn(),
 }));
+// No late cancellation unless a test says so
+beforeEach(() => (lateCancelledSlotIds as jest.Mock).mockResolvedValue(new Set()));
 
 // No member is frozen unless a test says so
 jest.mock('../freezes/freeze.store', () => ({
@@ -180,6 +183,13 @@ describe('BookingService — slot validation', () => {
     const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER, [fullSlot]]);
     const service = makeService(db, at15);
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Slot is full');
+  });
+
+  it('409 Cancelled late: the member cancelled this training late and paid for it', async () => {
+    (lateCancelledSlotIds as jest.Mock).mockResolvedValueOnce(new Set(['slot-1']));
+    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER]);
+    const service = makeService(db, at15);
+    await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Cancelled late');
   });
 
   it("answers 404 for another trainer's group slot", async () => {

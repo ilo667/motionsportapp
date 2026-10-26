@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { DatabaseService } from '../database/database.service';
 import { bookingGuests, bookings, members, trainingDays, trainingSlots, vacancyAlerts } from '../database/schema';
@@ -40,11 +40,38 @@ export async function findGroupBooking(db: Db | Tx, memberId: string, trainingDa
   return row ?? null;
 }
 
+// The member cancelled this training late and paid for it (booking/cancel-fee.ts, not waived): no booking it
+// again, or the same training would be spent twice
+export async function lateCancelledSlotIds(db: Db | Tx, memberId: string, slotIds: string[]): Promise<Set<string>> {
+  if (slotIds.length === 0) return new Set();
+  const rows = await db
+    .select({ slotId: bookings.slotId })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.memberId, memberId),
+        inArray(bookings.slotId, slotIds),
+        eq(bookings.status, 'CANCELLED'),
+        isNotNull(bookings.cancelFee),
+        isNull(bookings.feeWaivedAt),
+      ),
+    );
+  return new Set(rows.map((r) => r.slotId));
+}
+
 export type GroupBookingResult =
   | { ok: true; bookingId: string }
   | {
       ok: false;
-      reason: 'NOT_FOUND' | 'CANCELLED' | 'NOT_SCHEDULED' | 'WINDOW' | 'FULL' | 'ALREADY_BOOKED' | 'FROZEN';
+      reason:
+        | 'NOT_FOUND'
+        | 'CANCELLED'
+        | 'NOT_SCHEDULED'
+        | 'WINDOW'
+        | 'FULL'
+        | 'ALREADY_BOOKED'
+        | 'FROZEN'
+        | 'LATE_CANCELLED';
     };
 
 // Books a group training inside a transaction that must not fail because of it (a payment being confirmed, a cash
@@ -88,6 +115,7 @@ export async function tryBookGroup(
   if (slot.bookedCount >= slot.capacity) return { ok: false, reason: 'FULL' };
   if (await findGroupBooking(tx, memberId, slot.trainingDayId)) return { ok: false, reason: 'ALREADY_BOOKED' };
   if (await memberFrozenOn(tx, memberId, slot.localDate)) return { ok: false, reason: 'FROZEN' };
+  if ((await lateCancelledSlotIds(tx, memberId, [slotId])).size > 0) return { ok: false, reason: 'LATE_CANCELLED' };
 
   const [booking] = await tx
     .insert(bookings)

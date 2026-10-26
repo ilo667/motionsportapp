@@ -18,7 +18,7 @@ import { ClockService } from '../clock/clock.service';
 import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
 import { getMemberTrainerId } from '../schedule/default-trainer';
 import { EntitlementsService } from '../purchases/entitlements.service';
-import { cancelGuests, findGroupBooking, groupBookingWindow } from './group-booking';
+import { cancelGuests, findGroupBooking, groupBookingWindow, lateCancelledSlotIds } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { memberFrozenOn } from '../freezes/freeze.store';
 import { cancelFee, halfBack, type CancelFee } from './cancel-fee';
@@ -71,6 +71,10 @@ export class BookingService {
         await this.lockMember(tx, memberId);
         // Again under the member lock: a freeze approved at this moment cancels bookings under the same lock
         if (await memberFrozenOn(tx, memberId, day.localDate)) throw new ConflictException('Membership frozen');
+        // Cancelled this training late (and paid for it): not booked again
+        if ((await lateCancelledSlotIds(tx, memberId, [slotId])).size > 0) {
+          throw new ConflictException('Cancelled late');
+        }
 
         const [locked] = await tx
           .select()
@@ -268,6 +272,9 @@ export class BookingService {
           .limit(1);
 
         if (!slot1 || !slot2) throw new NotFoundException('Slot not found');
+        if ((await lateCancelledSlotIds(tx, memberId, [newSlotId])).size > 0) {
+          throw new ConflictException('Cancelled late');
+        }
 
         const newSlot = slot1.id === newSlotId ? slot1 : slot2;
         // A guest moves along: the new training needs a seat for them too
