@@ -97,11 +97,16 @@ const validDay = {
 };
 
 // groupPassLeft: group trainings the member's pass still holds for that day (booking needs one)
-function makeService(db: any, now: DateTime, groupPassLeft = 1) {
+function makeService(db: any, now: DateTime, groupPassLeft = 1, payer: unknown = null) {
   const mockClock = { now: () => now };
   const mockNotifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
   const mockVacancyAlerts = { unsubscribe: jest.fn().mockResolvedValue(undefined) };
-  const mockEntitlements = { groupPassLeft: jest.fn().mockResolvedValue(groupPassLeft) };
+  const mockEntitlements = {
+    groupPassLeft: jest.fn().mockResolvedValue(groupPassLeft),
+    // Nothing pays for the training unless a test says so (then a late cancellation costs nothing)
+    payerFor: jest.fn().mockResolvedValue(payer),
+    syncSpend: jest.fn().mockResolvedValue(undefined),
+  };
   return new BookingService(
     { db } as any,
     mockNotifications as any,
@@ -494,5 +499,69 @@ describe('BookingService — guests', () => {
     await makeService(ok.db, at15).switchSlot('member-1', 'slot-2', 'reason');
     expect(ok.sets).toContainEqual({ bookingId: 'booking-2' });
     expect(ok.sets.filter((x) => 'bookedCount' in x).map(seatsIn)).toEqual([2, 2]);
+  });
+});
+
+describe('BookingService — late cancellation', () => {
+  // A personal training at 19:00 on TODAY
+  const booking = { id: 'b1', memberId: 'member-1', slotId: 'slot-p', status: 'ACTIVE' };
+  const slot = { bookedCount: 1, capacity: 1, slotTime: '19:00', trainingType: 'персональні', trainerId: 'trainer-1' };
+  const single = { total: 1, amountUah: 700, purchaseId: 'purchase-1' };
+  const pass = { total: 8, amountUah: 4800, purchaseId: 'purchase-8' };
+
+  function cancelAt(now: DateTime, payer: unknown, spent: unknown[], type = 'персональні') {
+    const { db, sets } = makeDb([
+      [booking],
+      [validDay],
+      [{ ...slot, trainingType: type }],
+      spent,
+      [{ displayName: 'Оля' }],
+    ]);
+    const service = makeService(db, now, 1, payer);
+    return { db, sets, service, run: () => service.cancel('member-1', 'slot-p', 'захворіла') };
+  }
+
+  it('a single personal training 2 hours to a day before: spent, half its price back', async () => {
+    const { db, sets, service, run } = cancelAt(kyivAt(15), single, [single]);
+    await run();
+    expect(sets).toContainEqual({ cancelFee: 'FULL' });
+    expect(sets).toContainEqual({ cancelFee: 'HALF' });
+    expect((service as any).entitlements.syncSpend).toHaveBeenCalledWith(db, 'b1');
+    expect(db.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('a single personal training under 2 hours before: spent, nothing back', async () => {
+    const { db, sets, run } = cancelAt(kyivAt(17, 30), single, [single]);
+    await run();
+    expect(sets).toContainEqual({ cancelFee: 'FULL' });
+    expect(sets).not.toContainEqual({ cancelFee: 'HALF' });
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('a personal pass under a day before: one training spent', async () => {
+    const { db, sets, run } = cancelAt(kyivAt(15), pass, [pass]);
+    await run();
+    expect(sets).toContainEqual({ cancelFee: 'FULL' });
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('a group training from 2 hours before: free', async () => {
+    const { db, service, run } = cancelAt(kyivAt(16, 59), pass, [], 'групові');
+    await run();
+    expect((service as any).entitlements.syncSpend).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('nothing pays for it: free', async () => {
+    const { service, sets, run } = cancelAt(kyivAt(18), null, []);
+    await run();
+    expect(sets).not.toContainEqual({ cancelFee: 'FULL' });
+    expect((service as any).entitlements.syncSpend).not.toHaveBeenCalled();
+  });
+
+  it('the spend found nothing after all (a race): the fee goes', async () => {
+    const { sets, run } = cancelAt(kyivAt(18), single, []);
+    await run();
+    expect(sets).toContainEqual({ cancelFee: null });
   });
 });

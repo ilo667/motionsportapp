@@ -27,6 +27,17 @@ export class AdminPurchasesController {
     return this.purchasesService.markPaymentHandled(user.id, id);
   }
 
+  @Get('cancel-refunds/pending')
+  pendingCancelRefunds(@CurrentUser() user: SessionUser) {
+    return this.purchasesService.pendingCancelRefunds(user.id);
+  }
+
+  @Post('cancel-refunds/:id/done')
+  @HttpCode(200)
+  markCancelRefundDone(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SessionUser) {
+    return this.purchasesService.markCancelRefundDone(user.id, id);
+  }
+
   @Post('purchases/:id/confirm')
   @HttpCode(200)
   confirm(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SessionUser) {

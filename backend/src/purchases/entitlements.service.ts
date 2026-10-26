@@ -280,6 +280,9 @@ export class EntitlementsService {
         localDate: trainingDays.localDate,
         marked: attendance.bookingId,
         spentFrom: packageSpends.packageId,
+        status: bookings.status,
+        cancelFee: bookings.cancelFee,
+        feeWaivedAt: bookings.feeWaivedAt,
       })
       .from(bookings)
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
@@ -290,7 +293,9 @@ export class EntitlementsService {
       .limit(1);
     if (!booking || !PASS_TYPES.includes(booking.trainingType)) return;
 
-    if (!booking.marked) {
+    // A mark spends; so does a late cancellation by the member, unless the trainer waived it (booking/cancel-fee.ts)
+    const lateCancel = booking.status === 'CANCELLED' && !!booking.cancelFee && !booking.feeWaivedAt;
+    if (!booking.marked && !lateCancel) {
       if (booking.spentFrom) await tx.delete(packageSpends).where(eq(packageSpends.bookingId, bookingId));
       return;
     }
@@ -299,39 +304,7 @@ export class EntitlementsService {
     const memberFreezes = await loadFreezes(tx, [booking.memberId]);
     if (memberFreezes.some((f) => frozenOn(f, booking.localDate))) return;
 
-    // Lock first, count after: a mark waiting on the lock must see the other mark's spend. A count inside the
-    // locking statement would use that statement's snapshot, taken before the wait, and both could take the
-    // last training. The second statement gets a fresh snapshot (READ COMMITTED). Only the packages are locked
-    // (`of`), not the joined purchase: payments lock the purchase before the packages, the other order deadlocks
-    const own = await tx
-      .select({
-        id: packages.id,
-        total: packages.total,
-        durationMonths: packages.durationMonths,
-        ...PASS_DATES,
-        forBooking: sql<boolean>`coalesce(${purchases.bookingId} = ${bookingId}, false)`,
-      })
-      .from(packages)
-      .innerJoin(purchaseItems, eq(purchaseItems.id, packages.purchaseItemId))
-      .innerJoin(purchases, eq(purchases.id, purchaseItems.purchaseId))
-      .where(and(eq(packages.memberId, booking.memberId), eq(packages.trainingType, booking.trainingType)))
-      .orderBy(asc(packages.createdAt))
-      .for('update', { of: packages });
-    if (own.length === 0) return;
-    const spent = await tx
-      .select({ packageId: packageSpends.packageId, used: sql<number>`count(*)::int` })
-      .from(packageSpends)
-      .where(
-        inArray(
-          packageSpends.packageId,
-          own.map((p) => p.id),
-        ),
-      )
-      .groupBy(packageSpends.packageId);
-    const usable = own.filter(
-      (p) => passUsableOn(p, booking.localDate) && (spent.find((x) => x.packageId === p.id)?.used ?? 0) < p.total,
-    );
-    const from = usable.find((p) => p.forBooking) ?? usable[0];
+    const from = await this.payerFor(tx, booking, bookingId, true);
     if (!from) return;
 
     await tx.insert(packageSpends).values({ bookingId, packageId: from.id }).onConflictDoNothing();
@@ -350,6 +323,52 @@ export class EntitlementsService {
         .set({ activatedOn: booking.localDate, validUntil })
         .where(and(eq(packages.id, from.id), isNull(packages.activatedOn)));
     }
+  }
+
+  // What pays for this booking's training: the package bought for it first (cash for a group training), else the
+  // oldest one of that type usable on the training's date with trainings left. Null = nothing does.
+  // lock = for a spend: lock first, count after, so a mark waiting on the lock sees the other mark's spend (a count
+  // inside the locking statement would use that statement's snapshot, taken before the wait, and both could take
+  // the last training; the second statement gets a fresh snapshot, READ COMMITTED). Only the packages are locked
+  // (`of`), not the joined purchase: payments lock the purchase before the packages, the other order deadlocks
+  async payerFor(
+    q: Q,
+    booking: { memberId: string; trainingType: string; localDate: string },
+    bookingId: string,
+    lock = false,
+  ) {
+    const query = q
+      .select({
+        id: packages.id,
+        total: packages.total,
+        durationMonths: packages.durationMonths,
+        ...PASS_DATES,
+        forBooking: sql<boolean>`coalesce(${purchases.bookingId} = ${bookingId}, false)`,
+        // What the package cost when bought, and the purchase (a late cancellation of a single training gives half back)
+        amountUah: purchaseItems.amountUah,
+        purchaseId: purchases.id,
+      })
+      .from(packages)
+      .innerJoin(purchaseItems, eq(purchaseItems.id, packages.purchaseItemId))
+      .innerJoin(purchases, eq(purchases.id, purchaseItems.purchaseId))
+      .where(and(eq(packages.memberId, booking.memberId), eq(packages.trainingType, booking.trainingType)))
+      .orderBy(asc(packages.createdAt));
+    const own = lock ? await query.for('update', { of: packages }) : await query;
+    if (own.length === 0) return null;
+    const spent = await q
+      .select({ packageId: packageSpends.packageId, used: sql<number>`count(*)::int` })
+      .from(packageSpends)
+      .where(
+        inArray(
+          packageSpends.packageId,
+          own.map((p) => p.id),
+        ),
+      )
+      .groupBy(packageSpends.packageId);
+    const usable = own.filter(
+      (p) => passUsableOn(p, booking.localDate) && (spent.find((x) => x.packageId === p.id)?.used ?? 0) < p.total,
+    );
+    return usable.find((p) => p.forBooking) ?? usable[0] ?? null;
   }
 
   // «Активувати з сьогодні»: a waiting card starts today for its months. Compare-and-set, so a burned or already

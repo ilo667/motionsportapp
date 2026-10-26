@@ -17,6 +17,7 @@ import {
   trainerSchedules,
   adminPushSubscriptions,
   bookingGuests,
+  cancelRefunds,
 } from '../database/schema';
 import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
@@ -49,6 +50,10 @@ type CancellationRow = {
   reason: string | null;
   cancelledAt: Date | null;
   switchedToTime: string | null;
+  cancelFee?: string | null;
+  feeWaivedAt?: Date | null;
+  refundUah?: number | null;
+  refundStatus?: string | null;
 };
 
 function toCancellationView(r: CancellationRow) {
@@ -58,6 +63,15 @@ function toCancellationView(r: CancellationRow) {
     reason: r.reason ?? '',
     cancelledAt: r.cancelledAt?.toISOString() ?? null,
     switchedToTime: r.switchedToTime, // null = cancelled, otherwise moved to that time
+    // A late cancellation (booking/cancel-fee.ts): what it cost, half a single training back, and «Не списувати»
+    fee: r.cancelFee
+      ? {
+          kind: r.cancelFee as 'FULL' | 'HALF',
+          waived: !!r.feeWaivedAt,
+          refundUah: r.refundStatus === 'CANCELLED' ? null : (r.refundUah ?? null),
+          refundDone: r.refundStatus === 'DONE',
+        }
+      : null,
   };
 }
 
@@ -174,6 +188,20 @@ export class AdminScheduleService {
         .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')));
     await tx.delete(packageSpends).where(inArray(packageSpends.bookingId, ofSlots()));
     await tx.delete(attendance).where(inArray(attendance.bookingId, ofSlots()));
+    // Late cancellations of these trainings cost nothing either: their spends go back, a half refund still to
+    // return is dropped, and the fee goes (one already returned stays as it was)
+    const charged = await tx
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'CANCELLED'), isNotNull(bookings.cancelFee)));
+    if (charged.length === 0) return;
+    const ids = charged.map((b) => b.id);
+    await tx.delete(packageSpends).where(inArray(packageSpends.bookingId, ids));
+    await tx
+      .update(cancelRefunds)
+      .set({ status: 'CANCELLED' })
+      .where(and(inArray(cancelRefunds.bookingId, ids), eq(cancelRefunds.status, 'DUE')));
+    await tx.update(bookings).set({ cancelFee: null }).where(inArray(bookings.id, ids));
   }
 
   // Cancels these slots and every active booking on them (a system cancellation, no reason); their marks and spends
@@ -756,6 +784,45 @@ export class AdminScheduleService {
     return { marked: activeBookings.length };
   }
 
+  // «Не списувати»: the training a late cancellation took goes back, and the half refund (if any) is dropped.
+  // Only on this trainer's trainings, and only while the money hasn't been returned. Compare-and-set
+  async waiveCancelFee(bookingId: string, adminId: string) {
+    const [booking] = await this.database.db
+      .select({ id: bookings.id, refundStatus: cancelRefunds.status })
+      .from(bookings)
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
+      .leftJoin(cancelRefunds, eq(cancelRefunds.bookingId, bookings.id))
+      .where(and(eq(bookings.id, bookingId), eq(trainingSlots.trainerId, adminId)))
+      .limit(1);
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.refundStatus === 'DONE') throw new ConflictException('Money already returned');
+
+    await this.database.db.transaction(async (tx) => {
+      const [done] = await tx
+        .update(bookings)
+        .set({ feeWaivedAt: new Date(), feeWaivedBy: adminId })
+        .where(
+          and(
+            eq(bookings.id, bookingId),
+            eq(bookings.status, 'CANCELLED'),
+            isNotNull(bookings.cancelFee),
+            isNull(bookings.feeWaivedAt),
+          ),
+        )
+        .returning({ id: bookings.id });
+      if (!done) throw new ConflictException('Nothing to waive');
+      const [refund] = await tx
+        .update(cancelRefunds)
+        .set({ status: 'CANCELLED' })
+        .where(and(eq(cancelRefunds.bookingId, bookingId), eq(cancelRefunds.status, 'DUE')))
+        .returning({ id: cancelRefunds.id });
+      // Returned meanwhile (another trainer's tap): keep the fee, nothing changes
+      if (!refund && booking.refundStatus === 'DUE') throw new ConflictException('Money already returned');
+      await this.entitlements.syncSpend(tx, bookingId);
+    });
+    return { ok: true };
+  }
+
   async updateBookingAttendance(bookingId: string, dto: UpdateAttendanceDto, adminId: string) {
     // Only bookings on this trainer's own trainings
     const [booking] = await this.database.db
@@ -1110,12 +1177,17 @@ export class AdminScheduleService {
         localDate: trainingDays.localDate,
         switchedToSlotId: bookings.switchedToSlotId,
         switchedToTime: target.slotTime,
+        cancelFee: bookings.cancelFee,
+        feeWaivedAt: bookings.feeWaivedAt,
+        refundUah: cancelRefunds.amountUah,
+        refundStatus: cancelRefunds.status,
       })
       .from(bookings)
       .innerJoin(members, eq(members.id, bookings.memberId))
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
       .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
       .leftJoin(target, eq(target.id, bookings.switchedToSlotId))
+      .leftJoin(cancelRefunds, eq(cancelRefunds.bookingId, bookings.id))
       .where(and(eq(bookings.status, 'CANCELLED'), isNotNull(bookings.cancellationReason), filter))
       .orderBy(desc(bookings.cancelledAt));
     return limit ? query.limit(limit) : query;

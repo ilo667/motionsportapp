@@ -1,7 +1,17 @@
 import { Injectable, Logger, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { eq, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { bookingGuests, bookings, trainingSlots, trainingDays, members } from '../database/schema';
+import {
+  bookingGuests,
+  bookings,
+  cancelRefunds,
+  members,
+  packageSpends,
+  packages,
+  purchaseItems,
+  trainingDays,
+  trainingSlots,
+} from '../database/schema';
 import { NotificationService } from '../notifications/notification.service';
 import { VacancyAlertsService } from '../notifications/vacancy-alerts.service';
 import { ClockService } from '../clock/clock.service';
@@ -11,6 +21,7 @@ import { EntitlementsService } from '../purchases/entitlements.service';
 import { cancelGuests, findGroupBooking, groupBookingWindow } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { memberFrozenOn } from '../freezes/freeze.store';
+import { cancelFee, halfBack, type CancelFee } from './cancel-fee';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -141,6 +152,17 @@ export class BookingService {
         .update(bookings)
         .set({ status: 'CANCELLED', cancelledAt: now, cancellationReason: reason })
         .where(and(eq(bookings.id, booking.id), eq(bookings.status, 'ACTIVE')));
+      // Late: the training is spent from what pays for it, maybe half a single training's price back
+      if (day && slotBefore) {
+        await this.chargeLateCancel(
+          tx,
+          booking.id,
+          memberId,
+          slotBefore.trainingType,
+          day.localDate,
+          slotBefore.slotTime,
+        );
+      }
       // Their guest goes too: two seats free
       const seats = 1 + (await cancelGuests(tx, [booking.id], now)).size;
 
@@ -324,6 +346,72 @@ export class BookingService {
     }
 
     return { ok: true };
+  }
+
+  // What cancelling this booking now would cost, for the warning in «Скасувати» (the cancel itself decides again,
+  // from what it actually spends). refundUah: half of a single training given back
+  async cancelFeePreview(
+    memberId: string,
+    slotId: string,
+  ): Promise<{ fee: CancelFee | null; single: boolean; refundUah: number | null }> {
+    const [row] = await this.database.db
+      .select({
+        bookingId: bookings.id,
+        trainingType: trainingSlots.trainingType,
+        slotTime: trainingSlots.slotTime,
+        localDate: trainingDays.localDate,
+      })
+      .from(bookings)
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
+      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
+      .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
+      .limit(1);
+    if (!row) throw new NotFoundException('No active booking found');
+    const payer = await this.entitlements.payerFor(this.database.db, { memberId, ...row }, row.bookingId);
+    const msBefore = slotStartsAt(row.localDate, row.slotTime).toMillis() - this.clock.now().toMillis();
+    const fee = cancelFee(row.trainingType, msBefore, payer?.total ?? null);
+    return {
+      fee,
+      // A single training (burns) rather than a pass (loses one)
+      single: payer?.total === 1,
+      refundUah: fee === 'HALF' && payer ? halfBack(payer.amountUah) : null,
+    };
+  }
+
+  // A member's own cancellation that came late (booking/cancel-fee.ts): the booking keeps its fee, the training is
+  // spent like a mark (syncSpend), and for HALF a refund of half the single training waits for the trainer.
+  // Decided from what was actually spent, so a race with another spend can't charge what nothing paid for
+  private async chargeLateCancel(
+    tx: Tx,
+    bookingId: string,
+    memberId: string,
+    trainingType: string,
+    localDate: string,
+    slotTime: string,
+  ) {
+    const msBefore = slotStartsAt(localDate, slotTime).toMillis() - this.clock.now().toMillis();
+    const payer = await this.entitlements.payerFor(tx, { memberId, trainingType, localDate }, bookingId);
+    if (!cancelFee(trainingType, msBefore, payer?.total ?? null)) return;
+
+    await tx.update(bookings).set({ cancelFee: 'FULL' }).where(eq(bookings.id, bookingId));
+    await this.entitlements.syncSpend(tx, bookingId);
+    const [spent] = await tx
+      .select({ total: packages.total, amountUah: purchaseItems.amountUah, purchaseId: purchaseItems.purchaseId })
+      .from(packageSpends)
+      .innerJoin(packages, eq(packages.id, packageSpends.packageId))
+      .innerJoin(purchaseItems, eq(purchaseItems.id, packages.purchaseItemId))
+      .where(eq(packageSpends.bookingId, bookingId))
+      .limit(1);
+    const fee = cancelFee(trainingType, msBefore, spent?.total ?? null);
+    if (fee !== 'FULL') await tx.update(bookings).set({ cancelFee: fee }).where(eq(bookings.id, bookingId));
+    if (fee === 'HALF' && halfBack(spent.amountUah) > 0) {
+      await tx.insert(cancelRefunds).values({
+        bookingId,
+        memberId,
+        purchaseId: spent.purchaseId,
+        amountUah: halfBack(spent.amountUah),
+      });
+    }
   }
 
   // «+ Гість»: a member booked on a group training brings one guest, free, a name only. The guest takes a seat;

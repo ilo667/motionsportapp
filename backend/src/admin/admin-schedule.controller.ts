@@ -178,4 +178,11 @@ export class AdminScheduleController {
   ) {
     return this.adminScheduleService.updateGuestAttendance(guestId, dto, user.id);
   }
+
+  // «Не списувати» on a late cancellation
+  @Post('bookings/:bookingId/waive-fee')
+  @HttpCode(HttpStatus.OK)
+  waiveCancelFee(@Param('bookingId', ParseUUIDPipe) bookingId: string, @CurrentUser() user: SessionUser) {
+    return this.adminScheduleService.waiveCancelFee(bookingId, user.id);
+  }
 }

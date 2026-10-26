@@ -6,6 +6,8 @@ import {
   admins,
   attendance,
   bookings,
+  cancelRefunds,
+  trainingDays,
   clubCards,
   members,
   packageSpends,
@@ -369,6 +371,50 @@ export class PurchasesService {
         .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - ${seats}, 0)` })
         .where(eq(trainingSlots.id, cancelled.slotId));
     });
+    return { ok: true };
+  }
+
+  // «Повернути гроші»: half of a single personal / split training, after a member cancelled it 2–24 hours before
+  // (booking/cancel-fee.ts). Own and unassigned clients, oldest first. The trainer returns the money themselves
+  async pendingCancelRefunds(trainerId: string) {
+    const rows = await this.database.db
+      .select({
+        id: cancelRefunds.id,
+        memberId: cancelRefunds.memberId,
+        displayName: members.displayName,
+        amountUah: cancelRefunds.amountUah,
+        method: purchases.method,
+        createdAt: cancelRefunds.createdAt,
+        localDate: trainingDays.localDate,
+        slotTime: trainingSlots.slotTime,
+        trainingType: trainingSlots.trainingType,
+      })
+      .from(cancelRefunds)
+      .innerJoin(members, eq(members.id, cancelRefunds.memberId))
+      .innerJoin(purchases, eq(purchases.id, cancelRefunds.purchaseId))
+      .innerJoin(bookings, eq(bookings.id, cancelRefunds.bookingId))
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
+      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
+      .where(and(eq(cancelRefunds.status, 'DUE'), memberOf(trainerId)))
+      .orderBy(asc(cancelRefunds.createdAt));
+    return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
+  }
+
+  // «Повернено». Compare-and-set; another trainer's client answers 404, already handled 409
+  async markCancelRefundDone(trainerId: string, refundId: string) {
+    const [refund] = await this.database.db
+      .select({ memberId: cancelRefunds.memberId })
+      .from(cancelRefunds)
+      .where(eq(cancelRefunds.id, refundId))
+      .limit(1);
+    if (!refund) throw new NotFoundException('Refund not found');
+    await this.visibleMember(trainerId, refund.memberId);
+    const [done] = await this.database.db
+      .update(cancelRefunds)
+      .set({ status: 'DONE', doneAt: this.clock.now().toJSDate(), doneBy: trainerId })
+      .where(and(eq(cancelRefunds.id, refundId), eq(cancelRefunds.status, 'DUE')))
+      .returning({ id: cancelRefunds.id });
+    if (!done) throw new ConflictException('Refund was already handled');
     return { ok: true };
   }
 

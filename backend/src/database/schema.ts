@@ -149,6 +149,12 @@ export const bookings = pgTable(
     paymentStatus: text('payment_status'), // null = free | 'PENDING' | 'PAID'
     // Set when the member moved this booking to another slot (19:00 → 20:00); null + reason = plain cancel
     switchedToSlotId: uuid('switched_to_slot_id').references(() => trainingSlots.id),
+    // A late cancellation by the member (booking/cancel-fee.ts): FULL = the training is spent from what pays for it,
+    // HALF = spent too, and half of a single training's price goes back (cancel_refunds). Null = it cost nothing.
+    // The trainer may waive it («Не списувати») until the money is returned
+    cancelFee: text('cancel_fee'),
+    feeWaivedAt: timestamp('fee_waived_at', { withTimezone: true }),
+    feeWaivedBy: uuid('fee_waived_by').references((): AnyPgColumn => admins.id),
   },
   (table) => [
     // One active booking per member per slot. "One group booking per day" is checked in BookingService
@@ -158,6 +164,7 @@ export const bookings = pgTable(
       .where(sql`${table.status} = 'ACTIVE'`),
     oneOf('bookings_status_check', 'status', ['ACTIVE', 'CANCELLED']),
     oneOf('bookings_payment_status_check', 'payment_status', ['PENDING', 'PAID']),
+    oneOf('bookings_cancel_fee_check', 'cancel_fee', ['FULL', 'HALF']),
   ],
 );
 
@@ -560,5 +567,33 @@ export const freezeItems = pgTable(
   () => [
     oneOf('freeze_items_field_check', 'field', ['valid_until', 'activate_by']),
     check('freeze_items_target_check', sql`(club_card_id is null) <> (package_id is null)`),
+  ],
+);
+
+// Half of a single personal / split training goes back after a cancellation 2–24 hours before it (cancel_fee HALF).
+// The app only counts it: the trainer returns the money (LiqPay cabinet or cash) and presses «Повернено»
+export const cancelRefunds = pgTable(
+  'cancel_refunds',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    bookingId: uuid('booking_id')
+      .notNull()
+      .unique()
+      .references(() => bookings.id),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id),
+    purchaseId: uuid('purchase_id')
+      .notNull()
+      .references(() => purchases.id),
+    amountUah: integer('amount_uah').notNull(),
+    status: text('status').notNull().default('DUE'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    doneAt: timestamp('done_at', { withTimezone: true }),
+    doneBy: uuid('done_by').references(() => admins.id),
+  },
+  () => [
+    oneOf('cancel_refunds_status_check', 'status', ['DUE', 'DONE', 'CANCELLED']),
+    check('cancel_refunds_amount_check', sql`amount_uah > 0`),
   ],
 );

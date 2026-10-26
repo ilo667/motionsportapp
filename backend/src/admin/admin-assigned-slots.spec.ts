@@ -459,6 +459,7 @@ describe('Cancellation reasons for the trainer', () => {
         reason: 'Захворіла',
         cancelledAt: '2026-10-22T14:42:00.000Z',
         switchedToTime: null,
+        fee: null,
       },
       {
         bookingId: 'b2',
@@ -466,6 +467,7 @@ describe('Cancellation reasons for the trainer', () => {
         reason: 'Не встигаю',
         cancelledAt: '2026-10-22T13:10:00.000Z',
         switchedToTime: '20:00',
+        fee: null,
       },
     ]);
   });
@@ -769,5 +771,31 @@ describe("Trainer's today page — the booking window of the trainer's own sched
       bookingOpenAt: '2026-10-20T05:00:00.000Z', // 08:00 Kyiv (UTC+3)
       bookingCloseAt: '2026-10-20T07:00:00.000Z', // 10:00 Kyiv
     });
+  });
+});
+
+describe('Late cancellation — «Не списувати»', () => {
+  it('gives the training back and drops the half refund still to return', async () => {
+    const entitlements = { syncSpend: jest.fn() };
+    const { db, sets } = makeDb([[{ id: 'b1', refundStatus: 'DUE' }]]);
+    await makeService(db, entitlements).waiveCancelFee('b1', TRAINER);
+    expect(sets).toContainEqual(expect.objectContaining({ feeWaivedBy: TRAINER }));
+    expect(sets).toContainEqual({ status: 'CANCELLED' });
+    expect(entitlements.syncSpend).toHaveBeenCalledWith(db, 'b1');
+  });
+
+  it('not once the money was returned', async () => {
+    const { db } = makeDb([[{ id: 'b1', refundStatus: 'DONE' }]]);
+    await expect(makeService(db).waiveCancelFee('b1', TRAINER)).rejects.toThrow('Money already returned');
+  });
+
+  it("another trainer's training answers 404", async () => {
+    const { db } = makeDb([[]]);
+    await expect(makeService(db).waiveCancelFee('b1', TRAINER)).rejects.toThrow(NotFoundException);
+  });
+
+  it('nothing to waive (no fee, or waived already) answers 409', async () => {
+    const { db } = makeDb([[{ id: 'b1', refundStatus: null }]], () => []);
+    await expect(makeService(db).waiveCancelFee('b1', TRAINER)).rejects.toThrow('Nothing to waive');
   });
 });

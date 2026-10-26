@@ -1,4 +1,16 @@
-import { Controller, Post, Delete, Patch, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Patch,
+  Body,
+  Query,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { SessionGuard } from '../auth/session.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -17,6 +29,13 @@ export class BookingController {
   async book(@CurrentUser() user: SessionUser, @Body() dto: CreateBookingDto) {
     if (user.type !== 'member') throw new Error('Members only');
     return this.bookingService.book(user.id, dto.slotId);
+  }
+
+  // What «Скасувати» would cost now (late cancellation), for the warning before the member confirms
+  @Get('cancel-fee')
+  async cancelFee(@CurrentUser() user: SessionUser, @Query('slotId', ParseUUIDPipe) slotId: string) {
+    if (user.type !== 'member') throw new Error('Members only');
+    return this.bookingService.cancelFeePreview(user.id, slotId);
   }
 
   @Delete('current')
