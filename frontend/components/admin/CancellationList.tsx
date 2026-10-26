@@ -26,11 +26,11 @@ interface CancellationListProps {
   withDate?: boolean;
 }
 
-// What a late cancellation cost: «списано», «списано · повернути 350 ₴», «не списано» once waived
+// What a late cancellation cost: «списано», «повернути 350 ₴», «не списано» once waived
 function feeLabel(fee: NonNullable<Cancellation["fee"]>) {
   if (fee.waived) return "не списано";
   if (fee.kind === "HALF" && fee.refundUah) {
-    return `списано · ${fee.refundDone ? "повернено" : "повернути"} ${fee.refundUah} ₴`;
+    return `${fee.refundDone ? "повернено" : "повернути"} ${fee.refundUah} ₴`;
   }
   return "списано";
 }
