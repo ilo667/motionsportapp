@@ -523,7 +523,9 @@ export default function CalendarPage() {
                 {weekly && (
                   <p className="text-muted text-xs">
                     Додасться в «Розклад групових»: щотижня в цей день
-                    {schedule && !schedule.autoCreate ? ". Автоматичне додавання в календар увімкнеться" : ""}
+                    {schedule && !schedule.autoCreate
+                      ? ". У розкладі увімкнеться «Автоматично додавати на 3 тижні наперед»"
+                      : ""}
                   </p>
                 )}
               </div>
