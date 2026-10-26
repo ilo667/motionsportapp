@@ -3,8 +3,8 @@
   "short_name": "Motion Gym",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#116a73",
+  "background_color": "#070910",
+  "theme_color": "#070910",
   "icons": [
     { "src": "/motion-gym-logo-app.png", "sizes": "1254x1254", "type": "image/png" }
   ]

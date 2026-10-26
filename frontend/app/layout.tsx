@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="uk" className={`${rubik.variable} ${inter.variable} h-full antialiased`}>
       <head>
-        <meta name="theme-color" content="#93d23c" />
+        <meta name="theme-color" content="#070910" />
       </head>
       <body className="text-base sm:text-sm min-h-full flex flex-col">
         <OfflineBanner />
