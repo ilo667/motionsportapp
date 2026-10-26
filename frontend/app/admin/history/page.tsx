@@ -69,9 +69,10 @@ function HistorySlot({
           <ul className="flex flex-col space-y-2">
             {slot.participants.map((p) => (
               <li key={p.bookingId} className="flex items-center justify-between space-x-2">
-                <span className="text-body text-sm">
+                <span className={`text-body text-sm${p.guestOf ? " pl-4" : ""}`}>
                   {p.displayName}
                   {p.switchedFromTime && <span className="ml-2 text-xs text-amber-400">з {p.switchedFromTime}</span>}
+                  {p.guestOf && <span className="ml-2 text-xs text-subtle">гість · {p.guestOf}</span>}
                 </span>
                 <AttendanceButton
                   status={p.attendanceStatus}
@@ -156,8 +157,12 @@ export default function HistoryPage() {
   const changeAttendance = async (bookingId: string, previous: AttendanceStatus, next: AttendanceStatus) => {
     setError("");
     setAttendance(bookingId, next);
+    // A guest's row carries the guest's id and is marked through its own route
+    const participant = days
+      ?.flatMap((d) => d.slots.flatMap((s) => s.participants))
+      .find((p) => p.bookingId === bookingId);
     try {
-      await api.updateAttendance(bookingId, next);
+      await api.updateParticipantAttendance({ bookingId, guestOf: participant?.guestOf ?? null }, next);
     } catch {
       setAttendance(bookingId, previous);
       setError("Не вдалося зберегти відмітку. Спробуйте ще раз.");

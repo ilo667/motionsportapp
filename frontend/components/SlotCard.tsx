@@ -33,10 +33,14 @@ export function SlotCard({
 }: SlotCardProps) {
   const [modal, setModal] = useState<{ action: "cancel" } | { action: "switch"; targetSlot: SlotView } | null>(null);
   const [buying, setBuying] = useState(false);
+  // «+ Гість»: the name field is open
+  const [guestName, setGuestName] = useState<string | null>(null);
 
   // A move goes to another training of the day that has not started yet
   const otherSlot = allSlots.find((s) => s.id !== slot.id && s.status === "ACTIVE" && !s.started);
-  const canSwitch = !!otherSlot && otherSlot.bookedCount < otherSlot.capacity;
+  // A guest moves along and needs a seat there too
+  const seatsNeeded = slot.myGuest ? 2 : 1;
+  const canSwitch = !!otherSlot && otherSlot.bookedCount + seatsNeeded <= otherSlot.capacity;
 
   const isFull = slot.bookedCount >= slot.capacity;
   const hasAnyBooking = allSlots.some((s) => s.isMyBooking);
@@ -69,6 +73,64 @@ export function SlotCard({
           </p>
         ) : slot.isMyBooking ? (
           <div className="flex flex-col space-y-2">
+            {slot.myGuest ? (
+              <div className="flex items-center justify-between space-x-3 rounded-lg border border-line px-3 py-2.5">
+                <span className="text-body text-sm">
+                  <span className="text-subtle">Гість:</span> {slot.myGuest.name}
+                </span>
+                <button
+                  onClick={() => onMutate(() => api.removeGuest(slot.id))}
+                  className="text-subtle text-xs underline hover:text-body transition-colors"
+                >
+                  Прибрати
+                </button>
+              </div>
+            ) : guestName !== null ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!guestName.trim()) return;
+                  onMutate(() => api.addGuest(slot.id, guestName.trim()));
+                  setGuestName(null);
+                }}
+                className="flex flex-col space-y-2"
+              >
+                <input
+                  autoFocus
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  maxLength={40}
+                  placeholder="Ім'я гостя"
+                  className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
+                />
+                <div className="flex space-x-2">
+                  <button
+                    type="submit"
+                    disabled={!guestName.trim()}
+                    className="btn-primary flex-1 py-2.5 rounded-md text-sm font-medium transition-colors disabled:opacity-60"
+                  >
+                    Додати гостя
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGuestName(null)}
+                    className="btn-ghost flex-1 py-2.5 rounded-md border text-sm transition-colors"
+                  >
+                    Ні
+                  </button>
+                </div>
+              </form>
+            ) : (
+              !isFull && (
+                // A free guest takes one more seat on this training
+                <button
+                  onClick={() => setGuestName("")}
+                  className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors"
+                >
+                  + Привести гостя
+                </button>
+              )
+            )}
             {canSwitch && (
               <button
                 onClick={() => setModal({ action: "switch", targetSlot: otherSlot! })}

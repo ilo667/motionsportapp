@@ -49,15 +49,16 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
             <ul className="mb-3 space-y-2">
               {slot.participants.map((p) => (
                 <li key={p.bookingId} className="flex items-center justify-between space-x-2">
-                  <span className="text-body text-sm">
+                  <span className={`text-body text-sm${p.guestOf ? " pl-4" : ""}`}>
                     {p.displayName}
                     {p.switchedFromTime && <span className="ml-2 text-xs text-amber-400">з {p.switchedFromTime}</span>}
+                    {p.guestOf && <span className="ml-2 text-xs text-subtle">гість · {p.guestOf}</span>}
                   </span>
                   {/* Editable after "Підтвердити всіх" too: the trainer can fix a mistake */}
                   <AttendanceButton
                     status={p.attendanceStatus}
                     name={p.displayName}
-                    onChange={(next) => onMutate(() => api.updateAttendance(p.bookingId, next))}
+                    onChange={(next) => onMutate(() => api.updateParticipantAttendance(p, next))}
                   />
                 </li>
               ))}

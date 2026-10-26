@@ -287,6 +287,7 @@ export interface SlotView {
   isMyBooking: boolean;
   isMyVacancyAlert?: boolean;
   started?: boolean; // the training began: booking, cancelling and switching are over
+  myGuest?: { name: string } | null; // the guest the member brings (on their own booking only)
 }
 
 // Personal / split the trainer assigned to this member (any day, any time); paid, bookable until the start
@@ -351,6 +352,7 @@ export interface AdminParticipant {
   displayName: string;
   attendanceStatus: AttendanceStatus;
   switchedFromTime: string | null; // moved here from that slot today
+  guestOf: string | null; // a guest: who brought them (bookingId is then the guest's id)
 }
 
 export interface AdminSlotView {
@@ -432,6 +434,19 @@ export const api = {
   book: (slotId: string) =>
     request<{ ok: boolean }>("/bookings", {
       method: "POST",
+      body: JSON.stringify({ slotId }),
+    }),
+
+  // A free guest on the member's group booking (one per booking; takes a seat)
+  addGuest: (slotId: string, name: string) =>
+    request<{ ok: boolean }>("/bookings/guest", {
+      method: "POST",
+      body: JSON.stringify({ slotId, name }),
+    }),
+
+  removeGuest: (slotId: string) =>
+    request<{ ok: boolean }>("/bookings/guest", {
+      method: "DELETE",
       body: JSON.stringify({ slotId }),
     }),
 
@@ -635,6 +650,13 @@ export const api = {
 
   updateAttendance: (bookingId: string, status: AttendanceStatus) =>
     request<{ ok: boolean }>(`/admin/bookings/${bookingId}/attendance`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+
+  // A participant's mark: a member's booking, or a guest (nothing is spent for a guest)
+  updateParticipantAttendance: (p: { bookingId: string; guestOf: string | null }, status: AttendanceStatus) =>
+    request<{ ok: boolean }>(`/admin/${p.guestOf ? "guests" : "bookings"}/${p.bookingId}/attendance`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),

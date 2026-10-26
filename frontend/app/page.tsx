@@ -168,9 +168,11 @@ export default function SchedulePage() {
                     ? "Цей час скасовано тренером"
                     : raw.includes("Group pass required")
                       ? "Потрібен абонемент на групові: натисніть «Записатись» ще раз"
-                      : raw.includes("Membership frozen")
-                        ? "Абонемент заморожено"
-                        : raw || "Помилка. Спробуйте ще раз.";
+                      : raw.includes("Guest already added")
+                        ? "Гостя вже додано"
+                        : raw.includes("Membership frozen")
+                          ? "Абонемент заморожено"
+                          : raw || "Помилка. Спробуйте ще раз.";
       setMutateError(msg);
     }
   };
