@@ -11,7 +11,8 @@ import timeGridPlugin from "@fullcalendar/react/timegrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
 import ukLocale from "@fullcalendar/react/locales/uk";
 import type { DatesSetInfo, EventClickInfo, DateClickInfo } from "@fullcalendar/react";
-import { api, AdminMember, CalendarSlot, Cancellation, TrainingType } from "@/lib/api";
+import Link from "next/link";
+import { api, AdminMember, CalendarSlot, Cancellation, TrainerSchedule, TrainingType } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { useIsClient } from "@/lib/clientStore";
 import { TYPE_COLORS } from "@/lib/trainingTypes";
@@ -53,6 +54,7 @@ const ERROR_TEXTS: [string, string][] = [
   ["15-minute steps", "Вкажіть час з кроком 15 хвилин"],
   ["in the past", "Цей час уже минув"],
   ["Attendance already marked", "Цій людині вже поставили відмітку, її не можна прибрати"],
+  ["Booking must open before the first training", "Запис має відкриватися раніше за тренування"],
 ];
 
 function errorText(err: unknown, fallback: string) {
@@ -67,6 +69,11 @@ function hourOf(slotTime: string) {
 // Clicking today or a future day opens "Додати тренування"; past days do nothing, so no pointer there
 function clickableDayClass(info: { isPast: boolean }) {
   return info.isPast ? "" : "mg-clickable";
+}
+
+// The backend's weekday of a date: 1 = Пн … 7 = Нд
+function weekdayOf(date: string) {
+  return new Date(date + "T12:00:00").getDay() || 7;
 }
 
 function pad(n: number) {
@@ -102,14 +109,24 @@ export default function CalendarPage() {
     [router],
   );
 
-  // The trainer's booking opening time: a group training before it can't be booked (warned in the modal)
-  const [opensAt, setOpensAt] = useState("");
+  // «Розклад групових»: the opening time (a group training before it can't be booked, warned in the modal),
+  // which trainings repeat weekly (↻), and where «Щотижня» adds a time
+  const [schedule, setSchedule] = useState<TrainerSchedule | null>(null);
+  const opensAt = schedule?.bookingOpensAt ?? "";
+  // Group trainings only: «Лише цього дня» or «Щотижня» (adds the time to the schedule)
+  const [weekly, setWeekly] = useState(false);
   useEffect(() => {
     api
       .getMySchedule()
-      .then((s) => setOpensAt(s.bookingOpensAt))
+      .then(setSchedule)
       .catch(() => {});
   }, []);
+
+  // A group training at a weekday and time of the schedule, created by itself while auto-creation is on
+  const repeatsWeekly = (s: CalendarSlot) =>
+    s.trainingType === "групові" &&
+    !!schedule?.autoCreate &&
+    schedule.times.some((t) => t.weekday === weekdayOf(s.localDate) && t.slotTime === s.slotTime);
 
   useEffect(() => {
     api.getMembers().then(setMembers).catch(handleAuthError);
@@ -162,7 +179,7 @@ export default function CalendarPage() {
             .join(", ") || "без людей";
     return {
       id: s.slotId,
-      title: `${TYPE_SHORT[s.trainingType]} · ${detail}`,
+      title: `${repeatsWeekly(s) ? "↻ " : ""}${TYPE_SHORT[s.trainingType]} · ${detail}`,
       // Timed events (1 h) so the week-with-hours view places them on their hour; the time is shown by FullCalendar
       start,
       end,
@@ -183,6 +200,7 @@ export default function CalendarPage() {
   const openAddModal = (date: string, clickedTime = "") => {
     setSelectedType("групові");
     setTime(clickedTime);
+    setWeekly(false);
     setMemberIds([]);
     setError("");
     setModal({ mode: "add", date });
@@ -245,13 +263,41 @@ export default function CalendarPage() {
     if (modal?.mode !== "add") return;
     if (!TIME_RE.test(time)) return setError("Вкажіть час з кроком 15 хвилин, наприклад 18:30");
     if (selectedType === "групові") {
-      return run(() => api.upsertGroupSlot(modal.date, time), "Помилка збереження. Спробуйте ще раз.");
+      if (!weekly) return run(() => api.upsertGroupSlot(modal.date, time), "Помилка збереження. Спробуйте ще раз.");
+      return addWeekly(modal.date, time);
     }
     if (!memberIds[0]) return setError("Виберіть людину");
     return run(
       () =>
         api.createAssignedSlot(modal.date, { slotTime: time, trainingType: selectedType, memberIds: chosenMembers }),
       "Помилка збереження. Спробуйте ще раз.",
+    );
+  };
+
+  // «Щотижня»: the time goes into «Розклад групових» first (its rules checked there, nothing saved on an error),
+  // which adds the trainings 3 weeks ahead; then this date itself, which can be further ahead or a cancelled day
+  const addWeekly = async (date: string, slotTime: string) => {
+    if (!schedule) return setError("Розклад не завантажився. Оновіть сторінку.");
+    const weekday = weekdayOf(date);
+    const has = schedule.times.some((t) => t.weekday === weekday && t.slotTime === slotTime);
+    const next: TrainerSchedule = {
+      ...schedule,
+      autoCreate: true,
+      times: has ? schedule.times : [...schedule.times, { weekday, slotTime }],
+    };
+    setSaving(true);
+    setError("");
+    try {
+      const { bookingOpensAt, autoCreate, times } = await api.saveMySchedule(next);
+      setSchedule({ bookingOpensAt, autoCreate, times });
+    } catch (err: unknown) {
+      setSaving(false);
+      return setError(errorText(err, "Помилка збереження. Спробуйте ще раз."));
+    }
+    setSaving(false);
+    return run(
+      () => api.upsertGroupSlot(date, slotTime),
+      "Щотижня збережено, але на цю дату не додалось. Спробуйте ще раз.",
     );
   };
 
@@ -382,6 +428,14 @@ export default function CalendarPage() {
                   Записано {editing.bookedCount} з {editing.capacity}
                 </p>
               )}
+              {editing && repeatsWeekly(editing) && (
+                <p className="text-muted text-xs mt-1">
+                  ↻ Повторюється щотижня. «Скасувати» прибере лише цей день; щоб прибрати щотижневе —{" "}
+                  <Link href="/admin/schedule" className="text-accent hover:underline">
+                    «Розклад групових»
+                  </Link>
+                </p>
+              )}
             </div>
 
             {editing && editing.trainingType !== "групові" && editing.members.length > 0 && (
@@ -444,6 +498,32 @@ export default function CalendarPage() {
                 {!assigned && opensAt && TIME_RE.test(time) && time <= opensAt && (
                   <p className="text-warn text-xs mt-2">
                     Запис відкривається о {opensAt} — на це тренування записатися не вийде
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!editing && !assigned && (
+              <div className="space-y-2">
+                <div className="flex space-x-2">
+                  {[
+                    { value: false, label: "Лише цього дня" },
+                    { value: true, label: "Щотижня" },
+                  ].map((o) => (
+                    <button
+                      key={o.label}
+                      onClick={() => setWeekly(o.value)}
+                      aria-pressed={weekly === o.value}
+                      className={`flex-1 px-3 py-2 rounded-xl border text-sm transition-colors ${weekly === o.value ? "border-accent text-accent" : "border-line text-muted"}`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                {weekly && (
+                  <p className="text-muted text-xs">
+                    Додасться в «Розклад групових»: щотижня в цей день
+                    {schedule && !schedule.autoCreate ? ". Автоматичне додавання в календар увімкнеться" : ""}
                   </p>
                 )}
               </div>

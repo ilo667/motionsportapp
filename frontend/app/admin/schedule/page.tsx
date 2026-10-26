@@ -122,9 +122,13 @@ export default function GroupSchedulePage() {
 
   return (
     <PageLayout variant="top" loading={!schedule && !loadError} action={<AdminMenu />}>
-      <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">
+      <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-2">
         Розклад групових
       </h1>
+      <p className="text-muted text-sm mb-6">
+        Шаблон на кожен тиждень: за ним тренування самі з&apos;являються в календарі на 3 тижні вперед. Разове
+        тренування додавайте в календарі.
+      </p>
 
       {loadError && <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>}
 
@@ -190,9 +194,12 @@ export default function GroupSchedulePage() {
             })}
           </div>
 
-          <div className="flex items-center justify-between space-x-4">
+          <div className="flex items-center justify-between space-x-4 rounded-xl border border-line p-4">
             <label htmlFor="opens-at" className="text-heading text-sm">
               Запис відкривається о
+              <span className="block text-muted text-xs mt-1">
+                для всіх ваших групових, зокрема доданих у календарі
+              </span>
             </label>
             <input
               id="opens-at"
