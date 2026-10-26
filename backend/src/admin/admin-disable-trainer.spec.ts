@@ -114,11 +114,42 @@ describe('Disabling a trainer — refusals', () => {
   });
 
   it('already disabled (the compare-and-set matched nothing): 409 and nothing else is written', async () => {
-    const { db, log } = makeDb([[{ id: FIRST }], [{ id: NEW }], [{ id: GONE }], []], [[]]);
+    const { db, log } = makeDb(
+      [
+        [{ id: FIRST }],
+        [{ id: NEW }],
+        [{ id: GONE }],
+        [],
+        [
+          { id: GONE, disabledAt: null },
+          { id: NEW, disabledAt: null },
+        ],
+      ],
+      [[]],
+    );
     await expect(makeService(db).service.disableTrainer(ME, GONE, NEW)).rejects.toThrow(
       new ConflictException('Trainer already disabled'),
     );
     expect(log.map((e) => e.table)).toEqual([admins]);
+  });
+
+  // Two trainers at once: A disables B (clients to C) while D disables C. Both admin rows are locked in the
+  // transaction and C is checked again there, so B's clients never land on a disabled trainer
+  it('the chosen trainer disabled meanwhile (seen under the row lock): 404 and nothing is written', async () => {
+    const { db, log } = makeDb([
+      [{ id: FIRST }],
+      [{ id: NEW }],
+      [{ id: GONE }],
+      [],
+      [
+        { id: GONE, disabledAt: null },
+        { id: NEW, disabledAt: new Date() },
+      ],
+    ]);
+    await expect(makeService(db).service.disableTrainer(ME, GONE, NEW)).rejects.toThrow(
+      new NotFoundException('Trainer not found'),
+    );
+    expect(log).toEqual([]);
   });
 
   it('is for signed-in trainers only', () => {
@@ -140,7 +171,17 @@ describe('Disabling a trainer', () => {
 
   async function disable() {
     const { db, log } = makeDb(
-      [[{ id: FIRST }], [{ id: NEW }], [{ id: GONE }], slots, booked],
+      [
+        [{ id: FIRST }],
+        [{ id: NEW }],
+        [{ id: GONE }],
+        slots,
+        booked,
+        [
+          { id: GONE, disabledAt: null },
+          { id: NEW, disabledAt: null },
+        ],
+      ],
       [[{ id: GONE }], [], [{ id: 'm-1' }, { id: 'm-2' }, { id: 'm-3' }]],
     );
     const { service, notifications } = makeService(db);

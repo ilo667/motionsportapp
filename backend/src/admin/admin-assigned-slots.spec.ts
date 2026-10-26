@@ -459,6 +459,15 @@ describe('Clients per trainer', () => {
     expect(params).toEqual(['trainer-1']);
   });
 
+  it('the client update itself requires the trainer to be still enabled (a disable in between → 404)', async () => {
+    const { db } = makeDb([[{ id: 'trainer-2' }]], () => []);
+    const where = jest.fn(() => ({ returning: () => Promise.resolve([]) }));
+    db.update = jest.fn(() => ({ set: () => ({ where }) }));
+    await expect(makeService(db).assignTrainer('trainer-1', M1, 'trainer-2')).rejects.toThrow(NotFoundException);
+    const cond = new PgDialect().sqlToQuery((where.mock.calls[0] as unknown[])[0] as any);
+    expect(cond.sql).toContain('disabled_at is null');
+  });
+
   it('reassigns a client to another trainer', async () => {
     const { db, sets } = makeDb([[{ id: 'trainer-2' }]], () => [{ id: M1, trainerId: 'trainer-2' }]);
     await expect(makeService(db).assignTrainer('trainer-1', M1, 'trainer-2')).resolves.toEqual({

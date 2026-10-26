@@ -778,10 +778,17 @@ export class AdminScheduleService {
       .limit(1);
     if (!trainer) throw new NotFoundException('Trainer not found');
 
+    // Checked again in the update itself: the trainer may be disabled in between
     const [updated] = await this.database.db
       .update(members)
       .set({ trainerId })
-      .where(and(eq(members.id, memberId), this.visibleTo(adminId)))
+      .where(
+        and(
+          eq(members.id, memberId),
+          this.visibleTo(adminId),
+          sql`exists (select 1 from admins a where a.id = ${trainerId} and a.disabled_at is null)`,
+        ),
+      )
       .returning({ id: members.id, trainerId: members.trainerId });
     if (!updated) throw new NotFoundException('Member not found');
     return updated;
@@ -839,6 +846,15 @@ export class AdminScheduleService {
 
     const movedClients = await this.database.db.transaction(async (tx) => {
       const at = now.toJSDate();
+      // Both trainers' rows locked in id order (two disables at once wait for each other, no deadlock), then the
+      // chosen one checked again: it may have been disabled since the check above
+      const locked = await tx
+        .select({ id: admins.id, disabledAt: admins.disabledAt })
+        .from(admins)
+        .where(inArray(admins.id, [trainerId, transferToId]))
+        .orderBy(asc(admins.id))
+        .for('update');
+      if (!locked.some((a) => a.id === transferToId && !a.disabledAt)) throw new NotFoundException('Trainer not found');
       const [disabled] = await tx
         .update(admins)
         .set({ disabledAt: at, disabledByAdminId: adminId })
