@@ -114,7 +114,6 @@ Auth endpoints:
 - `StatsModule` — «Статистика» (`GET /admin/stats`, `AdminGuard`, the signed-in trainer's own numbers):
   - `revenue`: PAID purchases whose `purchases.trainer_id` is this trainer, by the month they were paid (`decided_at`, set by both LiqPay success and cash «Отримано»; Kyiv), at the amounts copied into `purchase_items`. Columns: club cards, персональні, спліт, групові (`revenueKey`: price list section, and `training_type` for trainer services), total; `allTime` + `months` newest first. No refunds yet (none are recorded), so no net figure
   - load: people marked ✓ (`attendance` PRESENT + guests PRESENT) on the trainer's active trainings, **days before today** only (like «Історія»). `busiestDays` = top 5 dates; `weekdays` = average per weekday over every day the trainer trained (a day nobody came counts as 0) — `summarizeLoad`
-- `HealthModule` — `GET /health`
 
 ### Trainers — rules
 

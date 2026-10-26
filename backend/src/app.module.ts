@@ -1,7 +1,6 @@
 // TODO: migrate to config module for env validation
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from './database/database.module';
-import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { BookingModule } from './booking/booking.module';
@@ -21,7 +20,6 @@ import { StatsModule } from './stats/stats.module';
   imports: [
     DatabaseModule,
     ClockModule,
-    HealthModule,
     AuthModule,
     ScheduleModule,
     BookingModule,
