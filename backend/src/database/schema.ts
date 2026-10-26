@@ -317,6 +317,9 @@ export const payments = pgTable(
     status: text('status').notNull().default('PENDING'), // PENDING | PAID | FAILED | EXPIRED | REPLACED
     liqpayPaymentId: text('liqpay_payment_id'),
     rawCallback: jsonb('raw_callback'),
+    // LiqPay refunded a paid payment (callback status `reversed`, e.g. «Повернення» in the LiqPay cabinet). Kept as
+    // it came, apart from raw_callback (the success that paid it); the app does nothing else with it yet
+    refundCallback: jsonb('refund_callback'),
     // Money that came after its purchase ended (raw_callback says success, status is not PAID) is shown to the
     // trainer until they press «Розібрано» (gave the purchase by hand or the money was refunded)
     handledAt: timestamp('handled_at', { withTimezone: true }),

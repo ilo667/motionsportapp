@@ -196,6 +196,16 @@ export class PaymentService {
         await this.needsManualHandling(payment, decoded);
       }
     }
+    // Refunded after it was paid: no refunds in the app yet, so only the payload is kept (the purchase stays)
+    if (decoded.status === 'reversed' && payment.status === 'PAID') {
+      this.logger.warn(
+        `LiqPay callback: order=${orderId} was refunded (reversed) — purchase left as is, needs manual handling`,
+      );
+      await this.database.db
+        .update(payments)
+        .set({ refundCallback: decoded, updatedAt: new Date() })
+        .where(eq(payments.id, payment.id));
+    }
     return { ok: true };
   }
 

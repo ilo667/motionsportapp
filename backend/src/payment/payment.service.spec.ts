@@ -453,6 +453,21 @@ describe('PaymentService — callback for a REPLACED attempt', () => {
   });
 });
 
+describe('PaymentService — refund of a paid payment', () => {
+  it('keeps the reversed callback apart, changes no status', async () => {
+    const { db, sets } = makeDb([[{ id: 'pay-1', purchaseId: 'purchase-1', status: 'PAID' }]]);
+    const svc = makeService(db);
+    const data = liqpayEncode({ order_id: 'mg-1', status: 'reversed' });
+    await expect(svc.handleCallback(data, liqpaySign('priv_key', data))).resolves.toEqual({ ok: true });
+    expect(sets).toEqual([
+      expect.objectContaining({ refundCallback: expect.objectContaining({ order_id: 'mg-1', status: 'reversed' }) }),
+    ]);
+    expect(sets[0]).not.toHaveProperty('status');
+    expect(sets[0]).not.toHaveProperty('rawCallback');
+    expect(svc.mockEntitlements.activate).not.toHaveBeenCalled();
+  });
+});
+
 describe('PaymentService — money for a purchase that no longer awaits it', () => {
   it('success on a PENDING payment of a cancelled purchase: nothing activated, evidence saved, needs manual handling', async () => {
     const errorLog = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
