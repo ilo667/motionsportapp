@@ -200,6 +200,7 @@ export function SlotCard({
         <CancellationReasonModal
           action={modal.action}
           switchTime={modal.action === "switch" ? modal.targetSlot.slotTime : undefined}
+          slotId={slot.id}
           onDismiss={() => setModal(null)}
           onConfirm={async (reason) => {
             setModal(null);

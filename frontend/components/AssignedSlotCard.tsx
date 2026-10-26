@@ -81,6 +81,7 @@ export function AssignedSlotCard({ slot, onMutate }: AssignedSlotCardProps) {
       {cancelOpen && (
         <CancellationReasonModal
           action="cancel"
+          slotId={slot.id}
           onDismiss={() => setCancelOpen(false)}
           onConfirm={async (reason) => {
             setCancelOpen(false);

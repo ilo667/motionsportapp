@@ -2,12 +2,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, AdminMember, Trainer, CashRequest, FreezeRequest } from "@/lib/api";
+import { api, AdminMember, Trainer, CashRequest, FreezeRequest, CancelRefund } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { CashRequests } from "@/components/admin/CashRequests";
 import { StrayPayments } from "@/components/admin/StrayPayments";
 import { FreezeRequests } from "@/components/admin/FreezeRequests";
+import { CancelRefunds } from "@/components/admin/CancelRefunds";
 import { FREQUENT_CANCELLATIONS, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
 
 export default function ClientsPage() {
@@ -18,6 +19,7 @@ export default function ClientsPage() {
   const [loadError, setLoadError] = useState(false);
   const [cash, setCash] = useState<CashRequest[]>([]);
   const [freezes, setFreezes] = useState<FreezeRequest[]>([]);
+  const [refunds, setRefunds] = useState<CancelRefund[]>([]);
 
   // After a cash or freeze decision: the request lists and the summaries change
   const reloadPurchases = () => {
@@ -30,19 +32,31 @@ export default function ClientsPage() {
       .then(setFreezes)
       .catch(() => {});
     api
+      .getPendingCancelRefunds()
+      .then(setRefunds)
+      .catch(() => {});
+    api
       .getMembers()
       .then(setMembers)
       .catch(() => {});
   };
 
   useEffect(() => {
-    Promise.all([api.getMembers(), api.getTrainers(), api.me(), api.getPendingCash(), api.getPendingFreezes()])
-      .then(([memberList, trainerList, me, cashList, freezeList]) => {
+    Promise.all([
+      api.getMembers(),
+      api.getTrainers(),
+      api.me(),
+      api.getPendingCash(),
+      api.getPendingFreezes(),
+      api.getPendingCancelRefunds(),
+    ])
+      .then(([memberList, trainerList, me, cashList, freezeList, refundList]) => {
         setMembers(memberList);
         setTrainers(trainerList);
         setMyId(me.id);
         setCash(cashList);
         setFreezes(freezeList);
+        setRefunds(refundList);
       })
       .catch((err: unknown) => {
         const status = (err as { status?: number }).status;
@@ -121,6 +135,7 @@ export default function ClientsPage() {
           <StrayPayments />
           <CashRequests requests={cash} onDecided={reloadPurchases} />
           <FreezeRequests requests={freezes} onDecided={reloadPurchases} />
+          <CancelRefunds refunds={refunds} onDone={reloadPurchases} />
 
           {unassigned.length > 0 && (
             <section>

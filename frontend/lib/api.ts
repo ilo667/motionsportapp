@@ -275,6 +275,28 @@ export interface Cancellation {
   reason: string;
   cancelledAt: string | null;
   switchedToTime: string | null; // null = cancelled, otherwise moved to that time
+  // A late cancellation: FULL = the training was spent, HALF = spent and half a single training goes back
+  fee: { kind: "FULL" | "HALF"; waived: boolean; refundUah: number | null; refundDone: boolean } | null;
+}
+
+// What «Скасувати» would cost now: null = nothing; single = a single training (burns) rather than a pass
+export interface CancelFeePreview {
+  fee: "FULL" | "HALF" | null;
+  single: boolean;
+  refundUah: number | null;
+}
+
+// Half of a single personal / split training to give back after a late cancellation (the trainer returns it)
+export interface CancelRefund {
+  id: string;
+  memberId: string;
+  displayName: string;
+  amountUah: number;
+  method: PurchaseMethod;
+  createdAt: string;
+  localDate: string;
+  slotTime: string;
+  trainingType: TrainingType;
 }
 
 export interface MemberCancellation extends Cancellation {
@@ -465,6 +487,9 @@ export const api = {
       body: JSON.stringify({ slotId }),
     }),
 
+  getCancelFee: (slotId: string) =>
+    request<CancelFeePreview>(`/bookings/cancel-fee?slotId=${encodeURIComponent(slotId)}`),
+
   cancelBooking: (slotId: string, reason: string) =>
     request<{ ok: boolean }>("/bookings/current", {
       method: "DELETE",
@@ -545,6 +570,13 @@ export const api = {
   requestUnfreeze: () => request<{ ok: boolean }>("/freezes/unfreeze", { method: "POST" }),
 
   getStats: () => request<TrainerStats>("/admin/stats"),
+
+  // Late cancellations: «Не списувати», and the half refunds the trainer returns
+  waiveCancelFee: (bookingId: string) =>
+    request<{ ok: boolean }>(`/admin/bookings/${bookingId}/waive-fee`, { method: "POST" }),
+  getPendingCancelRefunds: () => request<CancelRefund[]>("/admin/cancel-refunds/pending"),
+  markCancelRefundDone: (id: string) =>
+    request<{ ok: boolean }>(`/admin/cancel-refunds/${id}/done`, { method: "POST" }),
 
   getPendingFreezes: () => request<FreezeRequest[]>("/admin/freezes/pending"),
   decideFreeze: (freeze: FreezeRequest, approve: boolean) =>

@@ -1,20 +1,40 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { api, CancelFeePreview } from "@/lib/api";
 
 interface Props {
   action: "cancel" | "switch";
   switchTime?: string;
+  slotId?: string; // a cancel: asks what it would cost now (late cancellation)
   onConfirm: (reason: string) => void;
   onDismiss: () => void;
 }
 
-export function CancellationReasonModal({ action, switchTime, onConfirm, onDismiss }: Props) {
+// What a late cancellation costs, in words; null = it costs nothing
+function feeWarning(p: CancelFeePreview | null) {
+  if (!p?.fee) return null;
+  if (p.fee === "HALF") return `Тренування згорить, повернемо 50%${p.refundUah ? ` (${p.refundUah} ₴)` : ""}.`;
+  return p.single ? "Тренування згорить, гроші не повертаються." : "З абонемента спишеться 1 тренування.";
+}
+
+export function CancellationReasonModal({ action, switchTime, slotId, onConfirm, onDismiss }: Props) {
   const [reason, setReason] = useState("");
+  const [fee, setFee] = useState<CancelFeePreview | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (action !== "cancel" || !slotId) return;
+    api
+      .getCancelFee(slotId)
+      .then(setFee)
+      .catch(() => setFee(null));
+  }, [action, slotId]);
+
+  const warning = action === "cancel" ? feeWarning(fee) : null;
 
   const title = action === "switch" ? `Перенести на ${switchTime}` : "Скасувати запис";
 
@@ -39,6 +59,11 @@ export function CancellationReasonModal({ action, switchTime, onConfirm, onDismi
       <div className="absolute inset-0 bg-black/40" />
       <div className="relative w-full max-w-[480px] mx-auto bg-surface rounded-t-[20px] sm:rounded-2xl px-5 pt-6 pb-8 shadow-xl border border-line">
         <h2 className="font-geologica font-semibold text-lg text-heading mb-1">{title}</h2>
+        {warning && (
+          <p className="text-warn bg-warn-bg border border-warn-line rounded-xl px-3 py-2.5 text-sm mb-4">
+            Скасування зараз: {warning.charAt(0).toLowerCase() + warning.slice(1)}
+          </p>
+        )}
         <p className="text-muted text-sm mb-4">{prompt}</p>
 
         <textarea
