@@ -253,6 +253,21 @@ export interface MemberFreeze {
   decidedBy: string | null;
 }
 
+// «Статистика»: paid purchases of the trainer's clients by the month they were paid; load = people marked ✓
+export interface Revenue {
+  clubCards: number;
+  personal: number;
+  split: number;
+  group: number;
+  total: number;
+}
+
+export interface TrainerStats {
+  revenue: { allTime: Revenue; months: (Revenue & { month: string })[] }; // months: "2026-10", newest first
+  busiestDays: { localDate: string; present: number }[];
+  weekdays: { weekday: number; days: number; avgPresent: number }[]; // 1 = Пн … 7 = Нд, days the trainer trained
+}
+
 // A booking the member cancelled or moved themselves, with the reason they wrote
 export interface Cancellation {
   bookingId: string;
@@ -528,6 +543,8 @@ export const api = {
   requestFreeze: () => request<{ ok: boolean }>("/freezes", { method: "POST" }),
   cancelFreezeRequest: () => request<{ ok: boolean }>("/freezes/cancel", { method: "POST" }),
   requestUnfreeze: () => request<{ ok: boolean }>("/freezes/unfreeze", { method: "POST" }),
+
+  getStats: () => request<TrainerStats>("/admin/stats"),
 
   getPendingFreezes: () => request<FreezeRequest[]>("/admin/freezes/pending"),
   decideFreeze: (freeze: FreezeRequest, approve: boolean) =>

@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/admin/calendar", label: "Календар" },
   { href: "/admin/schedule", label: "Розклад групових" },
   { href: "/admin/history", label: "Історія" },
+  { href: "/admin/stats", label: "Статистика" },
   { href: "/admin/prices", label: "Ціни" },
   { href: "/admin/trainers", label: "Тренери" },
 ];
