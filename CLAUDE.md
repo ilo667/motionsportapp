@@ -22,6 +22,7 @@ backend/    NestJS 11 — Vercel serverless functions project
 npm run dev        # localhost:3000
 npm run build
 npm run lint
+npm run test       # Vitest, *.test.ts next to the code; pure functions only (no DOM). Pages can't export helpers, so a tested one lives in its own file (lib/schedulePoll.ts, app/admin/calendar/memberLabel.ts)
 npm run format     # prettier (printWidth 120, double quotes; *.md ignored); the local pre-commit hook rejects unformatted frontend files
 ```
 

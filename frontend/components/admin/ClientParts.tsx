@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, AdminMember, Trainer, MemberCancellation } from "@/lib/api";
 import { CancellationList } from "@/components/admin/CancellationList";
+import { plural } from "@/lib/plural";
 
 // Pieces of a client shared by the «Клієнти» list and the client page
 
@@ -15,14 +16,6 @@ const TYPE_FORMS: Record<AdminMember["packagesLeft"][number]["trainingType"], [s
   персональні: ["персональне", "персональні", "персональних"],
   спліт: ["спліт", "спліт", "спліт"],
 };
-
-function trainingsLeft(n: number, forms: [string, string, string]) {
-  const tens = n % 100;
-  const ones = n % 10;
-  const form =
-    tens >= 11 && tens <= 14 ? forms[2] : ones === 1 ? forms[0] : ones >= 2 && ones <= 4 ? forms[1] : forms[2];
-  return `${n} ${form}`;
-}
 
 const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 
@@ -45,7 +38,7 @@ export function PurchaseSummary({ m, className = "" }: { m: AdminMember; classNa
       <span className={`font-semibold ${badge} ${cardClass}`}>{text}</span>
       {m.packagesLeft.map((p) => (
         <span key={p.trainingType} className={`text-body border-line ${badge}`}>
-          {trainingsLeft(p.left, TYPE_FORMS[p.trainingType])}
+          {plural(p.left, TYPE_FORMS[p.trainingType])}
         </span>
       ))}
     </div>

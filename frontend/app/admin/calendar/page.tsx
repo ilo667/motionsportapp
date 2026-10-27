@@ -16,7 +16,7 @@ import { api, AdminMember, CalendarSlot, Cancellation, TrainerSchedule, Training
 import { PageLayout } from "@/components/PageLayout";
 import { useIsClient } from "@/lib/clientStore";
 import { TYPE_COLORS } from "@/lib/trainingTypes";
-import { trainingsCount } from "@/lib/plural";
+import { memberLabel } from "./memberLabel";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 
@@ -38,14 +38,6 @@ const TYPES: TrainingType[] = ["групові", "персональні", "сп
 const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, персональні: 1, спліт: 3 };
 const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
 const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
-
-// A member of an assigned training: cancelled, paid (spent from a package), trainings left to pay it, or not paid
-function memberLabel(m: { booked: boolean; spent: boolean; packageLeft: number }) {
-  if (!m.booked) return { text: "скасовано", className: "text-muted" };
-  if (m.spent) return { text: "оплачено", className: "text-teal" };
-  if (m.packageLeft > 0) return { text: `залишилось ${trainingsCount(m.packageLeft)}`, className: "text-teal" };
-  return { text: "не оплачено", className: "text-muted" };
-}
 
 const ERROR_TEXTS: [string, string][] = [
   ["Time is already taken", "На цей час уже є тренування"],

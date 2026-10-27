@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api, type Cancellation } from "@/lib/api";
+import { feeLabel } from "@/lib/cancelFee";
 
 const KYIV = "Europe/Kyiv";
 
@@ -24,15 +25,6 @@ interface CancellationListProps {
   title?: string; // none when the page already has a heading
   items: CancellationItem[];
   withDate?: boolean;
-}
-
-// What a late cancellation cost: «списано», «повернути 350 ₴», «не списано» once waived
-function feeLabel(fee: NonNullable<Cancellation["fee"]>) {
-  if (fee.waived) return "не списано";
-  if (fee.kind === "HALF" && fee.refundUah) {
-    return `${fee.refundDone ? "повернено" : "повернути"} ${fee.refundUah} ₴`;
-  }
-  return "списано";
 }
 
 // Who cancelled or moved and why. Used on the trainer's today page, in the calendar modal and in client history.

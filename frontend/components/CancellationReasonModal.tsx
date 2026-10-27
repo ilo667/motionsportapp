@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { api, CancelFeePreview } from "@/lib/api";
+import { feeWarning } from "@/lib/cancelFee";
 
 interface Props {
   action: "cancel" | "switch";
@@ -8,13 +9,6 @@ interface Props {
   slotId?: string; // a cancel: asks what it would cost now (late cancellation)
   onConfirm: (reason: string) => void;
   onDismiss: () => void;
-}
-
-// What a late cancellation costs, in words; null = it costs nothing
-function feeWarning(p: CancelFeePreview | null) {
-  if (!p?.fee) return null;
-  if (p.fee === "HALF") return `Тренування згорить, повернемо 50%${p.refundUah ? ` (${p.refundUah} ₴)` : ""}.`;
-  return p.single ? "Тренування згорить, гроші не повертаються." : "З абонемента спишеться 1 тренування.";
 }
 
 export function CancellationReasonModal({ action, switchTime, slotId, onConfirm, onDismiss }: Props) {
