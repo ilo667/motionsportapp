@@ -9,11 +9,22 @@ const FIELD = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outl
 const MIN_PASSWORD = 10;
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: "numeric" });
+  return new Date(iso).toLocaleDateString("uk-UA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Europe/Kyiv",
+  });
 }
 
 function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("uk-UA", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("uk-UA", {
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Kyiv",
+  });
 }
 
 // «Тренери»: invite a trainer by a one-time link, see who is here, change own password
