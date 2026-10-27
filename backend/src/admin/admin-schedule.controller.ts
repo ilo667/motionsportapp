@@ -18,7 +18,6 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
-import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { SlotMembersDto } from './dto/update-slot-members.dto';
 
@@ -94,39 +93,5 @@ export class AdminScheduleController {
     @CurrentUser() user: SessionUser,
   ) {
     return this.adminScheduleService.updateSlot(user.id, slotId, dto);
-  }
-
-  @Put('slots/:slotId/attendance/all')
-  @HttpCode(HttpStatus.OK)
-  markAllAttendance(@Param('slotId') slotId: string, @CurrentUser() user: SessionUser) {
-    return this.adminScheduleService.markAllAttendance(slotId, user.id);
-  }
-
-  @Patch('bookings/:bookingId/attendance')
-  @HttpCode(HttpStatus.OK)
-  updateBookingAttendance(
-    @Param('bookingId') bookingId: string,
-    @Body() dto: UpdateAttendanceDto,
-    @CurrentUser() user: SessionUser,
-  ) {
-    return this.adminScheduleService.updateBookingAttendance(bookingId, dto, user.id);
-  }
-
-  // A guest a member brought to a group training: ✓ / ✗ for the count, nothing is spent
-  @Patch('guests/:guestId/attendance')
-  @HttpCode(HttpStatus.OK)
-  updateGuestAttendance(
-    @Param('guestId', ParseUUIDPipe) guestId: string,
-    @Body() dto: UpdateAttendanceDto,
-    @CurrentUser() user: SessionUser,
-  ) {
-    return this.adminScheduleService.updateGuestAttendance(guestId, dto, user.id);
-  }
-
-  // «Не списувати» on a late cancellation
-  @Post('bookings/:bookingId/waive-fee')
-  @HttpCode(HttpStatus.OK)
-  waiveCancelFee(@Param('bookingId', ParseUUIDPipe) bookingId: string, @CurrentUser() user: SessionUser) {
-    return this.adminScheduleService.waiveCancelFee(bookingId, user.id);
   }
 }

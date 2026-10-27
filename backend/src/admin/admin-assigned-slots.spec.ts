@@ -4,6 +4,7 @@ import { validate } from 'class-validator';
 import { DateTime } from 'luxon';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { AdminScheduleService } from './admin-schedule.service';
+import { AdminAttendanceService } from './admin-attendance.service';
 import { AdminMembersService } from './admin-members.service';
 import { AdminTrainersService } from './admin-trainers.service';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
@@ -82,6 +83,10 @@ const now = DateTime.fromObject({ year: 2026, month: 10, day: 20, hour: 12 }, { 
 
 function makeService(db: any, entitlements: any = { syncSpend: jest.fn() }) {
   return new AdminScheduleService({ db } as any, {} as any, { now: () => now }, entitlements);
+}
+
+function makeAttendance(db: any, entitlements: any = { syncSpend: jest.fn() }) {
+  return new AdminAttendanceService({ db } as any, { now: () => now }, entitlements);
 }
 
 function makeMembers(db: any, entitlements: any = {}) {
@@ -283,7 +288,7 @@ describe('Attendance spends from the package', () => {
     for (const status of ['PRESENT', 'ABSENT', 'UNMARKED'] as const) {
       const entitlements = { syncSpend: jest.fn() };
       const { db, values } = makeDb([[{ id: 'b1' }]]);
-      await makeService(db, entitlements).updateBookingAttendance('b1', { status }, TRAINER);
+      await makeAttendance(db, entitlements).updateBookingAttendance('b1', { status }, TRAINER);
       expect(entitlements.syncSpend).toHaveBeenCalledWith(db, 'b1');
       // ✓ / ✗ saved as chosen; «—» saves no mark (the row is deleted)
       if (status === 'UNMARKED') expect(values).toEqual([]);
@@ -300,7 +305,7 @@ describe('Attendance spends from the package', () => {
         { id: 'b2', memberId: 'm2' },
       ],
     ]);
-    await makeService(db, entitlements).markAllAttendance('slot-1', TRAINER);
+    await makeAttendance(db, entitlements).markAllAttendance('slot-1', TRAINER);
     expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b1', 'b2']);
     expect(values).toEqual(['b1', 'b2'].map((bookingId) => expect.objectContaining({ bookingId, status: 'PRESENT' })));
   });
@@ -317,7 +322,7 @@ describe('Attendance spends from the package', () => {
         { id: 'b3', memberId: 'm-b' },
       ],
     ]);
-    await makeService(db, entitlements).markAllAttendance('slot-1', TRAINER);
+    await makeAttendance(db, entitlements).markAllAttendance('slot-1', TRAINER);
     expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b2', 'b3', 'b1']);
   });
 });
@@ -800,7 +805,7 @@ describe('Each trainer sees and changes only own trainings', () => {
 
   it("marking attendance on another trainer's training answers 404", async () => {
     const { db } = makeDb([[]]); // booking joined with a slot of this trainer: nothing
-    await expect(makeService(db).updateBookingAttendance('b1', { status: 'PRESENT' }, TRAINER)).rejects.toThrow(
+    await expect(makeAttendance(db).updateBookingAttendance('b1', { status: 'PRESENT' }, TRAINER)).rejects.toThrow(
       NotFoundException,
     );
     expect(db.insert).not.toHaveBeenCalled();
@@ -849,7 +854,7 @@ describe('Late cancellation — «Не списувати»', () => {
   it('gives the training back and drops the half refund still to return', async () => {
     const entitlements = { syncSpend: jest.fn() };
     const { db, sets } = makeDb([[{ id: 'b1', refundStatus: 'DUE' }]]);
-    await makeService(db, entitlements).waiveCancelFee('b1', TRAINER);
+    await makeAttendance(db, entitlements).waiveCancelFee('b1', TRAINER);
     expect(sets).toContainEqual(expect.objectContaining({ feeWaivedBy: TRAINER }));
     expect(sets).toContainEqual({ status: 'CANCELLED' });
     expect(entitlements.syncSpend).toHaveBeenCalledWith(db, 'b1');
@@ -857,16 +862,16 @@ describe('Late cancellation — «Не списувати»', () => {
 
   it('not once the money was returned', async () => {
     const { db } = makeDb([[{ id: 'b1', refundStatus: 'DONE' }]]);
-    await expect(makeService(db).waiveCancelFee('b1', TRAINER)).rejects.toThrow('Money already returned');
+    await expect(makeAttendance(db).waiveCancelFee('b1', TRAINER)).rejects.toThrow('Money already returned');
   });
 
   it("another trainer's training answers 404", async () => {
     const { db } = makeDb([[]]);
-    await expect(makeService(db).waiveCancelFee('b1', TRAINER)).rejects.toThrow(NotFoundException);
+    await expect(makeAttendance(db).waiveCancelFee('b1', TRAINER)).rejects.toThrow(NotFoundException);
   });
 
   it('nothing to waive (no fee, or waived already) answers 409', async () => {
     const { db } = makeDb([[{ id: 'b1', refundStatus: null }]], () => []);
-    await expect(makeService(db).waiveCancelFee('b1', TRAINER)).rejects.toThrow('Nothing to waive');
+    await expect(makeAttendance(db).waiveCancelFee('b1', TRAINER)).rejects.toThrow('Nothing to waive');
   });
 });

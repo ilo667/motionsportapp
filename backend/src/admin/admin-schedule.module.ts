@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AdminScheduleController } from './admin-schedule.controller';
 import { AdminScheduleService } from './admin-schedule.service';
+import { AdminAttendanceController } from './admin-attendance.controller';
+import { AdminAttendanceService } from './admin-attendance.service';
 import { AdminMembersController } from './admin-members.controller';
 import { AdminMembersService } from './admin-members.service';
 import { AdminTrainersController } from './admin-trainers.controller';
@@ -11,7 +13,7 @@ import { EntitlementsModule } from '../purchases/entitlements.module';
 
 @Module({
   imports: [AuthModule, NotificationsModule, EntitlementsModule],
-  controllers: [AdminScheduleController, AdminMembersController, AdminTrainersController],
-  providers: [AdminScheduleService, AdminMembersService, AdminTrainersService],
+  controllers: [AdminScheduleController, AdminAttendanceController, AdminMembersController, AdminTrainersController],
+  providers: [AdminScheduleService, AdminAttendanceService, AdminMembersService, AdminTrainersService],
 })
 export class AdminScheduleModule {}

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { eq, and, ne, or, inArray, gte, lt, lte, desc, isNotNull, isNull, sql } from 'drizzle-orm';
+import { eq, and, ne, or, inArray, gte, lt, lte, desc, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { DatabaseService } from '../database/database.service';
 import {
@@ -11,17 +11,15 @@ import {
   slotMembers,
   packageSpends,
   bookingGuests,
-  cancelRefunds,
 } from '../database/schema';
 import type { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import type { UpdateSlotDto } from './dto/update-slot.dto';
-import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import type { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { NotificationService } from '../notifications/notification.service';
 import { ClockService } from '../clock/clock.service';
-import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
+import { EntitlementsService } from '../purchases/entitlements.service';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
-import { visibleTo } from '../schedule/default-trainer';
+import { requireOwnSlot, visibleTo } from '../schedule/default-trainer';
 import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
 import {
   GROUP_TYPE,
@@ -54,6 +52,8 @@ const groupSlotRow = (trainingDayId: string, slotTime: string, trainerId: string
 });
 
 // The trainer's trainings: today page, history, calendar, adding / changing / cancelling them, attendance marks
+// The trainer's trainings: today page, history, calendar, adding / changing / cancelling them. Marks are
+// AdminAttendanceService
 @Injectable()
 export class AdminScheduleService {
   constructor(
@@ -153,14 +153,6 @@ export class AdminScheduleService {
   // Days with at least one slot of this trainer. Raw, fully qualified SQL (see the drizzle note in CLAUDE.md)
   private hasSlotsOf(adminId: string) {
     return sql`exists (select 1 from training_slots ts where ts.training_day_id = "training_days"."id" and ts.trainer_id = ${adminId})`;
-  }
-
-  // The slot if it belongs to this trainer; another trainer's slot answers 404 like a missing one
-  private async ownSlot(adminId: string, slotId: string, db: Db | Tx = this.database.db, lock = false) {
-    const query = db.select().from(trainingSlots).where(eq(trainingSlots.id, slotId));
-    const [slot] = await (lock ? query.for('update').limit(1) : query.limit(1));
-    if (!slot || slot.trainerId !== adminId) throw new NotFoundException('Slot not found');
-    return slot;
   }
 
   // Slot cards for the today page and history: participants with attendance, who moved in
@@ -420,7 +412,7 @@ export class AdminScheduleService {
   // unless their attendance is already marked (it may have been spent from their package)
   async updateSlotMembers(adminId: string, slotId: string, memberIds: string[]) {
     await this.database.db.transaction(async (tx) => {
-      const slot = await this.ownSlot(adminId, slotId, tx, true);
+      const slot = await requireOwnSlot(tx, adminId, slotId, true);
       if (!isAssignedType(slot.trainingType)) throw new BadRequestException('Group trainings are open to everyone');
       if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
 
@@ -598,7 +590,7 @@ export class AdminScheduleService {
   }
 
   async updateSlot(adminId: string, slotId: string, dto: UpdateSlotDto) {
-    const slot = await this.ownSlot(adminId, slotId);
+    const slot = await requireOwnSlot(this.database.db, adminId, slotId);
 
     if (dto.status === 'CANCELLED' && slot.status === 'ACTIVE') {
       const cancelled = await this.database.db.transaction((tx) =>
@@ -622,136 +614,9 @@ export class AdminScheduleService {
     return updated;
   }
 
-  async markAllAttendance(slotId: string, adminId: string) {
-    await this.ownSlot(adminId, slotId);
-    const activeBookings = await this.database.db
-      .select({ id: bookings.id, memberId: bookings.memberId })
-      .from(bookings)
-      .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
-
-    if (activeBookings.length === 0) return { marked: 0 };
-
-    const now = this.clock.now().toJSDate();
-    await this.database.db.transaction(async (tx) => {
-      for (const booking of inLockOrder(activeBookings)) {
-        await this.saveMark(tx, booking.id, 'PRESENT', now, adminId);
-        await this.entitlements.syncSpend(tx, booking.id);
-      }
-      // Their guests too (nothing to spend)
-      await tx
-        .update(bookingGuests)
-        .set({ attendance: 'PRESENT', markedAt: now, markedByAdminId: adminId })
-        .where(
-          and(
-            inArray(
-              bookingGuests.bookingId,
-              activeBookings.map((b) => b.id),
-            ),
-            eq(bookingGuests.status, 'ACTIVE'),
-          ),
-        );
-    });
-
-    return { marked: activeBookings.length };
-  }
-
-  // «Не списувати»: the training a late cancellation took goes back, and the half refund (if any) is dropped.
-  // Only on this trainer's trainings, and only while the money hasn't been returned. Compare-and-set
-  async waiveCancelFee(bookingId: string, adminId: string) {
-    const [booking] = await this.database.db
-      .select({ id: bookings.id, refundStatus: cancelRefunds.status })
-      .from(bookings)
-      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
-      .leftJoin(cancelRefunds, eq(cancelRefunds.bookingId, bookings.id))
-      .where(and(eq(bookings.id, bookingId), eq(trainingSlots.trainerId, adminId)))
-      .limit(1);
-    if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.refundStatus === 'DONE') throw new ConflictException('Money already returned');
-
-    await this.database.db.transaction(async (tx) => {
-      const [done] = await tx
-        .update(bookings)
-        .set({ feeWaivedAt: this.clock.now().toJSDate(), feeWaivedBy: adminId })
-        .where(
-          and(
-            eq(bookings.id, bookingId),
-            eq(bookings.status, 'CANCELLED'),
-            isNotNull(bookings.cancelFee),
-            isNull(bookings.feeWaivedAt),
-          ),
-        )
-        .returning({ id: bookings.id });
-      if (!done) throw new ConflictException('Nothing to waive');
-      const [refund] = await tx
-        .update(cancelRefunds)
-        .set({ status: 'CANCELLED' })
-        .where(and(eq(cancelRefunds.bookingId, bookingId), eq(cancelRefunds.status, 'DUE')))
-        .returning({ id: cancelRefunds.id });
-      // Returned meanwhile (another trainer's tap): keep the fee, nothing changes
-      if (!refund && booking.refundStatus === 'DUE') throw new ConflictException('Money already returned');
-      await this.entitlements.syncSpend(tx, bookingId);
-    });
-    return { ok: true };
-  }
-
-  async updateBookingAttendance(bookingId: string, dto: UpdateAttendanceDto, adminId: string) {
-    // Only bookings on this trainer's own trainings
-    const [booking] = await this.database.db
-      .select({ id: bookings.id })
-      .from(bookings)
-      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
-      .where(and(eq(bookings.id, bookingId), eq(trainingSlots.trainerId, adminId)))
-      .limit(1);
-
-    if (!booking) throw new NotFoundException('Booking not found');
-
-    const now = this.clock.now().toJSDate();
-    // The mark and the package move together: ✓ / ✗ spends a training, «—» gives it back
-    await this.database.db.transaction(async (tx) => {
-      if (dto.status === 'UNMARKED') {
-        await tx.delete(attendance).where(eq(attendance.bookingId, bookingId));
-      } else {
-        await this.saveMark(tx, bookingId, dto.status, now, adminId);
-      }
-      await this.entitlements.syncSpend(tx, bookingId);
-    });
-
-    return { ok: true };
-  }
-
-  // ✓ / ✗ on a booking, or changed; the caller spends from the package (syncSpend) in the same transaction
-  private async saveMark(tx: Tx, bookingId: string, status: 'PRESENT' | 'ABSENT', at: Date, adminId: string) {
-    await tx
-      .insert(attendance)
-      .values({ bookingId, status, markedAt: at, markedByAdminId: adminId })
-      .onConflictDoUpdate({ target: attendance.bookingId, set: { status, markedAt: at, markedByAdminId: adminId } });
-  }
-
-  // A guest's mark: for the trainer's count only, nothing is spent. Only guests on this trainer's trainings
-  async updateGuestAttendance(guestId: string, dto: UpdateAttendanceDto, adminId: string) {
-    const [guest] = await this.database.db
-      .select({ id: bookingGuests.id })
-      .from(bookingGuests)
-      .innerJoin(bookings, eq(bookings.id, bookingGuests.bookingId))
-      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
-      .where(and(eq(bookingGuests.id, guestId), eq(trainingSlots.trainerId, adminId)))
-      .limit(1);
-    if (!guest) throw new NotFoundException('Guest not found');
-    const marked = dto.status !== 'UNMARKED';
-    await this.database.db
-      .update(bookingGuests)
-      .set({
-        attendance: marked ? dto.status : null,
-        markedAt: marked ? this.clock.now().toJSDate() : null,
-        markedByAdminId: marked ? adminId : null,
-      })
-      .where(eq(bookingGuests.id, guestId));
-    return { ok: true };
-  }
-
   // Calendar modal: who cancelled or moved away from this slot and why
   async getSlotCancellations(adminId: string, slotId: string) {
-    await this.ownSlot(adminId, slotId);
+    await requireOwnSlot(this.database.db, adminId, slotId);
     // Members booked on it again (moved away and came back) are not shown as having cancelled
     const booked = await this.database.db
       .select({ memberId: bookings.memberId })

@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { and, asc, eq, isNull, or } from 'drizzle-orm';
-import { admins, members } from '../database/schema';
+import { admins, members, trainingSlots } from '../database/schema';
 import type { DatabaseService } from '../database/database.service';
 
 type Db = DatabaseService['db'];
@@ -50,4 +50,12 @@ export async function requireVisibleMember(db: Q, trainerId: string, memberId: s
     .where(and(eq(members.id, memberId), visibleTo(trainerId)))
     .limit(1);
   if (!member) throw new NotFoundException('Member not found');
+}
+
+// A training of this trainer; another trainer's answers 404 like a missing one. lock: FOR UPDATE, inside a transaction
+export async function requireOwnSlot(db: Q, trainerId: string, slotId: string, lock = false) {
+  const query = db.select().from(trainingSlots).where(eq(trainingSlots.id, slotId));
+  const [slot] = await (lock ? query.for('update').limit(1) : query.limit(1));
+  if (!slot || slot.trainerId !== trainerId) throw new NotFoundException('Slot not found');
+  return slot;
 }
