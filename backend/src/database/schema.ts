@@ -8,6 +8,7 @@ import {
   date,
   jsonb,
   uniqueIndex,
+  index,
   primaryKey,
   check,
   type AnyPgColumn,
@@ -15,6 +16,9 @@ import {
 import { sql } from 'drizzle-orm';
 import { GROUP_TYPE, ASSIGNED_TYPES, PASS_TYPES } from '../schedule/training-types';
 import { PRICE_SECTIONS } from '../prices/price-list';
+
+// Indexes: besides primary keys and unique columns, one per column a frequent query looks rows up by (Postgres
+// doesn't index foreign keys by itself). Names as `db:push` gives them: <table>_<column>_idx
 
 // CHECK that a text column holds one of the known values (NULL passes, so nullable columns stay optional).
 // A typo in code then fails loudly instead of quietly writing 'ACTVE'
@@ -74,7 +78,11 @@ export const sessions = pgTable(
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  () => [oneOf('sessions_principal_type_check', 'principal_type', ['member', 'admin'])],
+  (table) => [
+    oneOf('sessions_principal_type_check', 'principal_type', ['member', 'admin']),
+    // Every request finds its session by the cookie's hash
+    index('sessions_token_hash_idx').on(table.tokenHash),
+  ],
 );
 
 export const trainingDays = pgTable(
@@ -132,7 +140,11 @@ export const slotMembers = pgTable(
       .references(() => members.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.slotId, table.memberId] })],
+  (table) => [
+    primaryKey({ columns: [table.slotId, table.memberId] }),
+    // A member's assigned trainings (the key starts with the slot)
+    index('slot_members_member_id_idx').on(table.memberId),
+  ],
 );
 
 export const bookings = pgTable(
@@ -168,6 +180,9 @@ export const bookings = pgTable(
     oneOf('bookings_status_check', 'status', ['ACTIVE', 'CANCELLED']),
     oneOf('bookings_payment_status_check', 'payment_status', ['PENDING', 'PAID']),
     oneOf('bookings_cancel_fee_check', 'cancel_fee', ['FULL', 'HALF']),
+    // A training's participants and cancellations; a member's visits and cancellations (any status)
+    index('bookings_slot_id_idx').on(table.slotId),
+    index('bookings_member_id_idx').on(table.memberId),
   ],
 );
 
@@ -337,9 +352,12 @@ export const payments = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  () => [
+  (table) => [
     oneOf('payments_status_check', 'status', ['PENDING', 'PAID', 'FAILED', 'EXPIRED', 'REPLACED']),
     check('payments_owner_check', sql`booking_id IS NOT NULL OR purchase_id IS NOT NULL`),
+    index('payments_purchase_id_idx').on(table.purchaseId),
+    // Stale PENDING payments, looked for on every schedule load (expireStale)
+    index('payments_status_created_at_idx').on(table.status, table.createdAt),
   ],
 );
 
@@ -386,8 +404,8 @@ export const priceChanges = pgTable('price_changes', {
   changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-// A member's order: one trainer service, plus a club card when they had no valid one. Paid by LiqPay
-// (activated by the callback / status API) or in cash (activated when their trainer confirms)
+// A member's order: a group pass alone, or a club card, a trainer service, or both. Paid by LiqPay (activated by the
+// callback / status API) or in cash (activated when their trainer confirms)
 export const purchases = pgTable(
   'purchases',
   {
@@ -408,7 +426,8 @@ export const purchases = pgTable(
     slotId: uuid('slot_id').references(() => trainingSlots.id),
     bookingId: uuid('booking_id').references(() => bookings.id),
   },
-  () => [
+  (table) => [
+    index('purchases_member_id_idx').on(table.memberId),
     oneOf('purchases_method_check', 'method', ['LIQPAY', 'CASH']),
     oneOf('purchases_status_check', 'status', ['PENDING', 'PAID', 'REJECTED', 'FAILED', 'EXPIRED', 'CANCELLED']),
     check('purchases_total_check', sql`total_uah > 0`),
@@ -433,21 +452,25 @@ const A_MONTH_FROM_TODAY = sql`(CURRENT_DATE + INTERVAL '1 month')::date`;
 
 // Access to the gym. From a paid purchase, or added by the trainer (bought at the reception).
 // Waits for the trainer's «Активувати з сьогодні» (valid_from / valid_until null); burns after activate_by
-export const clubCards = pgTable('club_cards', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  memberId: uuid('member_id')
-    .notNull()
-    .references(() => members.id),
-  purchaseItemId: uuid('purchase_item_id').references(() => purchaseItems.id), // null = added by the trainer
-  label: text('label').notNull(),
-  validFrom: date('valid_from'),
-  validUntil: date('valid_until'),
-  durationMonths: integer('duration_months').notNull().default(0),
-  // The code always sets it; the default only fills rows that existed before activation
-  activateBy: date('activate_by').notNull().default(A_MONTH_FROM_TODAY),
-  addedBy: uuid('added_by').references(() => admins.id),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const clubCards = pgTable(
+  'club_cards',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id),
+    purchaseItemId: uuid('purchase_item_id').references(() => purchaseItems.id), // null = added by the trainer
+    label: text('label').notNull(),
+    validFrom: date('valid_from'),
+    validUntil: date('valid_until'),
+    durationMonths: integer('duration_months').notNull().default(0),
+    // The code always sets it; the default only fills rows that existed before activation
+    activateBy: date('activate_by').notNull().default(A_MONTH_FROM_TODAY),
+    addedBy: uuid('added_by').references(() => admins.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('club_cards_member_id_idx').on(table.memberId)],
+);
 
 // Trainings bought in a pack: a trainer service or a group pass. Left = total minus its spends; the oldest usable
 // pack is spent first. The first mark activates it (activated_on = that training's date, valid for duration_months);
@@ -472,29 +495,37 @@ export const packages = pgTable(
     validUntil: date('valid_until'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  () => [
+  (table) => [
+    index('packages_member_id_idx').on(table.memberId),
     oneOf('packages_training_type_check', 'training_type', PASS_TYPES),
     check('packages_total_check', sql`total > 0`),
   ],
 );
 
-// One training spent from a package: the trainer marked the booking (✓ or ✗). «—» deletes the row,
-// which gives the training back to the same package
-export const packageSpends = pgTable('package_spends', {
-  bookingId: uuid('booking_id')
-    .primaryKey()
-    .references(() => bookings.id),
-  packageId: uuid('package_id')
-    .notNull()
-    .references(() => packages.id),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+// One training spent from a package: the trainer marked the booking (✓ or ✗), or the member cancelled it late.
+// «—» (or «Не списувати») deletes the row, which gives the training back to the same package
+export const packageSpends = pgTable(
+  'package_spends',
+  {
+    bookingId: uuid('booking_id')
+      .primaryKey()
+      .references(() => bookings.id),
+    packageId: uuid('package_id')
+      .notNull()
+      .references(() => packages.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Trainings spent from a package (left = total minus these), counted on every look at it
+    index('package_spends_package_id_idx').on(table.packageId),
+  ],
+);
 
-// A trainer's regular group trainings («Мій розклад»). No row: the first trainer gets the old Mon/Wed/Fri
-// 19:00 / 20:00 schedule, any other trainer an empty one (`loadTrainerSchedule`)
 // 'HH:MM' on the 15-minute grid, as «Розклад групових» and the calendar use it
 const QUARTER_HOUR = "'^([01][0-9]|2[0-3]):(00|15|30|45)$'";
 
+// A trainer's regular group trainings («Розклад групових»). No row: the first trainer gets the old Mon/Wed/Fri
+// 19:00 / 20:00 schedule, any other trainer an empty one (`loadTrainerSchedule`)
 export const trainerSchedules = pgTable(
   'trainer_schedules',
   {
@@ -548,7 +579,8 @@ export const freezes = pgTable(
     unfreezeDecidedBy: uuid('unfreeze_decided_by').references(() => admins.id),
     unfreezeDecidedAt: timestamp('unfreeze_decided_at', { withTimezone: true }),
   },
-  () => [
+  (table) => [
+    index('freezes_member_id_idx').on(table.memberId),
     oneOf('freezes_status_check', 'status', ['REQUESTED', 'ACTIVE', 'REJECTED', 'CANCELLED']),
     check('freezes_dates_check', sql`status <> 'ACTIVE' or (started_on is not null and ends_on >= started_on)`),
   ],
