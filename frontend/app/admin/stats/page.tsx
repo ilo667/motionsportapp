@@ -6,6 +6,7 @@ import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { TYPE_COLORS } from "@/lib/trainingTypes";
 import { formatUah } from "@/lib/prices";
+import { toAdminLogin } from "@/lib/adminAuth";
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase mb-3";
 const label = "text-subtle text-xs font-semibold uppercase tracking-wide mb-2";
@@ -217,9 +218,7 @@ export default function StatsPage() {
       .getStats()
       .then(setStats)
       .catch((err: unknown) => {
-        const status = (err as { status?: number }).status;
-        if (status === 401 || status === 403) router.push("/admin/login");
-        else setLoadError(true);
+        if (!toAdminLogin(err, router)) setLoadError(true);
       });
   }, [router]);
 

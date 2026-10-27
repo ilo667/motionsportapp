@@ -6,6 +6,7 @@ import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { errorText } from "@/lib/apiErrors";
 import { trainingsCount } from "@/lib/plural";
+import { toAdminLogin } from "@/lib/adminAuth";
 
 // Weekdays as the backend counts them (1 = Пн … 7 = Нд)
 const WEEKDAYS = [
@@ -76,9 +77,7 @@ export default function GroupSchedulePage() {
       .getMySchedule()
       .then(setSchedule)
       .catch((err: unknown) => {
-        const status = (err as { status?: number }).status;
-        if (status === 401 || status === 403) router.push("/admin/login");
-        else setLoadError(true);
+        if (!toAdminLogin(err, router)) setLoadError(true);
       });
   }, [router]);
 

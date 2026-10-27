@@ -2,7 +2,7 @@
 import { useEffect, useRef, useCallback, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, ScheduleNext } from "@/lib/api";
+import { api, ScheduleNext, statusOf } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { SlotCard } from "@/components/SlotCard";
 import { kyivTime } from "@/lib/kyivTime";
@@ -52,11 +52,11 @@ export default function SchedulePage() {
       setSchedule(data);
     } catch (err: unknown) {
       // Signed in as a trainer: the schedule here is the members', the trainer's is in the panel
-      if ((err as { status?: number }).status === 403) {
+      if (statusOf(err) === 403) {
         router.replace("/admin");
         throw err;
       }
-      if ((err as { status?: number }).status === 401 && !authedRef.current) {
+      if (statusOf(err) === 401 && !authedRef.current) {
         try {
           localStorage.removeItem("mg_authed");
         } catch {}

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, statusOf } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { errorText } from "@/lib/apiErrors";
 
@@ -41,7 +41,7 @@ export default function ForgotPage() {
       } catch {}
       setResult(data);
     } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
+      const status = statusOf(err);
       if (status === 401) {
         setError("Невірний код учасника або код відновлення.");
       } else {

@@ -10,6 +10,7 @@ import { StrayPayments } from "@/components/admin/StrayPayments";
 import { FreezeRequests } from "@/components/admin/FreezeRequests";
 import { CancelRefunds } from "@/components/admin/CancelRefunds";
 import { FREQUENT_CANCELLATIONS, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
+import { toAdminLogin } from "@/lib/adminAuth";
 
 export default function ClientsPage() {
   const router = useRouter();
@@ -59,9 +60,7 @@ export default function ClientsPage() {
         setRefunds(refundList);
       })
       .catch((err: unknown) => {
-        const status = (err as { status?: number }).status;
-        if (status === 401 || status === 403) router.push("/admin/login");
-        else setLoadError(true);
+        if (!toAdminLogin(err, router)) setLoadError(true);
       });
   }, [router]);
 

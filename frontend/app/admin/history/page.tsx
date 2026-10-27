@@ -9,6 +9,7 @@ import { CancellationList } from "@/components/admin/CancellationList";
 import { TYPE_COLORS, TYPE_LABEL } from "@/lib/trainingTypes";
 import { longDay } from "@/lib/dates";
 import { Badge } from "@/components/Badge";
+import { toAdminLogin } from "@/lib/adminAuth";
 
 // "11 прийшли з 12 · 1 скасування" for the collapsed day row
 function daySummary(day: HistoryDay) {
@@ -99,9 +100,7 @@ export default function HistoryPage() {
         // The latest day starts expanded
         if (!before && page.days[0]) setOpen(new Set([page.days[0].localDate]));
       } catch (err: unknown) {
-        const status = (err as { status?: number }).status;
-        if (status === 401 || status === 403) router.push("/admin/login");
-        else setError("Не вдалося завантажити історію.");
+        if (!toAdminLogin(err, router)) setError("Не вдалося завантажити історію.");
       }
     },
     [router],

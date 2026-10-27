@@ -2,13 +2,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { api, AdminMember, MemberFreeze, MemberVisit, Trainer } from "@/lib/api";
+import { api, AdminMember, MemberFreeze, MemberVisit, Trainer, statusOf } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { MemberPurchases } from "@/components/admin/MemberPurchases";
 import { CancellationHistory, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
 import { ddmm, shortDay } from "@/lib/dates";
 import { TYPE_LABEL } from "@/lib/trainingTypes";
+import { toAdminLogin } from "@/lib/adminAuth";
 
 const MARK: Record<MemberVisit["attendance"], { text: string; className: string }> = {
   PRESENT: { text: "✓ Відвідано", className: "text-accent" },
@@ -107,9 +108,7 @@ export default function ClientPage() {
         .getMember(id)
         .then(setMember)
         .catch((err: unknown) => {
-          const status = (err as { status?: number }).status;
-          if (status === 401 || status === 403) router.push("/admin/login");
-          else setLoadError(status === 404 ? "missing" : "failed");
+          if (!toAdminLogin(err, router)) setLoadError(statusOf(err) === 404 ? "missing" : "failed");
         }),
     [id, router],
   );

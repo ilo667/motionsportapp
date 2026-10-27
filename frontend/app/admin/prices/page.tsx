@@ -1,13 +1,14 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, PriceChange, PriceItem } from "@/lib/api";
+import { api, ApiError, PriceChange, PriceItem, statusOf } from "@/lib/api";
 import { PriceList } from "@/components/PriceList";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { kyivDateTime } from "@/lib/dates";
 import { Modal } from "@/components/Modal";
 import { formatUah, lineName } from "@/lib/prices";
+import { toAdminLogin } from "@/lib/adminAuth";
 
 // Same limit as UpdatePriceDto on the backend
 const MAX_PRICE_UAH = 100_000;
@@ -82,9 +83,7 @@ export default function PricesPage() {
           setChanges(changes);
         })
         .catch((err: unknown) => {
-          const status = (err as { status?: number }).status;
-          if (status === 401 || status === 403) router.push("/admin/login");
-          else setLoadError(true);
+          if (!toAdminLogin(err, router)) setLoadError(true);
         }),
     [router],
   );
@@ -125,9 +124,10 @@ export default function PricesPage() {
       stopEdit();
       await load();
     } catch (err) {
-      const { status, body } = err as { status?: number; body?: { amountUah?: number; updatedBy?: string | null } };
+      const body =
+        err instanceof ApiError ? (err.body as { amountUah?: number; updatedBy?: string | null }) : undefined;
       setConfirm(null);
-      if (status === 409 && body?.amountUah !== undefined) {
+      if (statusOf(err) === 409 && body?.amountUah !== undefined) {
         // Another trainer got there first: show their amount and let this trainer decide again
         setError(`Ціну щойно змінив ${body.updatedBy ?? "інший тренер"}: ${formatUah(body.amountUah)}.`);
         await load();

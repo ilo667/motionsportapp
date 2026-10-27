@@ -1,10 +1,11 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, Trainer, TrainerInvite } from "@/lib/api";
+import { api, Trainer, TrainerInvite, statusOf } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { Modal } from "@/components/Modal";
+import { toAdminLogin } from "@/lib/adminAuth";
 
 const FIELD = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 const MIN_PASSWORD = 10;
@@ -47,9 +48,7 @@ export default function TrainersPage() {
         setMe(user.type === "admin" ? (user.username ?? null) : null);
       })
       .catch((err: unknown) => {
-        const status = (err as { status?: number }).status;
-        if (status === 401 || status === 403) router.push("/admin/login");
-        else setLoadError(true);
+        if (!toAdminLogin(err, router)) setLoadError(true);
       });
   }, [router]);
 
@@ -156,9 +155,9 @@ function DisableDialog({
       const { movedClients, cancelledTrainings } = await api.disableTrainer(trainer.id, transferToId);
       onDone(`Вимкнено. Клієнтів передано: ${movedClients}, тренувань скасовано: ${cancelledTrainings}`);
     } catch (err) {
-      const status = (err as { status?: number }).status;
-      setError(status === 409 ? "Цього тренера вже вимкнули" : "Не вдалося вимкнути. Спробуйте ще раз.");
-      if (status === 409) onConflict();
+      const conflict = statusOf(err) === 409;
+      setError(conflict ? "Цього тренера вже вимкнули" : "Не вдалося вимкнути. Спробуйте ще раз.");
+      if (conflict) onConflict();
     } finally {
       setBusy(false);
     }
@@ -352,8 +351,7 @@ function PasswordSection() {
       setRepeat("");
       setDone(true);
     } catch (err) {
-      const status = (err as { status?: number }).status;
-      setError(status === 401 ? "Поточний пароль невірний." : "Не вдалося змінити пароль. Спробуйте ще раз.");
+      setError(statusOf(err) === 401 ? "Поточний пароль невірний." : "Не вдалося змінити пароль. Спробуйте ще раз.");
     } finally {
       setBusy(false);
     }

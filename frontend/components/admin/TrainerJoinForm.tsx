@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, statusOf } from "@/lib/api";
 import { PageLayout } from "../PageLayout";
 
 const FIELD = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
@@ -42,7 +42,7 @@ export function TrainerJoinForm({ token }: { token: string }) {
       } catch {}
       router.push("/admin");
     } catch (err) {
-      const status = (err as { status?: number }).status;
+      const status = statusOf(err);
       if (status === 409) setError("Такий логін уже є. Оберіть інший.");
       else if (status === 400) setValid(false);
       else setError("Не вдалося зареєструватися. Спробуйте ще раз.");

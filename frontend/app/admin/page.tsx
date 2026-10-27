@@ -11,6 +11,7 @@ import { AdminMenu } from "@/components/admin/AdminMenu";
 import { errorText } from "@/lib/apiErrors";
 import { longDay } from "@/lib/dates";
 import { Badge } from "@/components/Badge";
+import { toAdminLogin } from "@/lib/adminAuth";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -41,12 +42,8 @@ export default function AdminPage() {
       setAnnouncement(ann);
       setExamples(exs);
     } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      if ((status === 401 || status === 403) && !authedRef.current) {
-        router.push("/admin/login");
-      } else {
-        setLoadFailed(true);
-      }
+      // Signed out on the first load: the login; once the page has shown, a failed refresh only says so
+      if (authedRef.current || !toAdminLogin(err, router)) setLoadFailed(true);
     }
   }, [router]);
 

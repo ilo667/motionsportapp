@@ -2,7 +2,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, statusOf } from "@/lib/api";
 import { PageLayout } from "./PageLayout";
 import { errorText } from "@/lib/apiErrors";
 
@@ -121,7 +121,7 @@ export function LoginForm({ variant }: { variant: "member" | "admin" }) {
       } catch {}
       router.push(config.redirectTo);
     } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
+      const status = statusOf(err);
       if (status === 401) {
         setError(config.invalidCredentials);
       } else {

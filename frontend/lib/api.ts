@@ -2,6 +2,23 @@ const BASE = "/api";
 
 type Ok = { ok: boolean };
 
+// A non-2xx answer: the backend's message (errorText words it for a person), the HTTP status and the whole body
+export class ApiError extends Error {
+  status: number;
+  body: Record<string, unknown>;
+
+  constructor(message: string, status: number, body: Record<string, unknown>) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+}
+
+// The HTTP status of a failed call; undefined for anything else (no connection)
+export function statusOf(err: unknown): number | undefined {
+  return err instanceof ApiError ? err.status : undefined;
+}
+
 // A JSON body goes with its Content-Type; a request without one sends neither
 async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -11,10 +28,7 @@ async function request<T>(path: string, method = "GET", body?: unknown): Promise
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(body.message ?? res.statusText), {
-      status: res.status,
-      body,
-    });
+    throw new ApiError(body.message ?? res.statusText, res.status, body);
   }
   // NestJS sends an empty body for a null result (e.g. a trainer with no upcoming trainings)
   const text = await res.text();

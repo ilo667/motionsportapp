@@ -19,6 +19,7 @@ import { AdminMenu } from "@/components/admin/AdminMenu";
 import { AddSlotModal } from "./AddSlotModal";
 import { EditSlotModal } from "./EditSlotModal";
 import { TYPES, weekdayOf } from "./slotForm";
+import { toAdminLogin } from "@/lib/adminAuth";
 
 // Short labels for calendar events — full names don't fit a day column
 const TYPE_SHORT: Record<TrainingType, string> = {
@@ -56,8 +57,7 @@ export default function CalendarPage() {
 
   const handleAuthError = useCallback(
     (err: unknown) => {
-      const status = (err as { status?: number }).status;
-      if (status === 401 || status === 403) router.push("/admin/login");
+      toAdminLogin(err, router);
     },
     [router],
   );

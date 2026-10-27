@@ -201,7 +201,7 @@ Deliberate copies (kept in sync by code, checked consistent on 2026-10-23): a pa
 
 ### Frontend conventions
 
-- All backend calls go through `frontend/lib/api.ts` (typed fetch wrapper, `credentials: 'include'`)
+- All backend calls go through `frontend/lib/api.ts` (typed fetch wrapper, `credentials: 'include'`; `get` / `post` / `put` / `patch` / `del` take the body as an object). A failed call throws **`ApiError`** (`status`, `body`); read the status with **`statusOf(err)`**, not a cast. An admin page whose load fails with 401 / 403 goes to `/admin/login` through **`toAdminLogin(err, router)`** (`lib/adminAuth.ts`, true when it went)
 - Badges: `components/Badge.tsx` (`tone` ok / warn / danger / none, `size` status / tag, the brand's colors and sizes). Not for the training-type chips (`TYPE_COLORS`) or «Запис відкрито»
 - Modals: `components/Modal.tsx` (`variant="sheet"` comes up from the bottom on a phone, `"card"` for the calendar and «Тренери»): the overlay, click outside / Escape to close (`canDismiss={false}` while saving), `role="dialog"`. Don't build another overlay by hand
 - Dates: `frontend/lib/dates.ts` (`ddmm` «27.10», `longDay` «понеділок, 27 жовтня», `shortDay` «27 жовт.», `kyivDateTime` «20 жовт., 15:02») and `lib/kyivTime.ts` («15:02»). A training day ('YYYY-MM-DD') is a date, not a moment: format it as noon UTC in UTC (local noon formatted in Kyiv time is the next day in a browser at UTC−10); a moment from the API (`…At`) in Kyiv time

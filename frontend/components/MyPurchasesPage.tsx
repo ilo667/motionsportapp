@@ -2,7 +2,7 @@
 import { ReactNode, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, AssignedType, CatalogItem, MyFreeze, MyPurchases } from "@/lib/api";
+import { api, AssignedType, CatalogItem, MyFreeze, MyPurchases, statusOf } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
 import { PageLayout } from "./PageLayout";
 import { PurchaseFlow, PurchaseMode } from "./PurchaseFlow";
@@ -157,7 +157,7 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
           setFreeze(myFreeze);
         })
         .catch((err: unknown) => {
-          const status = (err as { status?: number }).status;
+          const status = statusOf(err);
           // 403 = signed in as a trainer: their panel, not the member login
           if (status === 401) router.push("/login");
           else if (status === 403) router.push("/admin");
