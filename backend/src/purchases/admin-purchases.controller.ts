@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Param, UseGuards, HttpCode, ParseUUIDPipe } from '@nestjs/common';
-import { PurchasesService } from './purchases.service';
+import { AdminPurchasesService } from './admin-purchases.service';
 import { SessionGuard, SessionUser } from '../auth/session.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -9,50 +9,50 @@ import { AddClubCardDto } from './dto/add-club-card.dto';
 @Controller('admin')
 @UseGuards(SessionGuard, AdminGuard)
 export class AdminPurchasesController {
-  constructor(private readonly purchasesService: PurchasesService) {}
+  constructor(private readonly adminPurchasesService: AdminPurchasesService) {}
 
   @Get('purchases/pending')
   pendingCash(@CurrentUser() user: SessionUser) {
-    return this.purchasesService.pendingCash(user.id);
+    return this.adminPurchasesService.pendingCash(user.id);
   }
 
   @Get('payments/stray')
   strayPayments(@CurrentUser() user: SessionUser) {
-    return this.purchasesService.strayPayments(user.id);
+    return this.adminPurchasesService.strayPayments(user.id);
   }
 
   @Post('payments/:id/handled')
   @HttpCode(200)
   markPaymentHandled(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SessionUser) {
-    return this.purchasesService.markPaymentHandled(user.id, id);
+    return this.adminPurchasesService.markPaymentHandled(user.id, id);
   }
 
   @Get('cancel-refunds/pending')
   pendingCancelRefunds(@CurrentUser() user: SessionUser) {
-    return this.purchasesService.pendingCancelRefunds(user.id);
+    return this.adminPurchasesService.pendingCancelRefunds(user.id);
   }
 
   @Post('cancel-refunds/:id/done')
   @HttpCode(200)
   markCancelRefundDone(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SessionUser) {
-    return this.purchasesService.markCancelRefundDone(user.id, id);
+    return this.adminPurchasesService.markCancelRefundDone(user.id, id);
   }
 
   @Post('purchases/:id/confirm')
   @HttpCode(200)
   confirm(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SessionUser) {
-    return this.purchasesService.confirmCash(user.id, id);
+    return this.adminPurchasesService.confirmCash(user.id, id);
   }
 
   @Post('purchases/:id/reject')
   @HttpCode(200)
   reject(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: SessionUser) {
-    return this.purchasesService.rejectCash(user.id, id);
+    return this.adminPurchasesService.rejectCash(user.id, id);
   }
 
   @Get('members/:memberId/purchases')
   memberPurchases(@Param('memberId', ParseUUIDPipe) memberId: string, @CurrentUser() user: SessionUser) {
-    return this.purchasesService.memberPurchases(user.id, memberId);
+    return this.adminPurchasesService.memberPurchases(user.id, memberId);
   }
 
   @Post('members/:memberId/club-card')
@@ -62,7 +62,7 @@ export class AdminPurchasesController {
     @Body() dto: AddClubCardDto,
     @CurrentUser() user: SessionUser,
   ) {
-    return this.purchasesService.addCard(user.id, memberId, dto.priceItemId, dto.activate ?? false);
+    return this.adminPurchasesService.addCard(user.id, memberId, dto.priceItemId, dto.activate ?? false);
   }
 
   @Post('members/:memberId/club-cards/:cardId/activate')
@@ -72,6 +72,6 @@ export class AdminPurchasesController {
     @Param('cardId', ParseUUIDPipe) cardId: string,
     @CurrentUser() user: SessionUser,
   ) {
-    return this.purchasesService.activateCard(user.id, memberId, cardId);
+    return this.adminPurchasesService.activateCard(user.id, memberId, cardId);
   }
 }

@@ -4,6 +4,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { DateTime } from 'luxon';
 import { PurchasesService } from './purchases.service';
+import { purchaseViews } from './purchase-views';
 import { PurchasesController } from './purchases.controller';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { MemberGuard } from '../common/guards/member.guard';
@@ -360,7 +361,7 @@ describe('Purchases — views', () => {
         { purchaseId: 'p1', section: 'assigned', title: 'Спліт', optionLabel: '1 тренування', amountUah: 400 },
       ],
     ]);
-    const [view] = await makeService(db).svc.views(['p1']);
+    const [view] = await purchaseViews(db, ['p1']);
     expect(view.lines.map((l) => l.section)).toEqual(['club_card', 'assigned']);
   });
 });

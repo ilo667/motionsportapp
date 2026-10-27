@@ -1,7 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { DateTime } from 'luxon';
-import { PurchasesService } from './purchases.service';
+import { AdminPurchasesService } from './admin-purchases.service';
 import { AdminPurchasesController } from './admin-purchases.controller';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { KY_ZONE } from '../schedule/training-types';
@@ -40,13 +40,7 @@ function makeService(db: any) {
     usableCard: jest.fn().mockResolvedValue(null),
   };
   const notifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
-  const svc = new PurchasesService(
-    { db } as any,
-    { now: () => NOW },
-    entitlements as any,
-    {} as any,
-    notifications as any,
-  );
+  const svc = new AdminPurchasesService({ db } as any, { now: () => NOW }, entitlements as any, notifications as any);
   return { svc, entitlements, notifications };
 }
 
