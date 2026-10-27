@@ -1,19 +1,13 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, AdminSlotView, AttendanceStatus, HistoryDay, TrainingType } from "@/lib/api";
+import { api, AdminSlotView, AttendanceStatus, HistoryDay } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { AttendanceButton } from "@/components/admin/AttendanceButton";
 import { CancellationList } from "@/components/admin/CancellationList";
-import { TYPE_COLORS } from "@/lib/trainingTypes";
+import { TYPE_COLORS, TYPE_LABEL } from "@/lib/trainingTypes";
 import { longDay } from "@/lib/dates";
-
-const TYPE_LABEL: Record<TrainingType, string> = {
-  групові: "Групові",
-  персональні: "Персональне",
-  спліт: "Спліт",
-};
 
 // "11 прийшли з 12 · 1 скасування" for the collapsed day row
 function daySummary(day: HistoryDay) {

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api, AdminSlotView } from "@/lib/api";
 import { CancellationList } from "./CancellationList";
 import { AttendanceButton } from "./AttendanceButton";
+import { TYPE_LABEL } from "@/lib/trainingTypes";
 
 interface SlotCardProps {
   slot: AdminSlotView;
@@ -23,9 +24,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-baseline space-x-3">
           <span className="font-geologica font-semibold text-title text-heading">{slot.slotTime}</span>
-          {!isGroup && (
-            <span className="text-muted text-sm">{slot.trainingType === "спліт" ? "Спліт" : "Персональне"}</span>
-          )}
+          {!isGroup && <span className="text-muted text-sm">{TYPE_LABEL[slot.trainingType]}</span>}
         </div>
         <div className="flex items-center space-x-3">
           {belowMin && (

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api, AssignedType, CatalogItem, MyPurchases, PurchaseLine, PurchaseMethod } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
 import { errorText } from "@/lib/apiErrors";
+import { TYPE_LABEL } from "@/lib/trainingTypes";
 
 export const formatUah = (v: number) => `${v.toLocaleString("uk-UA")} ₴`;
 export const lineName = (l: Pick<PurchaseLine, "title" | "optionLabel">) =>
@@ -14,8 +15,8 @@ type Step = "service" | "club" | "group" | "checkout" | "sent";
 export type PurchaseMode = "service" | "card" | "group";
 
 const SERVICE_GROUPS: { type: AssignedType; title: string }[] = [
-  { type: "персональні", title: "Персональне" },
-  { type: "спліт", title: "Спліт" },
+  { type: "персональні", title: TYPE_LABEL.персональні },
+  { type: "спліт", title: TYPE_LABEL.спліт },
 ];
 
 // Options of one list grouped under their title ("Повний день": 1 / 3 / 6 місяців), in price list order

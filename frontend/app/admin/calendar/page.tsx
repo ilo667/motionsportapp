@@ -15,18 +15,12 @@ import Link from "next/link";
 import { api, AdminMember, CalendarSlot, Cancellation, TrainerSchedule, TrainingType } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { useIsClient } from "@/lib/clientStore";
-import { TYPE_COLORS } from "@/lib/trainingTypes";
+import { TYPE_COLORS, TYPE_LABEL, TYPE_LABEL_PLURAL } from "@/lib/trainingTypes";
 import { memberLabel } from "./memberLabel";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { errorText } from "@/lib/apiErrors";
 import { longDay } from "@/lib/dates";
-
-const TYPE_LABELS: Record<TrainingType, string> = {
-  групові: "Групові",
-  персональні: "Персональні",
-  спліт: "Спліт",
-};
 
 // Short labels for calendar events — full names don't fit a day column
 const TYPE_SHORT: Record<TrainingType, string> = {
@@ -324,7 +318,7 @@ export default function CalendarPage() {
               backgroundColor: TYPE_COLORS[t].bg,
             }}
           >
-            {TYPE_LABELS[t]}
+            {TYPE_LABEL_PLURAL[t]}
           </span>
         ))}
       </div>
@@ -402,7 +396,7 @@ export default function CalendarPage() {
             <div>
               <p className="text-muted text-xs uppercase tracking-wide mb-1">{longDay(modalDate)}</p>
               <p className="font-geologica font-semibold text-heading">
-                {editing ? `${TYPE_LABELS[editing.trainingType]} ${editing.slotTime}` : "Додати тренування"}
+                {editing ? `${TYPE_LABEL[editing.trainingType]} ${editing.slotTime}` : "Додати тренування"}
               </p>
               {editing?.trainingType === "групові" && (
                 <p className="text-muted text-xs mt-1">
@@ -455,7 +449,7 @@ export default function CalendarPage() {
                         : {}
                     }
                   >
-                    <span>{TYPE_LABELS[t]}</span>
+                    <span>{TYPE_LABEL_PLURAL[t]}</span>
                     {selectedType === t && <span>✓</span>}
                   </button>
                 ))}

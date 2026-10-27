@@ -5,11 +5,7 @@ import { api, AssignedSlotView } from "@/lib/api";
 import { trainingsCount } from "@/lib/plural";
 import { CancellationReasonModal } from "./CancellationReasonModal";
 import { longDay } from "@/lib/dates";
-
-const TYPE_LABELS: Record<AssignedSlotView["trainingType"], string> = {
-  персональні: "Персональне",
-  спліт: "Спліт",
-};
+import { TYPE_LABEL } from "@/lib/trainingTypes";
 
 interface AssignedSlotCardProps {
   slot: AssignedSlotView;
@@ -32,7 +28,7 @@ export function AssignedSlotCard({ slot, onMutate }: AssignedSlotCardProps) {
             <p className="text-muted text-xs capitalize mt-1">{longDay(slot.localDate)}</p>
           </div>
           <div className="text-right">
-            <span className="text-sm text-body">{TYPE_LABELS[slot.trainingType]}</span>
+            <span className="text-sm text-body">{TYPE_LABEL[slot.trainingType]}</span>
             {slot.trainingType === "спліт" && (
               <p className="text-muted text-xs mt-1">
                 {slot.bookedCount}/{slot.capacity} місць

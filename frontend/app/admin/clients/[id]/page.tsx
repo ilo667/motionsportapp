@@ -8,12 +8,7 @@ import { AdminMenu } from "@/components/admin/AdminMenu";
 import { MemberPurchases } from "@/components/admin/MemberPurchases";
 import { CancellationHistory, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
 import { ddmm, shortDay } from "@/lib/dates";
-
-const TYPE_LABEL: Record<MemberVisit["trainingType"], string> = {
-  групові: "Групове",
-  персональні: "Персональне",
-  спліт: "Спліт",
-};
+import { TYPE_LABEL } from "@/lib/trainingTypes";
 
 const MARK: Record<MemberVisit["attendance"], { text: string; className: string }> = {
   PRESENT: { text: "✓ Відвідано", className: "text-accent" },
