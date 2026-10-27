@@ -650,6 +650,35 @@ describe('History of past trainings', () => {
     expect(nextBefore).toBe('2026-10-07'); // the oldest day on this page
   });
 
+  // Reads in order from `reads`; every where condition is kept, as SQL
+  function recordingDb(reads: unknown[][]) {
+    const wheres: { sql: string; params: unknown[] }[] = [];
+    let idx = 0;
+    const link = (): any => {
+      const chain: any = { then: (r: (v: unknown) => void) => r(reads[idx++] ?? []) };
+      for (const m of ['from', 'innerJoin', 'leftJoin', 'orderBy', 'limit']) chain[m] = () => chain;
+      chain.where = (cond: any) => (wheres.push(new PgDialect().sqlToQuery(cond)), chain);
+      return chain;
+    };
+    return { db: { select: () => link() } as any, wheres };
+  }
+
+  it("a client's visits go up to today in the service clock, not the database's", async () => {
+    const { db, wheres } = recordingDb([[{ id: 'm1' }], []]);
+    await makeService(db).getMemberVisits(TRAINER, 'm1');
+    expect(wheres[1].params).toContain('2026-10-20');
+  });
+
+  it('cancellations counted over the last 30 days of the service clock', async () => {
+    const { db } = recordingDb([[]]);
+    const select = db.select;
+    let fields: any;
+    db.select = (f: unknown) => ((fields = f), select());
+    await makeService(db, { summaries: jest.fn().mockResolvedValue(new Map()) }).getMembers(TRAINER);
+    const { params } = new PgDialect().sqlToQuery(fields.recentCancellations);
+    expect(params).toEqual([now.minus({ days: 30 }).toJSDate()]);
+  });
+
   it('never shows today or future days, even with a later cursor', async () => {
     const { db } = makeDb([[]]);
     const where = jest.fn(() => ({ orderBy: () => ({ limit: () => Promise.resolve([]) }) }));

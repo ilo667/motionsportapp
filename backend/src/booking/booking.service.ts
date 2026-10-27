@@ -146,7 +146,7 @@ export class BookingService {
     if (day && slotBefore) this.validateBeforeStart(day.localDate, slotBefore.slotTime);
 
     const wasFull = await this.database.db.transaction(async (tx) => {
-      const now = new Date();
+      const now = this.clock.now().toJSDate();
       await tx
         .update(bookings)
         .set({ status: 'CANCELLED', cancelledAt: now, cancellationReason: reason })
@@ -280,7 +280,7 @@ export class BookingService {
           .update(bookings)
           .set({
             status: 'CANCELLED',
-            cancelledAt: new Date(),
+            cancelledAt: this.clock.now().toJSDate(),
             cancellationReason: reason,
             switchedToSlotId: newSlotId,
           })
@@ -444,7 +444,8 @@ export class BookingService {
       const [locked] = await tx.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).for('update').limit(1);
       const booking = await this.activeBooking(tx, memberId, slotId);
       if (!locked || !booking) throw new NotFoundException('No active booking found');
-      if ((await cancelGuests(tx, [booking.id], new Date())).size === 0) throw new NotFoundException('No guest');
+      if ((await cancelGuests(tx, [booking.id], this.clock.now().toJSDate())).size === 0)
+        throw new NotFoundException('No guest');
       return freeSeats(tx, slotId, 1);
     });
 

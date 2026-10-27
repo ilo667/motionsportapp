@@ -217,15 +217,15 @@ export class AdminScheduleService {
     await cancelGuests(
       tx,
       active.map((b) => b.id),
-      new Date(),
+      this.clock.now().toJSDate(),
     );
     await tx
       .update(bookings)
-      .set({ status: 'CANCELLED', cancelledAt: new Date() })
+      .set({ status: 'CANCELLED', cancelledAt: this.clock.now().toJSDate() })
       .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')));
     await tx
       .update(trainingSlots)
-      .set({ status: 'CANCELLED', bookedCount: 0, cancelledAt: new Date() })
+      .set({ status: 'CANCELLED', bookedCount: 0, cancelledAt: this.clock.now().toJSDate() })
       .where(inArray(trainingSlots.id, slotIds));
     return active.map(({ slotId, memberId }) => ({ slotId, memberId }));
   }
@@ -551,7 +551,7 @@ export class AdminScheduleService {
         // No reason: a system cancellation, never shown as the member's
         await tx
           .update(bookings)
-          .set({ status: 'CANCELLED', cancelledAt: new Date() })
+          .set({ status: 'CANCELLED', cancelledAt: this.clock.now().toJSDate() })
           .where(
             and(
               inArray(
@@ -608,10 +608,10 @@ export class AdminScheduleService {
   private async ensureDay(tx: Tx, date: string) {
     const [day] = await tx
       .insert(trainingDays)
-      .values({ localDate: date, status: 'SCHEDULED', updatedAt: new Date() })
+      .values({ localDate: date, status: 'SCHEDULED', updatedAt: this.clock.now().toJSDate() })
       .onConflictDoUpdate({
         target: trainingDays.localDate,
-        set: { status: 'SCHEDULED', updatedAt: new Date() },
+        set: { status: 'SCHEDULED', updatedAt: this.clock.now().toJSDate() },
       })
       .returning({ id: trainingDays.id });
     return day.id;
@@ -686,7 +686,7 @@ export class AdminScheduleService {
       // Other trainers' trainings that day keep the day scheduled
       await tx
         .update(trainingDays)
-        .set({ status: 'CANCELLED', updatedAt: new Date() })
+        .set({ status: 'CANCELLED', updatedAt: this.clock.now().toJSDate() })
         .where(
           and(
             eq(trainingDays.id, day.id),
@@ -736,7 +736,7 @@ export class AdminScheduleService {
 
     if (activeBookings.length === 0) return { marked: 0 };
 
-    const now = new Date();
+    const now = this.clock.now().toJSDate();
     await this.database.db.transaction(async (tx) => {
       for (const booking of inLockOrder(activeBookings)) {
         await tx
@@ -782,7 +782,7 @@ export class AdminScheduleService {
     await this.database.db.transaction(async (tx) => {
       const [done] = await tx
         .update(bookings)
-        .set({ feeWaivedAt: new Date(), feeWaivedBy: adminId })
+        .set({ feeWaivedAt: this.clock.now().toJSDate(), feeWaivedBy: adminId })
         .where(
           and(
             eq(bookings.id, bookingId),
@@ -816,7 +816,7 @@ export class AdminScheduleService {
 
     if (!booking) throw new NotFoundException('Booking not found');
 
-    const now = new Date();
+    const now = this.clock.now().toJSDate();
     // The mark and the package move together: ✓ / ✗ spends a training, «—» gives it back
     await this.database.db.transaction(async (tx) => {
       if (dto.status === 'UNMARKED') {
@@ -851,7 +851,7 @@ export class AdminScheduleService {
       .update(bookingGuests)
       .set({
         attendance: marked ? dto.status : null,
-        markedAt: marked ? new Date() : null,
+        markedAt: marked ? this.clock.now().toJSDate() : null,
         markedByAdminId: marked ? adminId : null,
       })
       .where(eq(bookingGuests.id, guestId));
@@ -860,7 +860,7 @@ export class AdminScheduleService {
 
   // Trainer's client list. trainerNote is admin-only — keep it out of member-facing queries
   async getMembers(adminId: string, onlyId?: string) {
-    const since = new Date(Date.now() - CANCELLATION_STATS_DAYS * 24 * 60 * 60 * 1000);
+    const since = this.clock.now().minus({ days: CANCELLATION_STATS_DAYS }).toJSDate();
     // Cancellations only (a move to another slot isn't a missed training)
     // Raw, fully qualified SQL: in a single-table select drizzle drops table names, and an unqualified
     // "id" inside the subquery would bind to bookings.id
@@ -1100,7 +1100,7 @@ export class AdminScheduleService {
           eq(bookings.memberId, memberId),
           eq(bookings.status, 'ACTIVE'),
           eq(trainingSlots.status, 'ACTIVE'),
-          lte(trainingDays.localDate, sql`(now() at time zone 'Europe/Kyiv')::date`),
+          lte(trainingDays.localDate, this.clock.now().toISODate()!),
         ),
       )
       .orderBy(desc(trainingDays.localDate), desc(trainingSlots.slotTime))

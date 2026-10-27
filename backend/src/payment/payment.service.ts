@@ -127,7 +127,7 @@ export class PaymentService {
     await this.database.db.transaction(async (tx) => {
       const replaced = await tx
         .update(payments)
-        .set({ status: 'REPLACED', updatedAt: new Date() })
+        .set({ status: 'REPLACED', updatedAt: this.clock.now().toJSDate() })
         .where(and(eq(payments.id, pending.id), eq(payments.status, 'PENDING')))
         .returning({ id: payments.id });
       if (replaced.length === 0) throw new ConflictException('Payment status changed, refresh the page');
@@ -151,7 +151,7 @@ export class PaymentService {
       result_url: `${process.env.FRONTEND_URL ?? ''}/payment/return?order=${orderId}`,
       // LiqPay closes the order at the same moment our expiry ends the purchase,
       // so an old LiqPay tab can't be paid after it is gone. Format: UTC "YYYY-MM-DD HH:mm:ss"
-      expired_date: new Date(Date.now() + this.expiryMs).toISOString().replace('T', ' ').slice(0, 19),
+      expired_date: new Date(this.clock.now().toMillis() + this.expiryMs).toISOString().replace('T', ' ').slice(0, 19),
     };
 
     const data = liqpayEncode(params);
@@ -203,7 +203,7 @@ export class PaymentService {
       );
       await this.database.db
         .update(payments)
-        .set({ refundCallback: decoded, updatedAt: new Date() })
+        .set({ refundCallback: decoded, updatedAt: this.clock.now().toJSDate() })
         .where(eq(payments.id, payment.id));
     }
     return { ok: true };
@@ -268,7 +268,7 @@ export class PaymentService {
   }
 
   async expireStale() {
-    const cutoff = new Date(Date.now() - this.expiryMs);
+    const cutoff = new Date(this.clock.now().toMillis() - this.expiryMs);
     const stale = await this.database.db
       .select({ id: payments.id, purchaseId: payments.purchaseId, orderId: payments.orderId })
       .from(payments)
@@ -324,13 +324,13 @@ export class PaymentService {
           // REPLACED is allowed: the member may pay an old LiqPay tab (caller checks the purchase still awaits payment)
           const [won] = await tx
             .update(payments)
-            .set({ status: 'PAID', liqpayPaymentId, rawCallback: liqpay, updatedAt: new Date() })
+            .set({ status: 'PAID', liqpayPaymentId, rawCallback: liqpay, updatedAt: this.clock.now().toJSDate() })
             .where(and(eq(payments.id, payment.id), inArray(payments.status, ['PENDING', 'REPLACED'])))
             .returning({ id: payments.id });
           if (!won) return false;
           const [paid] = await tx
             .update(purchases)
-            .set({ status: 'PAID', decidedAt: new Date() })
+            .set({ status: 'PAID', decidedAt: this.clock.now().toJSDate() })
             .where(and(eq(purchases.id, purchaseId), eq(purchases.status, 'PENDING')))
             .returning({ id: purchases.id });
           if (!paid) throw new PurchaseNotAwaitingPayment();
@@ -338,7 +338,7 @@ export class PaymentService {
           // Other open attempts for this purchase must not expire it later
           await tx
             .update(payments)
-            .set({ status: 'REPLACED', updatedAt: new Date() })
+            .set({ status: 'REPLACED', updatedAt: this.clock.now().toJSDate() })
             .where(
               and(eq(payments.purchaseId, purchaseId), eq(payments.status, 'PENDING'), ne(payments.id, payment.id)),
             );
@@ -391,7 +391,7 @@ export class PaymentService {
   private async saveRawCallback(paymentId: string, liqpay: Record<string, unknown>) {
     await this.database.db
       .update(payments)
-      .set({ rawCallback: liqpay, updatedAt: new Date() })
+      .set({ rawCallback: liqpay, updatedAt: this.clock.now().toJSDate() })
       .where(eq(payments.id, paymentId));
   }
 
@@ -405,7 +405,7 @@ export class PaymentService {
     return this.database.db.transaction(async (tx) => {
       const [won] = await tx
         .update(payments)
-        .set({ status, ...(rawCallback && { rawCallback }), updatedAt: new Date() })
+        .set({ status, ...(rawCallback && { rawCallback }), updatedAt: this.clock.now().toJSDate() })
         .where(and(eq(payments.id, payment.id), eq(payments.status, 'PENDING')))
         .returning({ id: payments.id });
       if (!won) return false;
@@ -413,7 +413,7 @@ export class PaymentService {
       if (payment.purchaseId) {
         await tx
           .update(purchases)
-          .set({ status, decidedAt: new Date() })
+          .set({ status, decidedAt: this.clock.now().toJSDate() })
           .where(and(eq(purchases.id, payment.purchaseId), eq(purchases.status, 'PENDING')));
       }
       return true;
