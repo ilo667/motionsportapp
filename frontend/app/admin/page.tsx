@@ -12,6 +12,8 @@ import { errorText } from "@/lib/apiErrors";
 import { longDay } from "@/lib/dates";
 import { Badge } from "@/components/Badge";
 import { toAdminLogin } from "@/lib/adminAuth";
+import { AnnouncementSection } from "./AnnouncementSection";
+import { CancelDayButton } from "./CancelDayButton";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -19,12 +21,8 @@ export default function AdminPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mutateError, setMutateError] = useState("");
-  const [confirmCancelDay, setConfirmCancelDay] = useState(false);
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [examples, setExamples] = useState<AnnouncementExample[]>([]);
-  const [newExampleText, setNewExampleText] = useState("");
-  const [editingText, setEditingText] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const authedRef = useRef(false);
 
@@ -85,12 +83,6 @@ export default function AdminPage() {
     } catch (err: unknown) {
       setMutateError(errorText(err));
     }
-  };
-
-  const handleCancelDay = async () => {
-    if (!schedule) return;
-    setConfirmCancelDay(false);
-    await handleMutate(() => api.cancelTrainingDay(schedule.localDate));
   };
 
   if (loading) {
@@ -164,167 +156,18 @@ export default function AdminPage() {
       {mutateError && <p className="text-danger text-sm mb-4 text-center">{mutateError}</p>}
 
       {schedule.status !== "CANCELLED" && (
-        <div className="border-t border-line pt-5">
-          <p className="text-muted text-xs mb-3 uppercase tracking-wide font-medium">Керування днем</p>
-          {!confirmCancelDay ? (
-            <button
-              onClick={() => setConfirmCancelDay(true)}
-              className="btn-ghost hover-danger w-full py-3 rounded-lg border text-sm transition-colors"
-            >
-              Скасувати мої тренування цього дня
-            </button>
-          ) : (
-            <div className="rounded-lg border border-danger bg-danger/5 p-4 space-y-3">
-              <p className="text-danger text-sm">
-                Скасувати ваші тренування {longDay(schedule.localDate)}? Усі записи на них буде відмінено. Тренування
-                інших тренерів залишаться.
-              </p>
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleCancelDay}
-                  className="btn-danger flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Скасувати
-                </button>
-                <button
-                  onClick={() => setConfirmCancelDay(false)}
-                  className="btn-ghost flex-1 py-2.5 rounded-lg border text-sm transition-colors"
-                >
-                  Ні
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        <CancelDayButton
+          date={schedule.localDate}
+          onCancel={() => handleMutate(() => api.cancelTrainingDay(schedule.localDate))}
+        />
       )}
 
-      {/* Announcement section */}
-      <div className="border-t border-line pt-5 mt-5">
-        <p className="text-muted text-xs mb-3 uppercase tracking-wide font-medium">Оголошення</p>
-
-        {/* Published status */}
-        {announcement?.publishedAt ? (
-          <div className="bg-teal/8 border border-teal/20 rounded-xl px-4 py-3 mb-4 text-sm text-body">
-            <p className="font-medium text-teal mb-1 text-xs">✓ Опубліковано</p>
-            {announcement.text}
-          </div>
-        ) : announcement?.text ? (
-          <div className="bg-surface border border-line rounded-xl px-4 py-3 mb-4 text-sm text-muted">
-            <p className="font-medium text-xs mb-1">Чернетка (не опубліковано)</p>
-            {announcement.text}
-          </div>
-        ) : null}
-
-        {/* Edit area */}
-        {editingText !== null ? (
-          <div className="mb-3 space-y-2">
-            <textarea
-              value={editingText}
-              onChange={(e) => setEditingText(e.target.value)}
-              rows={3}
-              className="input-field w-full rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:border-teal"
-              placeholder="Текст оголошення..."
-            />
-            <div className="flex space-x-2">
-              <button
-                onClick={async () => {
-                  await handleMutate(() => api.updateAnnouncementText(schedule.localDate, editingText));
-                  setEditingText(null);
-                }}
-                className="btn-primary flex-1 py-2 rounded-lg text-sm transition-colors"
-              >
-                Зберегти
-              </button>
-              <button
-                onClick={() => setEditingText(null)}
-                className="btn-ghost flex-1 py-2 rounded-lg border text-sm transition-colors"
-              >
-                Скасувати
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Actions */}
-        <div className="-m-1 flex flex-wrap mb-4">
-          <button
-            disabled={generating}
-            onClick={async () => {
-              setGenerating(true);
-              await handleMutate(() => api.generateAnnouncement(schedule.localDate));
-              setGenerating(false);
-            }}
-            className="m-1 btn-secondary py-2 px-3 rounded-lg border text-sm transition-colors disabled:opacity-50"
-          >
-            {generating ? "Генерую..." : "✨ Згенерувати AI"}
-          </button>
-          {announcement?.text && !announcement.publishedAt && (
-            <>
-              <button
-                onClick={() => setEditingText(announcement.text ?? "")}
-                className="m-1 btn-ghost py-2 px-3 rounded-lg border text-sm transition-colors"
-              >
-                Редагувати
-              </button>
-              <button
-                onClick={() => handleMutate(() => api.publishAnnouncement(schedule.localDate))}
-                className="m-1 btn-primary py-2 px-3 rounded-lg text-sm transition-colors"
-              >
-                Опублікувати
-              </button>
-            </>
-          )}
-          {announcement?.publishedAt && (
-            <button
-              onClick={() => handleMutate(() => api.unpublishAnnouncement(schedule.localDate))}
-              className="m-1 btn-ghost hover-danger py-2 px-3 rounded-lg border text-sm transition-colors"
-            >
-              Зняти з публікації
-            </button>
-          )}
-        </div>
-
-        {/* Examples */}
-        <p className="text-muted text-xs mb-2 font-medium">Приклади стилю для AI</p>
-        <div className="space-y-2 mb-3">
-          {examples.map((ex) => (
-            <div key={ex.id} className="flex items-start space-x-2 bg-surface rounded-lg px-3 py-2">
-              <p className="flex-1 text-sm text-body">{ex.text}</p>
-              <button
-                onClick={() => handleMutate(() => api.deleteAnnouncementExample(ex.id))}
-                className="text-muted hover:text-danger text-xs shrink-0 mt-0.5 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-        <div className="flex space-x-2">
-          <input
-            type="text"
-            value={newExampleText}
-            onChange={(e) => setNewExampleText(e.target.value)}
-            placeholder="Додати приклад оголошення..."
-            className="input-field flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:border-teal"
-            onKeyDown={async (e) => {
-              if (e.key === "Enter" && newExampleText.trim()) {
-                await handleMutate(() => api.addAnnouncementExample(newExampleText.trim()));
-                setNewExampleText("");
-              }
-            }}
-          />
-          <button
-            onClick={async () => {
-              if (!newExampleText.trim()) return;
-              await handleMutate(() => api.addAnnouncementExample(newExampleText.trim()));
-              setNewExampleText("");
-            }}
-            className="btn-primary py-2 px-3 rounded-lg text-sm transition-colors"
-          >
-            +
-          </button>
-        </div>
-      </div>
+      <AnnouncementSection
+        date={schedule.localDate}
+        announcement={announcement}
+        examples={examples}
+        onMutate={handleMutate}
+      />
     </PageLayout>
   );
 }
