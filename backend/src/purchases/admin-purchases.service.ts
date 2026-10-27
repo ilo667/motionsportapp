@@ -17,7 +17,7 @@ import {
 } from '../database/schema';
 import { EntitlementsService } from './entitlements.service';
 import { NotificationService } from '../notifications/notification.service';
-import { cancelGuests, freeSeats } from '../booking/group-booking';
+import { cancelGuests, freeSeats, lockMember } from '../booking/group-booking';
 import { cardState } from './validity';
 import { memberFrozenOn } from '../freezes/freeze.store';
 import { requireVisibleMember, visibleTo } from '../schedule/default-trainer';
@@ -257,24 +257,34 @@ export class AdminPurchasesService {
   // «+ Додати клубну карту з рецепції»: a card bought at the reception, waiting or (activate) active from today
   async addCard(trainerId: string, memberId: string, priceItemId: string, activate: boolean) {
     await requireVisibleMember(this.database.db, trainerId, memberId);
-    await this.rejectFrozen(memberId);
-    // One club card at a time: a new one only once the current card has ended or burned
-    if (await this.entitlements.usableCard(memberId)) throw new ConflictException('Member already has a club card');
-    await this.entitlements.addManualCard(this.database.db, memberId, trainerId, priceItemId, activate);
+    await this.database.db.transaction(async (tx) => {
+      // The member lock: a second «Додати» at once waits and then finds this card; a freeze approved meanwhile too
+      await lockMember(tx, memberId);
+      await this.rejectFrozen(tx, memberId);
+      // One club card at a time: a new one only once the current card has ended or burned
+      if (await this.entitlements.usableCard(memberId, tx))
+        throw new ConflictException('Member already has a club card');
+      await this.entitlements.addManualCard(tx, memberId, trainerId, priceItemId, activate);
+    });
     return { ok: true };
   }
 
   // «Активувати з сьогодні»
   async activateCard(trainerId: string, memberId: string, cardId: string) {
     await requireVisibleMember(this.database.db, trainerId, memberId);
-    await this.rejectFrozen(memberId);
-    await this.entitlements.activateCard(this.database.db, memberId, cardId);
+    await this.database.db.transaction(async (tx) => {
+      // Under the member lock, as a freeze's approval: the card is either started first (and its dates pushed by the
+      // freeze) or refused as frozen
+      await lockMember(tx, memberId);
+      await this.rejectFrozen(tx, memberId);
+      await this.entitlements.activateCard(tx, memberId, cardId);
+    });
     return { ok: true };
   }
 
   // A card added or started during a freeze would miss the pushed dates: after the unfreeze
-  private async rejectFrozen(memberId: string) {
-    if (await memberFrozenOn(this.database.db, memberId, this.clock.now().toISODate()!)) {
+  private async rejectFrozen(db: Q, memberId: string) {
+    if (await memberFrozenOn(db, memberId, this.clock.now().toISODate()!)) {
       throw new ConflictException('Member is frozen');
     }
   }

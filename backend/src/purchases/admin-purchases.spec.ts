@@ -5,6 +5,15 @@ import { AdminPurchasesService } from './admin-purchases.service';
 import { AdminPurchasesController } from './admin-purchases.controller';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { KY_ZONE } from '../schedule/training-types';
+import { lockMember } from '../booking/group-booking';
+
+// The member lock is tested in group-booking.spec; here only that it is taken, and when
+jest.mock('../booking/group-booking', () => ({
+  ...jest.requireActual('../booking/group-booking'),
+  lockMember: jest.fn().mockResolvedValue({ trainerId: 'trainer-1', displayName: 'Катя' }),
+}));
+const mockLockMember = lockMember as jest.Mock;
+beforeEach(() => mockLockMember.mockClear());
 
 const NOW = DateTime.fromISO('2026-10-23T12:00:00', { zone: KY_ZONE });
 
@@ -111,6 +120,29 @@ describe('Trainer — client purchases', () => {
     expect(entitlements.addManualCard).not.toHaveBeenCalled();
   });
 
+  it('adds the card in one transaction under the member lock: two «Додати» at once give one card', async () => {
+    const { db } = makeDb([[{ id: 'm1' }]]);
+    const tx = { ...db };
+    db.transaction = jest.fn((fn: (t: unknown) => unknown) => fn(tx));
+    const { svc, entitlements } = makeService(db);
+    await svc.addCard('trainer-1', 'm1', 'price-card', false);
+    expect(mockLockMember).toHaveBeenCalledWith(tx, 'm1');
+    expect(entitlements.usableCard).toHaveBeenCalledWith('m1', tx);
+    expect(mockLockMember.mock.invocationCallOrder[0]).toBeLessThan(
+      entitlements.usableCard.mock.invocationCallOrder[0],
+    );
+    expect(entitlements.addManualCard).toHaveBeenCalledWith(tx, 'm1', 'trainer-1', 'price-card', false);
+  });
+
+  it('a frozen client: 409, no card added', async () => {
+    // The visible member, then an active freeze over today
+    const freeze = { id: 'f1', memberId: 'm1', status: 'ACTIVE', startedOn: '2026-10-20', endsOn: '2026-11-19' };
+    const { db } = makeDb([[{ id: 'm1' }], [freeze]]);
+    const { svc, entitlements } = makeService(db);
+    await expect(svc.addCard('trainer-1', 'm1', 'price-card', false)).rejects.toThrow('Member is frozen');
+    expect(entitlements.addManualCard).not.toHaveBeenCalled();
+  });
+
   it('«Додати й активувати з сьогодні» passes activate on', async () => {
     const { db } = makeDb([[{ id: 'm1' }]]);
     const { svc, entitlements } = makeService(db);
@@ -121,8 +153,20 @@ describe('Trainer — client purchases', () => {
   it('activates a waiting card of a visible client', async () => {
     const { db } = makeDb([[{ id: 'm1' }]]);
     const { svc, entitlements } = makeService(db);
+    const tx = { ...db };
+    db.transaction = jest.fn((fn: (t: unknown) => unknown) => fn(tx));
     await svc.activateCard('trainer-1', 'm1', 'card-1');
-    expect(entitlements.activateCard).toHaveBeenCalledWith(db, 'm1', 'card-1');
+    // Under the member lock, as a freeze's approval takes it
+    expect(mockLockMember).toHaveBeenCalledWith(tx, 'm1');
+    expect(entitlements.activateCard).toHaveBeenCalledWith(tx, 'm1', 'card-1');
+  });
+
+  it('a frozen client: 409, the card is not started', async () => {
+    const freeze = { id: 'f1', memberId: 'm1', status: 'ACTIVE', startedOn: '2026-10-20', endsOn: '2026-11-19' };
+    const { db } = makeDb([[{ id: 'm1' }], [freeze]]);
+    const { svc, entitlements } = makeService(db);
+    await expect(svc.activateCard('trainer-1', 'm1', 'card-1')).rejects.toThrow('Member is frozen');
+    expect(entitlements.activateCard).not.toHaveBeenCalled();
   });
 
   it("another trainer's client: 404, the card is not touched", async () => {
