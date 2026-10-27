@@ -212,7 +212,8 @@ describe('Assigned slots — createAssignedSlot', () => {
 });
 
 describe('Assigned slots — updateSlotMembers', () => {
-  const split = { id: 'slot-1', trainingType: 'спліт', status: 'ACTIVE', trainerId: TRAINER };
+  // requireOwnSlot reads the slot with its date
+  const split = { id: 'slot-1', trainingType: 'спліт', status: 'ACTIVE', trainerId: TRAINER, localDate: '2026-10-21' };
 
   // Reads: the slot, the members check, who is on the slot now, their active bookings with marks
   const onSlot = (...ids: string[]) => ids.map((memberId) => ({ memberId }));
@@ -275,6 +276,15 @@ describe('Assigned slots — updateSlotMembers', () => {
     await makeService(db).updateSlotMembers(TRAINER, 'slot-1', [M1, M2, M3]);
     expect(values).toContainEqual([M1, M2, M3].map((memberId) => ({ slotId: 'slot-1', memberId })));
     expect(sets).not.toContainEqual(expect.objectContaining({ capacity: expect.anything() }));
+  });
+
+  // The date comes with the slot (requireOwnSlot): a freeze on another day doesn't stop it
+  it('a member frozen on the training day cannot be added to it', async () => {
+    (loadFreezes as jest.Mock).mockResolvedValue([
+      { id: 'f1', memberId: M2, status: 'ACTIVE', startedOn: '2026-10-21', endsOn: '2026-10-22' },
+    ]);
+    const { db } = makeDb([[split], [{ id: M1 }, { id: M2 }], onSlot(M1), [{ id: 'b1', memberId: M1, marked: null }]]);
+    await expect(makeService(db).updateSlotMembers(TRAINER, 'slot-1', [M1, M2])).rejects.toThrow('Member is frozen');
   });
 
   it('refuses group slots (open to everyone)', async () => {
@@ -750,11 +760,12 @@ describe('Cancelling a training gives the trainings back', () => {
     status: 'ACTIVE',
     trainingType: 'персональні',
     trainerId: TRAINER,
+    localDate: '2026-10-20',
   };
   const notifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
 
   it('cancelling one training removes its marks and spends (a ✓ or ✗ no longer costs a training)', async () => {
-    const { db } = makeDb([[mySlot], [{ memberId: M1 }], [{ localDate: '2026-10-20' }], [mySlot]]);
+    const { db } = makeDb([[mySlot], [{ memberId: M1 }], [mySlot]]);
     const svc = new AdminScheduleService({ db } as any, notifications as any, { now: () => now }, {
       syncSpend: jest.fn(),
     } as any);
@@ -765,7 +776,7 @@ describe('Cancelling a training gives the trainings back', () => {
 
   // The member cancelled late first: that spend and its fee stay (only «Не списувати» forgives it)
   it("leaves a member's late cancellation as it was: spends go back only from active bookings", async () => {
-    const { db, sets } = makeDb([[mySlot], [{ memberId: M1 }], [{ localDate: '2026-10-20' }], [mySlot]]);
+    const { db, sets } = makeDb([[mySlot], [{ memberId: M1 }], [mySlot]]);
     const svc = new AdminScheduleService({ db } as any, notifications as any, { now: () => now }, {
       syncSpend: jest.fn(),
     } as any);
@@ -774,6 +785,19 @@ describe('Cancelling a training gives the trainings back', () => {
     expect(deleted.filter((t: unknown) => t === packageSpends)).toHaveLength(1);
     expect(sets).not.toContainEqual({ cancelFee: null });
     expect(sets).not.toContainEqual({ status: 'CANCELLED' }); // no half refund dropped
+  });
+
+  it('tells the members who were booked, with the training date', async () => {
+    const notify = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
+    // Reads: the slot with its date, the slot lock, the active bookings, the slot after the update
+    const { db } = makeDb([[mySlot], [], [{ id: 'b1', slotId: 's1', memberId: M1 }], [mySlot]]);
+    const svc = new AdminScheduleService({ db } as any, notify as any, { now: () => now }, {} as any);
+    await svc.updateSlot(TRAINER, 's1', { status: 'CANCELLED' });
+    expect(notify.enqueueAndProcess).toHaveBeenCalledWith('SLOT_CANCELLED', 'slot-cancelled:s1:2026-10-20', {
+      memberIds: [M1],
+      slotTime: '18:00',
+      localDate: '2026-10-20',
+    });
   });
 
   it('«Скасувати мої тренування цього дня» does the same for every cancelled training', async () => {

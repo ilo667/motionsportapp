@@ -96,11 +96,8 @@ const MEMBER_TRAINER = [{ trainerId: 'trainer-1' }];
 // book()/switchSlot() lock the member row first (one read inside the transaction)
 const MEMBER = [{ id: 'member-1' }];
 
-const validDay = {
-  id: 'day-1',
-  localDate: TODAY,
-  status: 'SCHEDULED',
-};
+// book() reads the slot with its day's date and status in one query
+const slotOnDay = { ...validSlot, localDate: TODAY, dayStatus: 'SCHEDULED' };
 
 // groupPassLeft: group trainings the member's pass still holds for that day (booking needs one)
 function makeService(db: any, now: DateTime, groupPassLeft = 1, payer: unknown = null) {
@@ -124,14 +121,14 @@ function makeService(db: any, now: DateTime, groupPassLeft = 1, payer: unknown =
 
 describe('BookingService — booking window', () => {
   it('throws before the trainer opens booking (14:00)', async () => {
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay]]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER]);
     const service = makeService(db, kyivAt(13, 59));
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Booking is not open yet');
   });
 
   it('uses the opening time the trainer has now, not the one the training was created with', async () => {
     mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '16:00', autoCreate: true, times: [] });
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay]]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER]);
     await expect(makeService(db, kyivAt(15)).book('member-1', 'slot-1')).rejects.toThrow('Booking is not open yet');
     expect(mockLoadSchedule).toHaveBeenCalledWith(db, 'trainer-1');
   });
@@ -139,13 +136,13 @@ describe('BookingService — booking window', () => {
   it('does not throw at exactly 14:00', async () => {
     // Window is open — error must come from inside the transaction (slot already locked), not window validation
     const lockedSlot = { ...validSlot, bookedCount: 8, capacity: 8 };
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER, [lockedSlot]]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER, MEMBER, [lockedSlot]]);
     const service = makeService(db, kyivAt(14, 0));
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Slot is full');
   });
 
   it('closes when the training starts (19:00), not at 21:00', async () => {
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay]]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER]);
     await expect(makeService(db, kyivAt(19, 0)).book('member-1', 'slot-1')).rejects.toThrow(
       'Booking window has closed',
     );
@@ -155,13 +152,13 @@ describe('BookingService — booking window', () => {
 describe('BookingService — freeze', () => {
   it('a member frozen on that day cannot book', async () => {
     (memberFrozenOn as jest.Mock).mockResolvedValue(true);
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay]]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER]);
     await expect(makeService(db, kyivAt(15)).book('member-1', 'slot-1')).rejects.toThrow('Membership frozen');
   });
 
   it('checked again under the member lock (a freeze approved at that moment)', async () => {
     (memberFrozenOn as jest.Mock).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER, MEMBER]);
     await expect(makeService(db, kyivAt(15)).book('member-1', 'slot-1')).rejects.toThrow('Membership frozen');
   });
 });
@@ -183,14 +180,14 @@ describe('BookingService — slot validation', () => {
 
   it('throws when slot is full (checked inside transaction)', async () => {
     const fullSlot = { ...validSlot, bookedCount: 8, capacity: 8 };
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER, [fullSlot]]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER, MEMBER, [fullSlot]]);
     const service = makeService(db, at15);
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Slot is full');
   });
 
   it('409 Cancelled late: the member cancelled this training late and paid for it', async () => {
     (lateCancelledSlotIds as jest.Mock).mockResolvedValueOnce(new Set(['slot-1']));
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER, MEMBER]);
     const service = makeService(db, at15);
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('Cancelled late');
   });
@@ -210,21 +207,30 @@ describe('BookingService — slot validation', () => {
   it('throws when member already has a group booking for that day', async () => {
     const available = { ...validSlot, bookedCount: 5 };
     const existingBooking = { id: 'booking-existing' };
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER, [available], [existingBooking]]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER, MEMBER, [available], [existingBooking]]);
     const service = makeService(db, at15);
     await expect(service.book('member-1', 'slot-1')).rejects.toThrow('already have an active booking');
   });
 });
 
+describe('BookingService — day of the training', () => {
+  it('409 when the training day itself is cancelled', async () => {
+    const { db } = makeDb([[{ ...slotOnDay, dayStatus: 'CANCELLED' }], MEMBER_TRAINER]);
+    await expect(makeService(db, kyivAt(15)).book('member-1', 'slot-1')).rejects.toThrow(
+      'Training day is not scheduled',
+    );
+  });
+});
+
 describe('BookingService — group pass', () => {
   it('409 Group pass required without a pass that has trainings left, and nothing is booked', async () => {
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay]]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER]);
     await expect(makeService(db, kyivAt(15), 0).book('member-1', 'slot-1')).rejects.toThrow('Group pass required');
     expect(db.insert).not.toHaveBeenCalled();
   });
 
   it('with a pass that has trainings left it books as before', async () => {
-    const { db } = makeDb([[validSlot], MEMBER_TRAINER, [validDay], MEMBER, [validSlot], []]);
+    const { db } = makeDb([[slotOnDay], MEMBER_TRAINER, MEMBER, [validSlot], []]);
     await expect(makeService(db, kyivAt(15), 1).book('member-1', 'slot-1')).resolves.toEqual({ ok: true });
     expect(db.insert).toHaveBeenCalled();
   });

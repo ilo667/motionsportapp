@@ -433,12 +433,7 @@ export class AdminScheduleService {
       if (removed.some((b) => b.marked)) throw new ConflictException('Attendance already marked');
       // Only members new to the slot are booked: one who cancelled themselves stays cancelled
       const added = memberIds.filter((id) => !onSlot.some((m) => m.memberId === id));
-      const [day] = await tx
-        .select({ localDate: trainingDays.localDate })
-        .from(trainingDays)
-        .where(eq(trainingDays.id, slot.trainingDayId))
-        .limit(1);
-      if (day) await this.rejectFrozen(tx, added, day.localDate);
+      await this.rejectFrozen(tx, added, slot.localDate);
 
       await tx.delete(slotMembers).where(eq(slotMembers.slotId, slotId));
       await tx.insert(slotMembers).values(memberIds.map((memberId) => ({ slotId, memberId })));
@@ -597,12 +592,7 @@ export class AdminScheduleService {
       const cancelled = await this.database.db.transaction((tx) =>
         cancelSlotsTx(tx, [slotId], this.clock.now().toJSDate()),
       );
-      const [day] = await this.database.db
-        .select({ localDate: trainingDays.localDate })
-        .from(trainingDays)
-        .where(eq(trainingDays.id, slot.trainingDayId))
-        .limit(1);
-      if (day) await notifySlotsCancelled(this.notifications, [{ ...slot, localDate: day.localDate }], cancelled);
+      await notifySlotsCancelled(this.notifications, [slot], cancelled);
     } else {
       await this.database.db
         .update(trainingSlots)
