@@ -289,7 +289,6 @@ export const announcementExamples = pgTable('announcement_examples', {
   id: uuid('id').primaryKey().defaultRandom(),
   text: text('text').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const announcements = pgTable(
