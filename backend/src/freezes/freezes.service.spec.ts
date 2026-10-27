@@ -1,4 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { DateTime } from 'luxon';
 import { FreezesService } from './freezes.service';
 import { openFreeze } from './freeze.store';
@@ -25,17 +27,19 @@ const TODAY = '2026-10-26';
 type Write = { op: 'update' | 'insert'; table: unknown; set?: Record<string, unknown>; values?: unknown };
 
 // Drizzle mock: each awaited read takes the next of `reads`; a write with .returning() takes the next of `returns`.
-// Writes are recorded with their table, so tests can say what changed
+// Writes are recorded with their table, so tests can say what changed; reads' WHERE conditions in `wheres`
 function makeDb(reads: unknown[][], returns: unknown[][] = []) {
   let r = 0;
   let w = 0;
   const writes: Write[] = [];
+  const wheres: SQL[] = [];
 
   function readLink(): any {
     const chain: any = { then: (resolve: (v: unknown) => void) => resolve(reads[r++] ?? []) };
-    for (const m of ['from', 'innerJoin', 'leftJoin', 'where', 'for', 'orderBy', 'limit']) {
+    for (const m of ['from', 'innerJoin', 'leftJoin', 'for', 'orderBy', 'limit']) {
       chain[m] = jest.fn().mockImplementation(() => readLink());
     }
+    chain.where = jest.fn().mockImplementation((cond: SQL) => (wheres.push(cond), readLink()));
     return chain;
   }
 
@@ -70,8 +74,10 @@ function makeDb(reads: unknown[][], returns: unknown[][] = []) {
     }),
     transaction: jest.fn().mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(db)),
   };
-  return { db, writes };
+  return { db, writes, wheres };
 }
+
+const render = (cond: SQL) => new PgDialect().sqlToQuery(cond);
 
 // The number a date shift adds: `valid_until + ${days}::int`
 function shiftOf(set: Record<string, unknown>) {
@@ -200,6 +206,16 @@ describe('FreezesService — approve', () => {
     });
   });
 
+  it("a booking's guest goes with it: two seats freed", async () => {
+    mockFreeSeats.mockClear();
+    const { db } = makeDb([VISIBLE, MEMBER, [], [], toCancel], [[{ memberId: 'm1' }], [{ bookingId: 'b-full' }]]);
+    await makeService(db).svc.approve('trainer-1', 'f1');
+    expect(mockFreeSeats.mock.calls.map((c) => [c[1], c[2]])).toEqual([
+      ['s-wed', 2],
+      ['s-split', 1],
+    ]);
+  });
+
   it('a decided request answers 409', async () => {
     const { db } = makeDb([VISIBLE, MEMBER], [[]]);
     await expect(makeService(db).svc.approve('trainer-1', 'f1')).rejects.toThrow(ConflictException);
@@ -214,9 +230,16 @@ describe('FreezesService — approve', () => {
 describe('FreezesService — unfreeze', () => {
   it('ends today and moves the pushed dates back by the days left', async () => {
     const items = [{ clubCardId: 'c1', packageId: null, field: 'valid_until' }];
-    const { db, writes } = makeDb([VISIBLE, [{ memberId: 'm1', endsOn: '2026-11-20' }], items]);
+    const { db, writes, wheres } = makeDb([VISIBLE, [{ memberId: 'm1', endsOn: '2026-11-20' }], items]);
     const { svc, notifications } = makeService(db);
     await svc.approveUnfreeze('trainer-1', 'f1');
+
+    // Only an asked unfreeze of a freeze not over yet
+    const { sql, params } = render(wheres[1]);
+    expect(sql).toBe(
+      '("freezes"."id" = $1 and ("freezes"."status" = $2 and "freezes"."unfreeze_requested_at" is not null and "freezes"."ends_on" > $3))',
+    );
+    expect(params).toEqual(['f1', 'ACTIVE', TODAY]);
 
     expect(writes.find((w) => w.table === freezes)!.set).toMatchObject({
       endsOn: TODAY,
@@ -250,7 +273,7 @@ describe('FreezesService — unfreeze', () => {
 describe('FreezesService — pending', () => {
   it('a request shows the last day it would freeze; an unfreeze the current one', async () => {
     const requestedAt = new Date('2026-10-25T10:00:00Z');
-    const { db } = makeDb([
+    const { db, wheres } = makeDb([
       [
         { id: 'f1', memberId: 'm1', displayName: 'Катя', status: 'REQUESTED', requestedAt, endsOn: null },
         {
@@ -265,6 +288,12 @@ describe('FreezesService — pending', () => {
       ],
     ]);
     const rows = await makeService(db).svc.pending('trainer-1');
+    // Freeze requests, and unfreezes asked while the freeze goes on
+    const { sql, params } = render(wheres[0]);
+    expect(sql).toContain(
+      '("freezes"."status" = $2 or ("freezes"."status" = $3 and "freezes"."unfreeze_requested_at" is not null and "freezes"."ends_on" > $4))',
+    );
+    expect(params.slice(1)).toEqual(['REQUESTED', 'ACTIVE', TODAY]);
     expect(rows.map((r) => [r.id, r.kind, r.until])).toEqual([
       ['f1', 'freeze', '2026-11-24'],
       ['f2', 'unfreeze', '2026-11-09'],

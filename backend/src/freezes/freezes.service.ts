@@ -1,4 +1,5 @@
-import { Injectable, ConflictException, NotFoundException, Logger } from '@nestjs/common';
+import { DateTime } from 'luxon';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { ClockService } from '../clock/clock.service';
@@ -15,7 +16,7 @@ import {
   trainingSlots,
   vacancyAlerts,
 } from '../database/schema';
-import { EntitlementsService } from '../purchases/entitlements.service';
+import { EntitlementsService, USED } from '../purchases/entitlements.service';
 import { cardState, passState } from '../purchases/validity';
 import { NotificationService } from '../notifications/notification.service';
 import { slotStartsAt } from '../schedule/training-types';
@@ -30,17 +31,17 @@ type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 // Freezes shown on a client's page
 const MEMBER_FREEZES_LIMIT = 10;
 
-const USED = sql<number>`(select count(*)::int from package_spends ps where ps.package_id = "packages"."id")`;
+// An active freeze whose member asked to unfreeze, not over yet
+const unfreezeAsked = (today: string) =>
+  and(eq(freezes.status, 'ACTIVE'), sql`${freezes.unfreezeRequestedAt} is not null`, sql`${freezes.endsOn} > ${today}`);
 
-export type FreezeState = 'requested' | 'active' | 'unfreeze_requested';
+type FreezeState = 'requested' | 'active' | 'unfreeze_requested';
 
 // «Заморозити абонемент»: the member asks, a trainer approves; the same for «Розморозити». Everything the member
 // has (club card, packages, waiting or active) stops for the frozen days: approving pushes its dates 30 days
 // ahead at once, an early unfreeze moves them back by the days left (rules.ts, schema `freezes`)
 @Injectable()
 export class FreezesService {
-  private readonly logger = new Logger(FreezesService.name);
-
   constructor(
     private readonly database: DatabaseService,
     private readonly clock: ClockService,
@@ -157,19 +158,7 @@ export class FreezesService {
       })
       .from(freezes)
       .innerJoin(members, eq(members.id, freezes.memberId))
-      .where(
-        and(
-          visibleTo(trainerId),
-          or(
-            eq(freezes.status, 'REQUESTED'),
-            and(
-              eq(freezes.status, 'ACTIVE'),
-              sql`${freezes.unfreezeRequestedAt} is not null`,
-              sql`${freezes.endsOn} > ${today}`,
-            ),
-          ),
-        ),
-      )
+      .where(and(visibleTo(trainerId), or(eq(freezes.status, 'REQUESTED'), unfreezeAsked(today))))
       .orderBy(freezes.requestedAt);
     return rows.map((r) => ({
       id: r.id,
@@ -208,51 +197,7 @@ export class FreezesService {
 
       await this.pushDates(tx, freezeId, done.memberId, today, FREEZE_DAYS);
 
-      // Trainings not started yet, before the freeze ends. Slots locked as BookingService does, seats freed
-      const toCancel = await tx
-        .select({
-          id: bookings.id,
-          slotId: bookings.slotId,
-          slotTime: trainingSlots.slotTime,
-          localDate: trainingDays.localDate,
-        })
-        .from(bookings)
-        .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
-        .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
-        .where(
-          and(
-            eq(bookings.memberId, done.memberId),
-            eq(bookings.status, 'ACTIVE'),
-            gte(trainingDays.localDate, today),
-            lt(trainingDays.localDate, endsOn),
-          ),
-        )
-        .for('update', { of: trainingSlots });
-      const ahead = toCancel.filter((b) => slotStartsAt(b.localDate, b.slotTime) > now);
-      const freed: typeof ahead = [];
-      if (ahead.length > 0) {
-        await tx
-          .update(bookings)
-          .set({ status: 'CANCELLED', cancelledAt: now.toJSDate() })
-          .where(
-            and(
-              inArray(
-                bookings.id,
-                ahead.map((b) => b.id),
-              ),
-              eq(bookings.status, 'ACTIVE'),
-            ),
-          );
-        // Guests go with the bookings: one more seat each
-        const withGuest = await cancelGuests(
-          tx,
-          ahead.map((b) => b.id),
-          now.toJSDate(),
-        );
-        for (const b of ahead) {
-          if (await freeSeats(tx, b.slotId, withGuest.has(b.id) ? 2 : 1)) freed.push(b);
-        }
-      }
+      const freed = await this.cancelBookingsAhead(tx, done.memberId, today, endsOn, now);
       // No «З'явилось місце» while frozen
       await tx.update(vacancyAlerts).set({ active: false }).where(eq(vacancyAlerts.memberId, done.memberId));
       return { memberId: done.memberId, freed };
@@ -266,7 +211,7 @@ export class FreezesService {
         excludeMemberId: memberId,
       });
     }
-    await this.notifications.enqueueAndProcess('FREEZE_DECIDED', `freeze-decided:${freezeId}`, {
+    await this.notifyDecided(`freeze-decided:${freezeId}`, {
       memberId,
       kind: 'freeze',
       approved: true,
@@ -286,11 +231,7 @@ export class FreezesService {
       if (!done) throw new ConflictException('Freeze was already decided');
       return done.memberId;
     });
-    await this.notifications.enqueueAndProcess('FREEZE_DECIDED', `freeze-decided:${freezeId}`, {
-      memberId,
-      kind: 'freeze',
-      approved: false,
-    });
+    await this.notifyDecided(`freeze-decided:${freezeId}`, { memberId, kind: 'freeze', approved: false });
     return { ok: true };
   }
 
@@ -303,14 +244,7 @@ export class FreezesService {
       const [freeze] = await tx
         .select({ memberId: freezes.memberId, endsOn: freezes.endsOn })
         .from(freezes)
-        .where(
-          and(
-            eq(freezes.id, freezeId),
-            eq(freezes.status, 'ACTIVE'),
-            sql`${freezes.unfreezeRequestedAt} is not null`,
-            sql`${freezes.endsOn} > ${today}`,
-          ),
-        )
+        .where(and(eq(freezes.id, freezeId), unfreezeAsked(today)))
         .for('update')
         .limit(1);
       if (!freeze) throw new ConflictException('Unfreeze was already decided');
@@ -322,7 +256,7 @@ export class FreezesService {
       await this.moveDates(tx, freezeId, -back);
       return freeze.memberId;
     });
-    await this.notifications.enqueueAndProcess('FREEZE_DECIDED', `unfreeze-decided:${freezeId}:${now.getTime()}`, {
+    await this.notifyDecided(`unfreeze-decided:${freezeId}:${now.getTime()}`, {
       memberId,
       kind: 'unfreeze',
       approved: true,
@@ -345,7 +279,7 @@ export class FreezesService {
       if (!done) throw new ConflictException('Unfreeze was already decided');
       return done.memberId;
     });
-    await this.notifications.enqueueAndProcess('FREEZE_DECIDED', `unfreeze-decided:${freezeId}:${now.getTime()}`, {
+    await this.notifyDecided(`unfreeze-decided:${freezeId}:${now.getTime()}`, {
       memberId,
       kind: 'unfreeze',
       approved: false,
@@ -383,6 +317,45 @@ export class FreezesService {
       unfreezeRequested: !!r.unfreezeRequestedAt,
       decidedBy: r.decidedBy,
     }));
+  }
+
+  // The member's trainings not started yet, before the freeze ends: cancelled (system cancellations, no reason) with
+  // their guests, seats freed. Slots locked as BookingService does. Returns those that were full (for «З'явилось місце»)
+  private async cancelBookingsAhead(tx: Tx, memberId: string, today: string, endsOn: string, now: DateTime) {
+    const toCancel = await tx
+      .select({
+        id: bookings.id,
+        slotId: bookings.slotId,
+        slotTime: trainingSlots.slotTime,
+        localDate: trainingDays.localDate,
+      })
+      .from(bookings)
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
+      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
+      .where(
+        and(
+          eq(bookings.memberId, memberId),
+          eq(bookings.status, 'ACTIVE'),
+          gte(trainingDays.localDate, today),
+          lt(trainingDays.localDate, endsOn),
+        ),
+      )
+      .for('update', { of: trainingSlots });
+    const ahead = toCancel.filter((b) => slotStartsAt(b.localDate, b.slotTime) > now);
+    if (ahead.length === 0) return [];
+    const ids = ahead.map((b) => b.id);
+    const at = now.toJSDate();
+    await tx
+      .update(bookings)
+      .set({ status: 'CANCELLED', cancelledAt: at })
+      .where(and(inArray(bookings.id, ids), eq(bookings.status, 'ACTIVE')));
+    // Guests go with the bookings: one more seat each
+    const withGuest = await cancelGuests(tx, ids, at);
+    const freed: typeof ahead = [];
+    for (const b of ahead) {
+      if (await freeSeats(tx, b.slotId, withGuest.has(b.id) ? 2 : 1)) freed.push(b);
+    }
+    return freed;
   }
 
   // Every card and package the member has on `from` (waiting or active, trainings left) gets its date pushed
@@ -458,6 +431,14 @@ export class FreezesService {
     }
   }
 
+  // «FREEZE_DECIDED» to the member: a freeze or an early unfreeze approved or not (until: the last frozen day)
+  private notifyDecided(
+    dedupeKey: string,
+    payload: { memberId: string; kind: 'freeze' | 'unfreeze'; approved: boolean; until?: string },
+  ) {
+    return this.notifications.enqueueAndProcess('FREEZE_DECIDED', dedupeKey, payload);
+  }
+
   // Own clients' and unassigned clients' freezes; anyone else's answers 404 like a missing one
   private async visibleFreeze(tx: Tx, trainerId: string, freezeId: string) {
     const [row] = await tx
@@ -478,7 +459,7 @@ export class FreezesService {
   }
 }
 
-export function freezeState(f: { status: string; unfreezeRequestedAt: Date | null }): FreezeState {
+function freezeState(f: { status: string; unfreezeRequestedAt: Date | null }): FreezeState {
   if (f.status === 'REQUESTED') return 'requested';
   return f.unfreezeRequestedAt ? 'unfreeze_requested' : 'active';
 }

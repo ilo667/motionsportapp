@@ -56,7 +56,7 @@ export type UsableCard = {
 };
 
 // Trainings already spent from a package. Fully qualified: drizzle drops table names in single-table selects
-const USED = sql<number>`(select count(*)::int from package_spends ps where ps.package_id = "packages"."id")`;
+export const USED = sql<number>`(select count(*)::int from package_spends ps where ps.package_id = "packages"."id")`;
 
 const cardLabel = (title: string, optionLabel: string | null) => (optionLabel ? `${title} · ${optionLabel}` : title);
 
