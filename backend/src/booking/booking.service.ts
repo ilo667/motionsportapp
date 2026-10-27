@@ -1,5 +1,5 @@
 import { Injectable, Logger, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import {
   bookingGuests,
@@ -18,13 +18,32 @@ import { ClockService } from '../clock/clock.service';
 import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
 import { getMemberTrainerId } from '../schedule/default-trainer';
 import { EntitlementsService } from '../purchases/entitlements.service';
-import { cancelGuests, freeSeats, findGroupBooking, groupBookingWindow, lateCancelledSlotIds } from './group-booking';
+import {
+  cancelGuests,
+  freeSeats,
+  findGroupBooking,
+  groupBookingWindow,
+  lateCancelledSlotIds,
+  takeSeats,
+} from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { memberFrozenOn } from '../freezes/freeze.store';
 import { cancelFee, halfBack, type CancelFee } from './cancel-fee';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
+// The unique index on active bookings (bookings_member_slot_active_idx) answers a race the per-day check missed
+async function oneBookingPerDay<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err: unknown) {
+    if ((err as { code?: string })?.code === '23505') {
+      throw new ConflictException('You already have an active booking for this day');
+    }
+    throw err;
+  }
+}
 
 @Injectable()
 export class BookingService {
@@ -43,7 +62,7 @@ export class BookingService {
 
     if (!slot) throw new NotFoundException('Slot not found');
     if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
-    // Assigned trainings are booked only through payment (PaymentService.createCheckout)
+    // Assigned trainings are booked by the trainer (assigning is booking), never by the member
     if (slot.trainingType !== GROUP_TYPE) throw new BadRequestException('This slot requires payment');
     // Members book only their own trainer's group trainings
     if (slot.trainerId !== (await getMemberTrainerId(this.database.db, memberId)))
@@ -66,8 +85,8 @@ export class BookingService {
       throw new ConflictException('Group pass required');
     }
 
-    try {
-      await this.database.db.transaction(async (tx) => {
+    await oneBookingPerDay(() =>
+      this.database.db.transaction(async (tx) => {
         await this.lockMember(tx, memberId);
         // Again under the member lock: a freeze approved at this moment cancels bookings under the same lock
         if (await memberFrozenOn(tx, memberId, day.localDate)) throw new ConflictException('Membership frozen');
@@ -76,13 +95,7 @@ export class BookingService {
           throw new ConflictException('Cancelled late');
         }
 
-        const [locked] = await tx
-          .select()
-          .from(trainingSlots)
-          .where(eq(trainingSlots.id, slotId))
-          .for('update')
-          .limit(1);
-
+        const locked = await this.lockSlot(tx, slotId);
         if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is no longer available');
         if (locked.bookedCount >= locked.capacity) throw new ConflictException('Slot is full');
 
@@ -90,23 +103,10 @@ export class BookingService {
           throw new ConflictException('You already have an active booking for this day');
         }
 
-        await tx.insert(bookings).values({
-          memberId,
-          slotId,
-          status: 'ACTIVE',
-        });
-
-        await tx
-          .update(trainingSlots)
-          .set({ bookedCount: sql`${trainingSlots.bookedCount} + 1` })
-          .where(eq(trainingSlots.id, slotId));
-      });
-    } catch (err: unknown) {
-      if ((err as { code?: string })?.code === '23505') {
-        throw new ConflictException('You already have an active booking for this day');
-      }
-      throw err;
-    }
+        await tx.insert(bookings).values({ memberId, slotId, status: 'ACTIVE' });
+        await takeSeats(tx, slotId, 1);
+      }),
+    );
 
     // Booked the slot they were waiting for: no "seat free" push about their own slot
     await this.vacancyAlerts.unsubscribe(memberId, slotId);
@@ -168,13 +168,13 @@ export class BookingService {
     });
 
     if (wasFull && day && slotBefore) {
-      const dedupeKey = `vacancy:${booking.slotId}:${booking.id}`;
-      await this.notifications.enqueueAndProcess('VACANCY', dedupeKey, {
-        slotId: booking.slotId,
-        slotTime: slotBefore.slotTime,
-        localDate: day.localDate,
-        excludeMemberId: booking.memberId,
-      });
+      await this.notifyVacancy(
+        booking.slotId,
+        `vacancy:${booking.slotId}:${booking.id}`,
+        slotBefore.slotTime,
+        day.localDate,
+        booking.memberId,
+      );
     }
 
     if (day && slotBefore) {
@@ -240,24 +240,11 @@ export class BookingService {
 
     const [firstId, secondId] = [oldSlotId, newSlotId].sort();
 
-    let wasFull = false;
-    try {
-      wasFull = await this.database.db.transaction(async (tx) => {
+    const wasFull = await oneBookingPerDay(() =>
+      this.database.db.transaction(async (tx) => {
         await this.lockMember(tx, memberId);
-
-        const [slot1] = await tx
-          .select()
-          .from(trainingSlots)
-          .where(eq(trainingSlots.id, firstId))
-          .for('update')
-          .limit(1);
-
-        const [slot2] = await tx
-          .select()
-          .from(trainingSlots)
-          .where(eq(trainingSlots.id, secondId))
-          .for('update')
-          .limit(1);
+        const slot1 = await this.lockSlot(tx, firstId);
+        const slot2 = await this.lockSlot(tx, secondId);
 
         if (!slot1 || !slot2) throw new NotFoundException('Slot not found');
         if ((await lateCancelledSlotIds(tx, memberId, [newSlotId])).size > 0) {
@@ -266,11 +253,7 @@ export class BookingService {
 
         const newSlot = slot1.id === newSlotId ? slot1 : slot2;
         // A guest moves along: the new training needs a seat for them too
-        const [guest] = await tx
-          .select({ id: bookingGuests.id })
-          .from(bookingGuests)
-          .where(and(eq(bookingGuests.bookingId, current.id), eq(bookingGuests.status, 'ACTIVE')))
-          .limit(1);
+        const guest = await this.activeGuest(tx, current.id);
         const seats = guest ? 2 : 1;
 
         if (newSlot.status !== 'ACTIVE') throw new ConflictException('Target slot is cancelled');
@@ -290,38 +273,26 @@ export class BookingService {
 
         const [created] = await tx
           .insert(bookings)
-          .values({
-            memberId,
-            slotId: newSlotId,
-            status: 'ACTIVE',
-          })
+          .values({ memberId, slotId: newSlotId, status: 'ACTIVE' })
           .returning({ id: bookings.id });
         if (guest) await tx.update(bookingGuests).set({ bookingId: created.id }).where(eq(bookingGuests.id, guest.id));
 
-        await tx
-          .update(trainingSlots)
-          .set({ bookedCount: sql`${trainingSlots.bookedCount} + ${seats}` })
-          .where(eq(trainingSlots.id, newSlotId));
+        await takeSeats(tx, newSlotId, seats);
         return freeSeats(tx, oldSlotId, seats);
-      });
-    } catch (err: unknown) {
-      if ((err as { code?: string })?.code === '23505') {
-        throw new ConflictException('You already have an active booking for this day');
-      }
-      throw err;
-    }
+      }),
+    );
 
     // Usually they came here from a vacancy push; stop alerts for the slot they now hold
     await this.vacancyAlerts.unsubscribe(memberId, newSlotId);
 
     if (wasFull && day && oldSlotBefore) {
-      const dedupeKey = `vacancy:${oldSlotId}:${current.id}`;
-      await this.notifications.enqueueAndProcess('VACANCY', dedupeKey, {
-        slotId: oldSlotId,
-        slotTime: oldSlotBefore.slotTime,
-        localDate: day.localDate,
-        excludeMemberId: current.memberId,
-      });
+      await this.notifyVacancy(
+        oldSlotId,
+        `vacancy:${oldSlotId}:${current.id}`,
+        oldSlotBefore.slotTime,
+        day.localDate,
+        current.memberId,
+      );
     }
 
     if (day && oldSlotBefore) {
@@ -415,23 +386,15 @@ export class BookingService {
 
     await this.database.db.transaction(async (tx) => {
       await this.lockMember(tx, memberId);
-      const [locked] = await tx.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).for('update').limit(1);
+      const locked = await this.lockSlot(tx, slotId);
       if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
       const booking = await this.activeBooking(tx, memberId, slotId);
       if (!booking) throw new NotFoundException('No active booking found');
-      const [already] = await tx
-        .select({ id: bookingGuests.id })
-        .from(bookingGuests)
-        .where(and(eq(bookingGuests.bookingId, booking.id), eq(bookingGuests.status, 'ACTIVE')))
-        .limit(1);
-      if (already) throw new ConflictException('Guest already added');
+      if (await this.activeGuest(tx, booking.id)) throw new ConflictException('Guest already added');
       if (locked.bookedCount >= locked.capacity) throw new ConflictException('Slot is full');
 
       await tx.insert(bookingGuests).values({ bookingId: booking.id, name: guestName });
-      await tx
-        .update(trainingSlots)
-        .set({ bookedCount: sql`${trainingSlots.bookedCount} + 1` })
-        .where(eq(trainingSlots.id, slotId));
+      await takeSeats(tx, slotId, 1);
     });
     return { ok: true };
   }
@@ -441,7 +404,7 @@ export class BookingService {
     this.validateBeforeStart(slot.localDate, slot.slotTime);
 
     const wasFull = await this.database.db.transaction(async (tx) => {
-      const [locked] = await tx.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).for('update').limit(1);
+      const locked = await this.lockSlot(tx, slotId);
       const booking = await this.activeBooking(tx, memberId, slotId);
       if (!locked || !booking) throw new NotFoundException('No active booking found');
       if ((await cancelGuests(tx, [booking.id], this.clock.now().toJSDate())).size === 0)
@@ -451,12 +414,8 @@ export class BookingService {
 
     // A seat freed in a full group training: «З'явилось місце» to those waiting
     if (wasFull) {
-      await this.notifications.enqueueAndProcess('VACANCY', `vacancy:${slotId}:guest:${Date.now()}`, {
-        slotId,
-        slotTime: slot.slotTime,
-        localDate: slot.localDate,
-        excludeMemberId: memberId,
-      });
+      const key = `vacancy:${slotId}:guest:${this.clock.now().toMillis()}`;
+      await this.notifyVacancy(slotId, key, slot.slotTime, slot.localDate, memberId);
     }
     return { ok: true };
   }
@@ -485,6 +444,32 @@ export class BookingService {
       .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
       .limit(1);
     return booking ?? null;
+  }
+
+  private async activeGuest(tx: Tx, bookingId: string) {
+    const [guest] = await tx
+      .select({ id: bookingGuests.id })
+      .from(bookingGuests)
+      .where(and(eq(bookingGuests.bookingId, bookingId), eq(bookingGuests.status, 'ACTIVE')))
+      .limit(1);
+    return guest ?? null;
+  }
+
+  // The slot row under FOR UPDATE: seats are counted and taken under this lock
+  private async lockSlot(tx: Tx, slotId: string) {
+    const [slot] = await tx.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).for('update').limit(1);
+    return slot ?? null;
+  }
+
+  // «З'явилось місце» to those waiting for this slot, except the member who freed the seat
+  private async notifyVacancy(
+    slotId: string,
+    dedupeKey: string,
+    slotTime: string,
+    localDate: string,
+    excludeMemberId: string,
+  ) {
+    await this.notifications.enqueueAndProcess('VACANCY', dedupeKey, { slotId, slotTime, localDate, excludeMemberId });
   }
 
   // Push to the trainer whose training it is, with the member's reason. A failed push must not fail the member's action
@@ -521,7 +506,7 @@ export class BookingService {
     await tx.select({ id: members.id }).from(members).where(eq(members.id, memberId)).for('update').limit(1);
   }
 
-  // The member's active group booking on that day (assigned bookings don't count)
+  // Cancelling, switching away and removing a guest: only until the training starts
   private validateBeforeStart(localDate: string, slotTime: string) {
     const now = this.clock.now();
     if (now >= slotStartsAt(localDate, slotTime)) throw new BadRequestException('Training has already started');

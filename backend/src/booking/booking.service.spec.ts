@@ -428,7 +428,7 @@ describe('BookingService — guests', () => {
     const { db, sets } = makeDb([GROUP_SLOT, MEMBER, [validSlot], BOOKING, []]);
     await expect(makeService(db, at15).addGuest('member-1', 'slot-1', '  Марія ')).resolves.toEqual({ ok: true });
     expect(db.insert).toHaveBeenCalledTimes(1);
-    expect(seatsIn(sets[0])).toBeUndefined(); // `booked_count + 1`
+    expect(seatsIn(sets[0])).toBe(1); // `booked_count + 1`
   });
 
   it('only on their own booking', async () => {

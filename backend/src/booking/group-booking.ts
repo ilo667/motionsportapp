@@ -121,10 +121,7 @@ export async function tryBookGroup(
     .insert(bookings)
     .values({ memberId, slotId, status: 'ACTIVE' })
     .returning({ id: bookings.id });
-  await tx
-    .update(trainingSlots)
-    .set({ bookedCount: sql`${trainingSlots.bookedCount} + 1` })
-    .where(eq(trainingSlots.id, slotId));
+  await takeSeats(tx, slotId, 1);
   // They hold a seat now: no «З'явилось місце» for this slot (BookingService.book does the same)
   await tx
     .update(vacancyAlerts)
@@ -143,6 +140,14 @@ export async function cancelGuests(tx: Tx, bookingIds: string[], at: Date): Prom
     .where(and(inArray(bookingGuests.bookingId, bookingIds), eq(bookingGuests.status, 'ACTIVE')))
     .returning({ bookingId: bookingGuests.bookingId });
   return new Set(rows.map((r) => r.bookingId));
+}
+
+// Takes seats on a training (a booking, its guest); the caller holds the slot row lock and has checked capacity
+export async function takeSeats(tx: Tx, slotId: string, seats: number) {
+  await tx
+    .update(trainingSlots)
+    .set({ bookedCount: sql`${trainingSlots.bookedCount} + ${seats}` })
+    .where(eq(trainingSlots.id, slotId));
 }
 
 // Frees seats on a training (a booking that went, its guest) under the slot row lock, and says whether a group
