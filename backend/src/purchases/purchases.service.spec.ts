@@ -82,17 +82,13 @@ const GROUP = { id: 'price-g', section: 'group', title: 'Абонемент', op
 const MEMBER = [{ trainerId: 'trainer-1', displayName: 'Катя' }];
 const GROUP_SLOT = [{ trainingType: 'групові' }];
 
-function makeService(db: any, opts: { card?: unknown; pushFails?: boolean; packages?: unknown[] } = {}) {
+function makeService(db: any, opts: { card?: unknown; packages?: unknown[] } = {}) {
   const entitlements = {
     usableCard: jest.fn().mockResolvedValue(opts.card ?? null),
     packagesOf: jest.fn().mockResolvedValue(opts.packages ?? []),
   };
   const payments = { checkoutPurchase: jest.fn().mockResolvedValue({ data: 'd', signature: 's' }) };
-  const notifications = {
-    enqueueAndProcess: opts.pushFails
-      ? jest.fn().mockRejectedValue(new Error('push down'))
-      : jest.fn().mockResolvedValue(undefined),
-  };
+  const notifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
   const svc = new PurchasesService(
     { db } as any,
     { now: () => NOW },
@@ -331,16 +327,6 @@ describe('Purchases — create', () => {
       displayName: 'Катя',
       totalUah: 5000,
     });
-  });
-
-  it('a failed push never fails the cash request', async () => {
-    const { db } = makeDb([[CARD, PERSONAL], MEMBER, []]);
-    await expect(
-      makeService(db, { pushFails: true }).svc.create('m1', {
-        priceItemIds: ['price-card', 'price-p8'],
-        method: 'CASH',
-      }),
-    ).resolves.toEqual({ purchaseId: 'purchase-1' });
   });
 });
 

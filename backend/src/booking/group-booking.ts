@@ -144,3 +144,23 @@ export async function cancelGuests(tx: Tx, bookingIds: string[], at: Date): Prom
     .returning({ bookingId: bookingGuests.bookingId });
   return new Set(rows.map((r) => r.bookingId));
 }
+
+// Frees seats on a training (a booking that went, its guest) under the slot row lock, and says whether a group
+// training was full before: then «З'явилось місце» is due to those waiting for it (sent after the transaction)
+export async function freeSeats(tx: Tx, slotId: string, seats: number): Promise<boolean> {
+  const [slot] = await tx
+    .select({
+      bookedCount: trainingSlots.bookedCount,
+      capacity: trainingSlots.capacity,
+      trainingType: trainingSlots.trainingType,
+    })
+    .from(trainingSlots)
+    .where(eq(trainingSlots.id, slotId))
+    .for('update')
+    .limit(1);
+  await tx
+    .update(trainingSlots)
+    .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - ${seats}, 0)` })
+    .where(eq(trainingSlots.id, slotId));
+  return !!slot && slot.trainingType === GROUP_TYPE && slot.bookedCount >= slot.capacity;
+}

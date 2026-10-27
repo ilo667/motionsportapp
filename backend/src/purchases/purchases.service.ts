@@ -21,7 +21,7 @@ import { EntitlementsService } from './entitlements.service';
 import { PaymentService } from '../payment/payment.service';
 import { NotificationService } from '../notifications/notification.service';
 import type { CreatePurchaseDto } from './dto/create-purchase.dto';
-import { cancelGuests, tryBookGroup, type GroupBookingResult } from '../booking/group-booking';
+import { cancelGuests, freeSeats, tryBookGroup, type GroupBookingResult } from '../booking/group-booking';
 import { cardState } from './validity';
 import { GROUP_TYPE } from '../schedule/training-types';
 import { memberFrozenOn, openFreeze } from '../freezes/freeze.store';
@@ -247,7 +247,11 @@ export class PurchasesService {
     if (dto.method === 'LIQPAY') {
       return { purchaseId, checkout: await this.payments.checkoutPurchase(purchaseId, memberId) };
     }
-    await this.notifyCash(purchaseId, trainerId!, displayName, totalUah);
+    await this.notifications.enqueueAndProcess('CASH_REQUESTED', `cash-requested:${purchaseId}`, {
+      trainerId: trainerId!,
+      displayName,
+      totalUah,
+    });
     return { purchaseId };
   }
 
@@ -355,25 +359,40 @@ export class PurchasesService {
   // The member never paid. Cash for a group training booked the seat at once: that booking goes too (no pay,
   // no seat), with any mark on it. A system cancellation, so no reason is shown as the member's
   async rejectCash(trainerId: string, purchaseId: string) {
-    await this.database.db.transaction(async (tx) => {
+    const freed = await this.database.db.transaction(async (tx) => {
       const { bookingId } = await this.decideCash(tx, trainerId, purchaseId, 'REJECTED');
-      if (!bookingId) return;
+      if (!bookingId) return null;
       const [cancelled] = await tx
         .update(bookings)
         .set({ status: 'CANCELLED', cancelledAt: this.clock.now().toJSDate() })
         .where(and(eq(bookings.id, bookingId), eq(bookings.status, 'ACTIVE')))
-        .returning({ slotId: bookings.slotId });
+        .returning({ slotId: bookings.slotId, memberId: bookings.memberId });
       // The member already cancelled it: a late cancellation keeps what it spent (booking/cancel-fee.ts)
-      if (!cancelled) return;
+      if (!cancelled) return null;
       await tx.delete(packageSpends).where(eq(packageSpends.bookingId, bookingId));
       await tx.delete(attendance).where(eq(attendance.bookingId, bookingId));
       // Their guest goes with the booking
       const seats = 1 + (await cancelGuests(tx, [bookingId], this.clock.now().toJSDate())).size;
-      await tx
-        .update(trainingSlots)
-        .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - ${seats}, 0)` })
-        .where(eq(trainingSlots.id, cancelled.slotId));
+      return (await freeSeats(tx, cancelled.slotId, seats)) ? { bookingId, ...cancelled } : null;
     });
+
+    // A seat freed in a full group training: «З'явилось місце» to those waiting, as when a member cancels
+    if (freed) {
+      const [slot] = await this.database.db
+        .select({ slotTime: trainingSlots.slotTime, localDate: trainingDays.localDate })
+        .from(trainingSlots)
+        .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
+        .where(eq(trainingSlots.id, freed.slotId))
+        .limit(1);
+      if (slot) {
+        await this.notifications.enqueueAndProcess('VACANCY', `vacancy:${freed.slotId}:${freed.bookingId}`, {
+          slotId: freed.slotId,
+          slotTime: slot.slotTime,
+          localDate: slot.localDate,
+          excludeMemberId: freed.memberId,
+        });
+      }
+    }
     return { ok: true };
   }
 
@@ -541,19 +560,6 @@ export class PurchasesService {
           .filter((l) => l.purchaseId === r.id)
           .map((l) => ({ section: l.section, title: l.title, optionLabel: l.optionLabel, amountUah: l.amountUah })),
       }));
-  }
-
-  // A failed push never fails the member's request
-  private async notifyCash(purchaseId: string, trainerId: string, displayName: string, totalUah: number) {
-    try {
-      await this.notifications.enqueueAndProcess('CASH_REQUESTED', `cash-requested:${purchaseId}`, {
-        trainerId,
-        displayName,
-        totalUah,
-      });
-    } catch (err) {
-      this.logger.error(`Cash request push for purchase ${purchaseId} failed`, err);
-    }
   }
 }
 

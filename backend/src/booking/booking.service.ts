@@ -18,7 +18,7 @@ import { ClockService } from '../clock/clock.service';
 import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
 import { getMemberTrainerId } from '../schedule/default-trainer';
 import { EntitlementsService } from '../purchases/entitlements.service';
-import { cancelGuests, findGroupBooking, groupBookingWindow, lateCancelledSlotIds } from './group-booking';
+import { cancelGuests, freeSeats, findGroupBooking, groupBookingWindow, lateCancelledSlotIds } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { memberFrozenOn } from '../freezes/freeze.store';
 import { cancelFee, halfBack, type CancelFee } from './cancel-fee';
@@ -134,8 +134,6 @@ export class BookingService {
 
     const [slotBefore] = await this.database.db
       .select({
-        bookedCount: trainingSlots.bookedCount,
-        capacity: trainingSlots.capacity,
         slotTime: trainingSlots.slotTime,
         trainingType: trainingSlots.trainingType,
         trainerId: trainingSlots.trainerId,
@@ -147,10 +145,7 @@ export class BookingService {
     // Group or assigned: only until the training starts (a booked no-show loses the training)
     if (day && slotBefore) this.validateBeforeStart(day.localDate, slotBefore.slotTime);
 
-    // Vacancy alerts exist only for group slots (assigned ones are not open to others)
-    const wasAtCapacity = slotBefore?.trainingType === GROUP_TYPE && slotBefore.bookedCount >= slotBefore.capacity;
-
-    await this.database.db.transaction(async (tx) => {
+    const wasFull = await this.database.db.transaction(async (tx) => {
       const now = new Date();
       await tx
         .update(bookings)
@@ -169,14 +164,10 @@ export class BookingService {
       }
       // Their guest goes too: two seats free
       const seats = 1 + (await cancelGuests(tx, [booking.id], now)).size;
-
-      await tx
-        .update(trainingSlots)
-        .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - ${seats}, 0)` })
-        .where(eq(trainingSlots.id, booking.slotId));
+      return freeSeats(tx, booking.slotId, seats);
     });
 
-    if (wasAtCapacity && day) {
+    if (wasFull && day && slotBefore) {
       const dedupeKey = `vacancy:${booking.slotId}:${booking.id}`;
       await this.notifications.enqueueAndProcess('VACANCY', dedupeKey, {
         slotId: booking.slotId,
@@ -234,8 +225,6 @@ export class BookingService {
 
     const [oldSlotBefore] = await this.database.db
       .select({
-        bookedCount: trainingSlots.bookedCount,
-        capacity: trainingSlots.capacity,
         slotTime: trainingSlots.slotTime,
         trainerId: trainingSlots.trainerId,
       })
@@ -249,12 +238,11 @@ export class BookingService {
       if (oldSlotBefore) this.validateBeforeStart(day.localDate, oldSlotBefore.slotTime);
     }
 
-    const wasAtCapacity = oldSlotBefore && oldSlotBefore.bookedCount >= oldSlotBefore.capacity;
-
     const [firstId, secondId] = [oldSlotId, newSlotId].sort();
 
+    let wasFull = false;
     try {
-      await this.database.db.transaction(async (tx) => {
+      wasFull = await this.database.db.transaction(async (tx) => {
         await this.lockMember(tx, memberId);
 
         const [slot1] = await tx
@@ -312,13 +300,9 @@ export class BookingService {
 
         await tx
           .update(trainingSlots)
-          .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - ${seats}, 0)` })
-          .where(eq(trainingSlots.id, oldSlotId));
-
-        await tx
-          .update(trainingSlots)
           .set({ bookedCount: sql`${trainingSlots.bookedCount} + ${seats}` })
           .where(eq(trainingSlots.id, newSlotId));
+        return freeSeats(tx, oldSlotId, seats);
       });
     } catch (err: unknown) {
       if ((err as { code?: string })?.code === '23505') {
@@ -330,7 +314,7 @@ export class BookingService {
     // Usually they came here from a vacancy push; stop alerts for the slot they now hold
     await this.vacancyAlerts.unsubscribe(memberId, newSlotId);
 
-    if (wasAtCapacity && day) {
+    if (wasFull && day && oldSlotBefore) {
       const dedupeKey = `vacancy:${oldSlotId}:${current.id}`;
       await this.notifications.enqueueAndProcess('VACANCY', dedupeKey, {
         slotId: oldSlotId,
@@ -461,11 +445,7 @@ export class BookingService {
       const booking = await this.activeBooking(tx, memberId, slotId);
       if (!locked || !booking) throw new NotFoundException('No active booking found');
       if ((await cancelGuests(tx, [booking.id], new Date())).size === 0) throw new NotFoundException('No guest');
-      await tx
-        .update(trainingSlots)
-        .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - 1, 0)` })
-        .where(eq(trainingSlots.id, slotId));
-      return locked.bookedCount >= locked.capacity;
+      return freeSeats(tx, slotId, 1);
     });
 
     // A seat freed in a full group training: «З'явилось місце» to those waiting

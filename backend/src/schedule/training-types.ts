@@ -3,6 +3,7 @@ import { DateTime } from 'luxon';
 export const KY_ZONE = 'Europe/Kyiv';
 
 export const GROUP_TYPE = 'групові';
+export const GROUP_CAPACITY = 8;
 // Assigned slots: visible only to members listed in slot_members, paid via LiqPay, bookable until the start
 export const ASSIGNED_TYPES = ['персональні', 'спліт'];
 // What a package can pay for: trainer services and group passes
@@ -20,4 +21,9 @@ export function isAssignedType(trainingType: string) {
 
 export function slotStartsAt(localDate: string, slotTime: string) {
   return DateTime.fromISO(`${localDate}T${slotTime}:00`, { zone: KY_ZONE });
+}
+
+// A training is over an hour after its start: the 22:00 cron marks it then, and disabling a trainer leaves it as it is
+export function slotOverAt(localDate: string, slotTime: string) {
+  return slotStartsAt(localDate, slotTime).plus({ hours: 1 });
 }

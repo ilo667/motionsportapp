@@ -8,7 +8,7 @@ import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
 import { trainingDays, trainingSlots, bookings, attendance, bookingGuests } from '../database/schema';
-import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
+import { GROUP_TYPE, slotOverAt, slotStartsAt } from '../schedule/training-types';
 import { bookingOpensAt } from '../trainer-schedule/rules';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { getDefaultTrainerId } from '../schedule/default-trainer';
@@ -125,7 +125,7 @@ export class InternalCronController {
 
     // Only trainings that are over (an hour after the start): Vercel runs crons in UTC, so this job comes at a
     // different Kyiv hour in winter and summer, and must not mark a training that is still going on
-    const unmarkedBookings = unmarked.filter((b) => now >= slotStartsAt(today, b.slotTime).plus({ hours: 1 }));
+    const unmarkedBookings = unmarked.filter((b) => now >= slotOverAt(today, b.slotTime));
     const guestsMarked = await this.markGuests(day.id, today, now);
 
     if (unmarkedBookings.length === 0) {
@@ -163,7 +163,7 @@ export class InternalCronController {
           isNull(bookingGuests.attendance),
         ),
       );
-    const over = guests.filter((g) => now >= slotStartsAt(today, g.slotTime).plus({ hours: 1 }));
+    const over = guests.filter((g) => now >= slotOverAt(today, g.slotTime));
     for (const g of over) {
       await this.database.db
         .update(bookingGuests)

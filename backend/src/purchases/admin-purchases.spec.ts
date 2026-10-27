@@ -39,8 +39,15 @@ function makeService(db: any) {
     activateCard: jest.fn(),
     usableCard: jest.fn().mockResolvedValue(null),
   };
-  const svc = new PurchasesService({ db } as any, { now: () => NOW }, entitlements as any, {} as any, {} as any);
-  return { svc, entitlements };
+  const notifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
+  const svc = new PurchasesService(
+    { db } as any,
+    { now: () => NOW },
+    entitlements as any,
+    {} as any,
+    notifications as any,
+  );
+  return { svc, entitlements, notifications };
 }
 
 describe('Trainer — cash requests', () => {
@@ -140,6 +147,32 @@ describe('Trainer — client purchases', () => {
     expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED', cancelledAt: expect.any(Date) }));
     expect(sets).toContainEqual({ bookedCount: expect.anything() });
     expect(db.delete).toHaveBeenCalled(); // a mark on it goes too
+  });
+
+  it('rejecting cash in a full group training tells those waiting for a seat, not the member', async () => {
+    const { db } = makeDb(
+      [[{ bookedCount: 8, capacity: 8, trainingType: 'групові' }], [{ slotTime: '19:00', localDate: '2026-10-24' }]],
+      () => [{ id: 'purchase-1', bookingId: 'b1', slotId: 's1', memberId: 'm1' }],
+    );
+    db.delete = jest.fn(() => ({ where: () => Promise.resolve() }));
+    const { svc, notifications } = makeService(db);
+    await svc.rejectCash('trainer-1', 'purchase-1');
+    expect(notifications.enqueueAndProcess).toHaveBeenCalledWith('VACANCY', 'vacancy:s1:b1', {
+      slotId: 's1',
+      slotTime: '19:00',
+      localDate: '2026-10-24',
+      excludeMemberId: 'm1',
+    });
+  });
+
+  it('rejecting cash in a training that was not full sends nothing', async () => {
+    const { db } = makeDb([[{ bookedCount: 5, capacity: 8, trainingType: 'групові' }]], () => [
+      { id: 'purchase-1', bookingId: 'b1', slotId: 's1', memberId: 'm1' },
+    ]);
+    db.delete = jest.fn(() => ({ where: () => Promise.resolve() }));
+    const { svc, notifications } = makeService(db);
+    await svc.rejectCash('trainer-1', 'purchase-1');
+    expect(notifications.enqueueAndProcess).not.toHaveBeenCalled();
   });
 
   // The member cancelled it (late, so a pass paid for it): «Відхилити» leaves that booking and its spend alone

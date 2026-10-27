@@ -16,6 +16,21 @@ function makeNotifications() {
   return { svc, push, subs };
 }
 
+// A failed push never fails the request that sent it: a member's cancel, a cash request, a freeze, «Відхилити»
+describe('Push — a failure is logged, never thrown', () => {
+  it('the event row cannot be written (the database is down)', async () => {
+    const db = {
+      insert: () => ({
+        values: () => ({ onConflictDoNothing: () => ({ returning: () => Promise.reject(new Error('db down')) }) }),
+      }),
+    };
+    const svc = new NotificationService({ db } as any, {} as any, {} as any, {} as any);
+    jest.spyOn((svc as any).logger, 'error').mockImplementation(() => undefined);
+    await expect(svc.enqueueAndProcess('CASH_REQUESTED', 'cash-requested:p1', {})).resolves.toBeUndefined();
+    expect((svc as any).logger.error).toHaveBeenCalledWith('Push cash-requested:p1 failed', expect.any(Error));
+  });
+});
+
 describe('Trainer push — member cancelled / moved', () => {
   it('sends the reason to the trainer devices only', async () => {
     const { svc, push, subs } = makeNotifications();

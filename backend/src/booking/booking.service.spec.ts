@@ -1,7 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { BookingService } from './booking.service';
-import { cancelGuests, lateCancelledSlotIds } from './group-booking';
+import { cancelGuests, freeSeats, lateCancelledSlotIds } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
 
@@ -10,9 +10,12 @@ jest.mock('./group-booking', () => ({
   ...jest.requireActual('./group-booking'),
   cancelGuests: jest.fn().mockResolvedValue(new Set()),
   lateCancelledSlotIds: jest.fn(),
+  freeSeats: jest.fn(),
 }));
 // No late cancellation unless a test says so
 beforeEach(() => (lateCancelledSlotIds as jest.Mock).mockResolvedValue(new Set()));
+// Freeing seats is tested in group-booking.spec; here it says whether the training was full
+beforeEach(() => (freeSeats as jest.Mock).mockResolvedValue(false));
 
 // No member is frozen unless a test says so
 jest.mock('../freezes/freeze.store', () => ({
@@ -461,6 +464,7 @@ describe('BookingService — guests', () => {
 
   it('removing the guest from a full training tells those waiting', async () => {
     (cancelGuests as jest.Mock).mockResolvedValueOnce(new Set(['booking-1']));
+    (freeSeats as jest.Mock).mockResolvedValueOnce(true);
     const { db } = makeDb([GROUP_SLOT, [{ ...validSlot, bookedCount: 8 }], BOOKING]);
     const service = makeService(db, at15);
     await service.removeGuest('member-1', 'slot-1');
@@ -481,7 +485,8 @@ describe('BookingService — guests', () => {
       [{ displayName: 'Оля' }],
     ]);
     await makeService(db, at15).cancel('member-1', 'slot-1', 'reason');
-    expect(seatsIn(sets.find((x) => 'bookedCount' in x)!)).toBe(2);
+    expect(freeSeats).toHaveBeenCalledWith(db, 'slot-1', 2);
+    expect(sets.some((x) => 'bookedCount' in x)).toBe(false);
   });
 
   it('a move takes the guest along and needs two seats there', async () => {
@@ -508,7 +513,71 @@ describe('BookingService — guests', () => {
     const ok = makeDb(reads(6), () => [{ id: 'booking-2' }]);
     await makeService(ok.db, at15).switchSlot('member-1', 'slot-2', 'reason');
     expect(ok.sets).toContainEqual({ bookingId: 'booking-2' });
-    expect(ok.sets.filter((x) => 'bookedCount' in x).map(seatsIn)).toEqual([2, 2]);
+    // Two seats taken there, two freed here
+    expect(ok.sets.filter((x) => 'bookedCount' in x).map(seatsIn)).toEqual([2]);
+    expect(freeSeats).toHaveBeenCalledWith(ok.db, 'slot-1', 2);
+  });
+});
+
+describe("BookingService — «З'явилось місце»", () => {
+  const at15 = kyivAt(15);
+  const groupSlot = { bookedCount: 8, capacity: 8, slotTime: '19:00', trainingType: 'групові', trainerId: 'trainer-1' };
+  const cancelReads = () => [
+    [{ id: 'booking-1', memberId: 'member-1', slotId: 'slot-1', status: 'ACTIVE' }],
+    [validDay],
+    [groupSlot],
+    [{ displayName: 'Оля' }],
+  ];
+  const vacancyCalls = (service: BookingService) =>
+    ((service as any).notifications.enqueueAndProcess as jest.Mock).mock.calls.filter((c) => c[0] === 'VACANCY');
+
+  it('a cancel that frees a seat in a full training tells those waiting, not the one who left', async () => {
+    (freeSeats as jest.Mock).mockResolvedValueOnce(true);
+    const service = makeService(makeDb(cancelReads()).db, at15);
+    await service.cancel('member-1', 'slot-1', 'reason');
+    expect(vacancyCalls(service)).toEqual([
+      [
+        'VACANCY',
+        'vacancy:slot-1:booking-1',
+        { slotId: 'slot-1', slotTime: '19:00', localDate: TODAY, excludeMemberId: 'member-1' },
+      ],
+    ]);
+  });
+
+  it('nothing when the training was not full', async () => {
+    const service = makeService(makeDb(cancelReads()).db, at15);
+    await service.cancel('member-1', 'slot-1', 'reason');
+    expect(vacancyCalls(service)).toEqual([]);
+  });
+
+  it('a move away from a full training tells those waiting for it', async () => {
+    (freeSeats as jest.Mock).mockResolvedValueOnce(true);
+    const current = { id: 'booking-1', slotId: 'slot-1', trainingDayId: 'day-1', memberId: 'member-1' };
+    const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '20:00', trainerId: 'trainer-1' };
+    const { db } = makeDb(
+      [
+        [target],
+        MEMBER_TRAINER,
+        [current],
+        [validDay],
+        [{ bookedCount: 8, capacity: 8, slotTime: '19:00' }],
+        MEMBER,
+        [{ id: 'slot-1', status: 'ACTIVE', capacity: 8, bookedCount: 8 }],
+        [{ id: 'slot-2', status: 'ACTIVE', capacity: 8, bookedCount: 3 }],
+        [],
+        [{ displayName: 'Іра' }],
+      ],
+      () => [{ id: 'booking-2' }],
+    );
+    const service = makeService(db, at15);
+    await service.switchSlot('member-1', 'slot-2', 'reason');
+    expect(vacancyCalls(service)).toEqual([
+      [
+        'VACANCY',
+        'vacancy:slot-1:booking-1',
+        { slotId: 'slot-1', slotTime: '19:00', localDate: TODAY, excludeMemberId: 'member-1' },
+      ],
+    ]);
   });
 });
 

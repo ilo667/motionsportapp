@@ -1,5 +1,7 @@
 import { DateTime } from 'luxon';
-import { tryBookGroup } from './group-booking';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import { freeSeats, tryBookGroup } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 
 jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
@@ -137,5 +139,31 @@ describe('tryBookGroup — booking inside someone else’s transaction, never th
     expect(await tryBookGroup(a.tx, at(15), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'NOT_FOUND' });
     const b = makeTx([MEMBER, [{ ...slot, trainingType: 'спліт' }], TRAINER, []]);
     expect(await tryBookGroup(b.tx, at(15), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'NOT_FOUND' });
+  });
+});
+
+describe('freeSeats — a booking (and its guest) gave its seats back', () => {
+  it('locks the training, frees the seats, never below zero', async () => {
+    const { tx, updates } = makeTx([[{ bookedCount: 3, capacity: 8, trainingType: 'групові' }]]);
+    await freeSeats(tx, 'slot-1', 2);
+    expect(tx.select.mock.results[0].value.for).toHaveBeenCalledWith('update');
+    const { sql, params } = new PgDialect().sqlToQuery((updates[0].set as { bookedCount: SQL }).bookedCount);
+    expect(sql).toBe('GREATEST("training_slots"."booked_count" - $1, 0)');
+    expect(params).toEqual([2]);
+  });
+
+  it("a full group training: «З'явилось місце» is due", async () => {
+    const { tx } = makeTx([[{ bookedCount: 8, capacity: 8, trainingType: 'групові' }]]);
+    expect(await freeSeats(tx, 'slot-1', 1)).toBe(true);
+  });
+
+  it('not full: nothing to tell', async () => {
+    const { tx } = makeTx([[{ bookedCount: 7, capacity: 8, trainingType: 'групові' }]]);
+    expect(await freeSeats(tx, 'slot-1', 1)).toBe(false);
+  });
+
+  it('a full assigned training: nobody waits for it (no vacancy alerts there)', async () => {
+    const { tx } = makeTx([[{ bookedCount: 1, capacity: 1, trainingType: 'персональні' }]]);
+    expect(await freeSeats(tx, 'slot-p', 1)).toBe(false);
   });
 });

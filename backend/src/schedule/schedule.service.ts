@@ -16,7 +16,7 @@ import {
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { EntitlementsService } from '../purchases/entitlements.service';
-import { GROUP_TYPE, KY_ZONE, ASSIGNED_TYPES, slotStartsAt } from './training-types';
+import { GROUP_TYPE, GROUP_CAPACITY, KY_ZONE, ASSIGNED_TYPES, slotStartsAt } from './training-types';
 import { getMemberTrainerId } from './default-trainer';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
@@ -37,7 +37,6 @@ export type GroupSlotsResult = { added: number; skipped: SkippedTraining[] };
 
 // Group trainings are created this many days ahead
 const GROUP_HORIZON_DAYS = 21;
-const GROUP_CAPACITY = 8;
 
 @Injectable()
 export class ScheduleService {

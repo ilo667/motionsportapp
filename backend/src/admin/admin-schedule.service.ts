@@ -30,7 +30,15 @@ import { EntitlementsService, inLockOrder } from '../purchases/entitlements.serv
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { getDefaultTrainerId } from '../schedule/default-trainer';
 import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
-import { GROUP_TYPE, KY_ZONE, ASSIGNED_MEMBER_LIMITS, isAssignedType, slotStartsAt } from '../schedule/training-types';
+import {
+  GROUP_TYPE,
+  GROUP_CAPACITY,
+  KY_ZONE,
+  ASSIGNED_MEMBER_LIMITS,
+  isAssignedType,
+  slotOverAt,
+  slotStartsAt,
+} from '../schedule/training-types';
 import { loadFreezes } from '../freezes/freeze.store';
 import { cancelGuests } from '../booking/group-booking';
 import { frozenOn, plusDays } from '../freezes/rules';
@@ -176,7 +184,6 @@ export class AdminScheduleService {
     return sql`exists (select 1 from training_slots ts where ts.training_day_id = "training_days"."id" and ts.trainer_id = ${adminId})`;
   }
 
-  // The slot if it belongs to this trainer; another trainer's slot answers 404 like a missing one
   // A cancelled training costs nothing: its attendance marks go, and with them the trainings they took from
   // packages (activation stays, as with «—»). Called in the transaction that cancels the bookings, before it.
   // A member's own late cancellation stays as it was: they cancelled before the trainer did
@@ -192,14 +199,21 @@ export class AdminScheduleService {
   }
 
   // Cancels these slots and every active booking on them (a system cancellation, no reason); their marks and spends
-  // go back first. The caller marks the day CANCELLED when it has to, and tells the members after the transaction
-  private async cancelSlotsTx(tx: Tx, slotIds: string[]) {
-    if (slotIds.length === 0) return;
-    await this.releaseMarks(tx, slotIds);
+  // go back first. The slots are locked before the bookings are read, so a member booking at this moment waits and
+  // then finds the training cancelled, or was booked already and is among those returned. The caller marks the day
+  // CANCELLED when it has to, and tells the returned members after the transaction (notifySlotsCancelled)
+  private async cancelSlotsTx(tx: Tx, slotIds: string[]): Promise<{ slotId: string; memberId: string }[]> {
+    if (slotIds.length === 0) return [];
+    await tx
+      .select({ id: trainingSlots.id })
+      .from(trainingSlots)
+      .where(inArray(trainingSlots.id, slotIds))
+      .for('update');
     const active = await tx
-      .select({ id: bookings.id })
+      .select({ id: bookings.id, slotId: bookings.slotId, memberId: bookings.memberId })
       .from(bookings)
       .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')));
+    await this.releaseMarks(tx, slotIds);
     await cancelGuests(
       tx,
       active.map((b) => b.id),
@@ -213,8 +227,26 @@ export class AdminScheduleService {
       .update(trainingSlots)
       .set({ status: 'CANCELLED', bookedCount: 0, cancelledAt: new Date() })
       .where(inArray(trainingSlots.id, slotIds));
+    return active.map(({ slotId, memberId }) => ({ slotId, memberId }));
   }
 
+  // «Тренування скасовано» to the members who were booked (from cancelSlotsTx), one push per training
+  private async notifySlotsCancelled(
+    slots: { id: string; slotTime: string; localDate: string }[],
+    cancelled: { slotId: string; memberId: string }[],
+  ) {
+    for (const slot of slots) {
+      const memberIds = cancelled.filter((b) => b.slotId === slot.id).map((b) => b.memberId);
+      if (memberIds.length === 0) continue;
+      await this.notifications.enqueueAndProcess('SLOT_CANCELLED', `slot-cancelled:${slot.id}:${slot.localDate}`, {
+        memberIds,
+        slotTime: slot.slotTime,
+        localDate: slot.localDate,
+      });
+    }
+  }
+
+  // The slot if it belongs to this trainer; another trainer's slot answers 404 like a missing one
   private async ownSlot(adminId: string, slotId: string, db: Db | Tx = this.database.db, lock = false) {
     const query = db.select().from(trainingSlots).where(eq(trainingSlots.id, slotId));
     const [slot] = await (lock ? query.for('update').limit(1) : query.limit(1));
@@ -385,7 +417,7 @@ export class AdminScheduleService {
   }
 
   // Group slot at any time from 06:00 to 21:00 (not in the past), at least an hour from the trainer's other active group trainings
-  // that day. Re-activates a cancelled slot at that time, but never takes over an active assigned one
+  // that day. A cancelled slot at that time stays as it was (a new row), an active assigned one is never taken over
   async upsertGroupSlot(adminId: string, date: string, slotTime: string) {
     const timeError = groupTimeError(slotTime, []);
     if (timeError) throw new BadRequestException(timeError);
@@ -417,7 +449,7 @@ export class AdminScheduleService {
           slotTime,
           status: 'ACTIVE',
           trainingType: GROUP_TYPE,
-          capacity: 8,
+          capacity: GROUP_CAPACITY,
           bookedCount: 0,
           trainerId: adminId,
         })
@@ -588,7 +620,7 @@ export class AdminScheduleService {
     return day.id;
   }
 
-  // SCHEDULED: adds this trainer's group slots of that weekday from «Мій розклад» (times taken are skipped).
+  // SCHEDULED: adds this trainer's group slots of that weekday from «Розклад групових» (times taken or past are skipped).
   // CANCELLED: cancels only this trainer's slots; the day itself is cancelled when nothing active is left on it
   async upsertTrainingDay(adminId: string, date: string, dto: UpsertTrainingDayDto) {
     if (dto.status === 'SCHEDULED') {
@@ -606,10 +638,13 @@ export class AdminScheduleService {
               eq(trainingSlots.status, 'ACTIVE'),
             ),
           );
-        // Leave out a time within an hour of a group training already there that day
+        // Leave out a time already past (nobody could book it, as in ensureGroupSlots) and one within an hour of a
+        // group training already there that day
+        const now = this.clock.now();
         const times = (await loadTrainerSchedule(tx, adminId)).times.filter(
           (t) =>
             t.weekday === weekday &&
+            slotStartsAt(date, t.slotTime) > now &&
             !groupTimeError(
               t.slotTime,
               active.map((a) => a.slotTime).filter((a) => a !== t.slotTime),
@@ -624,7 +659,7 @@ export class AdminScheduleService {
               slotTime,
               status: 'ACTIVE' as const,
               trainingType: GROUP_TYPE,
-              capacity: 8,
+              capacity: GROUP_CAPACITY,
               bookedCount: 0,
               trainerId: adminId,
             })),
@@ -649,16 +684,8 @@ export class AdminScheduleService {
       );
     const mySlotIds = mySlots.map((s) => s.id);
 
-    const affectedBookings =
-      mySlotIds.length > 0
-        ? await this.database.db
-            .select({ memberId: bookings.memberId, slotId: bookings.slotId })
-            .from(bookings)
-            .where(and(inArray(bookings.slotId, mySlotIds), eq(bookings.status, 'ACTIVE')))
-        : [];
-
-    await this.database.db.transaction(async (tx) => {
-      await this.cancelSlotsTx(tx, mySlotIds);
+    const cancelled = await this.database.db.transaction(async (tx) => {
+      const booked = await this.cancelSlotsTx(tx, mySlotIds);
       // Other trainers' trainings that day keep the day scheduled
       await tx
         .update(trainingDays)
@@ -669,18 +696,13 @@ export class AdminScheduleService {
             sql`not exists (select 1 from training_slots ts where ts.training_day_id = ${day.id} and ts.status = 'ACTIVE')`,
           ),
         );
+      return booked;
     });
 
-    for (const slot of mySlots) {
-      const memberIds = affectedBookings.filter((b) => b.slotId === slot.id).map((b) => b.memberId);
-      if (memberIds.length > 0) {
-        await this.notifications.enqueueAndProcess('SLOT_CANCELLED', `slot-cancelled:${slot.id}:${date}`, {
-          memberIds,
-          slotTime: slot.slotTime,
-          localDate: date,
-        });
-      }
-    }
+    await this.notifySlotsCancelled(
+      mySlots.map((s) => ({ ...s, localDate: date })),
+      cancelled,
+    );
 
     return { ok: true };
   }
@@ -689,28 +711,13 @@ export class AdminScheduleService {
     const slot = await this.ownSlot(adminId, slotId);
 
     if (dto.status === 'CANCELLED' && slot.status === 'ACTIVE') {
-      const affectedBookings = await this.database.db
-        .select({ memberId: bookings.memberId })
-        .from(bookings)
-        .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
-
-      await this.database.db.transaction((tx) => this.cancelSlotsTx(tx, [slotId]));
-
-      const memberIds = affectedBookings.map((b) => b.memberId);
-      if (memberIds.length > 0) {
-        const [day] = await this.database.db
-          .select({ localDate: trainingDays.localDate })
-          .from(trainingDays)
-          .where(eq(trainingDays.id, slot.trainingDayId))
-          .limit(1);
-        if (day) {
-          await this.notifications.enqueueAndProcess('SLOT_CANCELLED', `slot-cancelled:${slotId}:${day.localDate}`, {
-            memberIds,
-            slotTime: slot.slotTime,
-            localDate: day.localDate,
-          });
-        }
-      }
+      const cancelled = await this.database.db.transaction((tx) => this.cancelSlotsTx(tx, [slotId]));
+      const [day] = await this.database.db
+        .select({ localDate: trainingDays.localDate })
+        .from(trainingDays)
+        .where(eq(trainingDays.id, slot.trainingDayId))
+        .limit(1);
+      if (day) await this.notifySlotsCancelled([{ ...slot, localDate: day.localDate }], cancelled);
     } else {
       await this.database.db
         .update(trainingSlots)
@@ -1043,29 +1050,15 @@ export class AdminScheduleService {
           ),
         )
         .for('update', { of: trainingSlots });
-      const slots = fromToday.filter((s) => slotStartsAt(s.localDate, s.slotTime).plus({ hours: 1 }) > now);
-      const ids = slots.map((s) => s.id);
-      const booked =
-        ids.length > 0
-          ? await tx
-              .select({ memberId: bookings.memberId, slotId: bookings.slotId })
-              .from(bookings)
-              .where(and(inArray(bookings.slotId, ids), eq(bookings.status, 'ACTIVE')))
-          : [];
-      await this.cancelSlotsTx(tx, ids);
-      return { movedClients: moved.length, toCancel: slots, affected: booked };
+      const slots = fromToday.filter((s) => slotOverAt(s.localDate, s.slotTime) > now);
+      const affected = await this.cancelSlotsTx(
+        tx,
+        slots.map((s) => s.id),
+      );
+      return { movedClients: moved.length, toCancel: slots, affected };
     });
 
-    for (const slot of toCancel) {
-      const memberIds = affected.filter((b) => b.slotId === slot.id).map((b) => b.memberId);
-      if (memberIds.length > 0) {
-        await this.notifications.enqueueAndProcess('SLOT_CANCELLED', `slot-cancelled:${slot.id}:${slot.localDate}`, {
-          memberIds,
-          slotTime: slot.slotTime,
-          localDate: slot.localDate,
-        });
-      }
-    }
+    await this.notifySlotsCancelled(toCancel, affected);
 
     return { movedClients, cancelledTrainings: toCancel.length };
   }

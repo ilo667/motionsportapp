@@ -369,6 +369,21 @@ describe('Training day SCHEDULED — no overlap with what is already there', () 
     await makeService(db).upsertTrainingDay(TRAINER, '2026-10-21', { status: 'SCHEDULED' } as any);
     expect(values).toContainEqual([expect.objectContaining({ slotTime: '10:00' })]);
   });
+
+  it('leaves out a time already past today, as automatic creation does (the clock is Tue 20.10 12:00)', async () => {
+    mockLoadSchedule.mockResolvedValue({
+      bookingOpensAt: '08:00',
+      autoCreate: true,
+      times: [
+        { weekday: 2, slotTime: '10:00' },
+        { weekday: 2, slotTime: '18:00' },
+      ],
+    });
+    const { db, values } = makeDb([[]]);
+    await makeService(db).upsertTrainingDay(TRAINER, '2026-10-20', { status: 'SCHEDULED' } as any);
+    expect(values).toContainEqual([expect.objectContaining({ slotTime: '18:00' })]);
+    expect(JSON.stringify(values)).not.toContain('10:00');
+  });
 });
 
 describe('Calendar — assigned slot members', () => {

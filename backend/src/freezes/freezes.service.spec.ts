@@ -2,9 +2,19 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { FreezesService } from './freezes.service';
 import { openFreeze } from './freeze.store';
-import { bookings, clubCards, freezeItems, freezes, packages, trainingSlots } from '../database/schema';
+import { freeSeats } from '../booking/group-booking';
+import { bookings, clubCards, freezeItems, freezes, packages } from '../database/schema';
 
 jest.mock('./freeze.store', () => ({ openFreeze: jest.fn() }));
+// Freeing seats is tested in group-booking.spec; here only the 19:00 on Wednesday was full
+jest.mock('../booking/group-booking', () => ({
+  ...jest.requireActual('../booking/group-booking'),
+  freeSeats: jest.fn(),
+}));
+const mockFreeSeats = freeSeats as jest.Mock;
+beforeEach(() =>
+  mockFreeSeats.mockImplementation((_tx: unknown, slotId: string) => Promise.resolve(slotId === 's-wed')),
+);
 const mockOpenFreeze = openFreeze as jest.Mock;
 beforeEach(() => mockOpenFreeze.mockResolvedValue(null));
 
@@ -142,11 +152,10 @@ describe('FreezesService — approve', () => {
     { clubCardId: 'card-active', packageId: null, field: 'valid_until' },
     { clubCardId: null, packageId: 'pack-waiting', field: 'activate_by' },
   ];
-  const slot = { slotId: 's', trainingType: 'групові', capacity: 8, bookedCount: 3 };
   const toCancel = [
-    { ...slot, id: 'b-started', slotId: 's-today-9', slotTime: '09:00', localDate: TODAY },
-    { ...slot, id: 'b-full', slotId: 's-wed', slotTime: '19:00', localDate: '2026-10-28', bookedCount: 8 },
-    { ...slot, id: 'b-split', slotId: 's-split', slotTime: '10:00', localDate: '2026-11-02', trainingType: 'спліт' },
+    { id: 'b-started', slotId: 's-today-9', slotTime: '09:00', localDate: TODAY },
+    { id: 'b-full', slotId: 's-wed', slotTime: '19:00', localDate: '2026-10-28' },
+    { id: 'b-split', slotId: 's-split', slotTime: '10:00', localDate: '2026-11-02' },
   ];
 
   it('freezes for 30 days, pushes the dates of what is waiting or active, cancels trainings ahead', async () => {
@@ -174,7 +183,10 @@ describe('FreezesService — approve', () => {
 
     // The 09:00 training today has started: it stays. The other two lose a seat each
     expect(writes.find((w) => w.table === bookings)!.set).toMatchObject({ status: 'CANCELLED' });
-    expect(writes.filter((w) => w.table === trainingSlots)).toHaveLength(2);
+    expect(mockFreeSeats.mock.calls.map((c) => [c[1], c[2]])).toEqual([
+      ['s-wed', 1],
+      ['s-split', 1],
+    ]);
     // A seat freed in a full group training: «З'явилось місце»
     const vacancy = notifications.enqueueAndProcess.mock.calls.filter((c) => c[0] === 'VACANCY');
     expect(vacancy).toEqual([

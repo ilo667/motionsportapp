@@ -18,9 +18,9 @@ import {
 import { EntitlementsService } from '../purchases/entitlements.service';
 import { cardState, passState } from '../purchases/validity';
 import { NotificationService } from '../notifications/notification.service';
-import { GROUP_TYPE, slotStartsAt } from '../schedule/training-types';
+import { slotStartsAt } from '../schedule/training-types';
 import { openFreeze } from './freeze.store';
-import { cancelGuests } from '../booking/group-booking';
+import { cancelGuests, freeSeats } from '../booking/group-booking';
 import { FREEZE_DAYS, daysBetween, plusDays } from './rules';
 
 type Db = DatabaseService['db'];
@@ -92,7 +92,11 @@ export class FreezesService {
         .returning({ id: freezes.id });
       return { freezeId: row.id, trainerId: member.trainerId, displayName: member.displayName };
     });
-    await this.push('FREEZE_REQUESTED', `freeze-requested:${freezeId}`, { trainerId, displayName, kind: 'freeze' });
+    await this.notifications.enqueueAndProcess('FREEZE_REQUESTED', `freeze-requested:${freezeId}`, {
+      trainerId,
+      displayName,
+      kind: 'freeze',
+    });
     return { ok: true };
   }
 
@@ -128,7 +132,7 @@ export class FreezesService {
       .from(members)
       .where(eq(members.id, memberId))
       .limit(1);
-    await this.push('FREEZE_REQUESTED', `unfreeze-requested:${done.id}:${now.getTime()}`, {
+    await this.notifications.enqueueAndProcess('FREEZE_REQUESTED', `unfreeze-requested:${done.id}:${now.getTime()}`, {
       trainerId: member?.trainerId ?? null,
       displayName: member?.displayName ?? '',
       kind: 'unfreeze',
@@ -209,9 +213,6 @@ export class FreezesService {
           id: bookings.id,
           slotId: bookings.slotId,
           slotTime: trainingSlots.slotTime,
-          trainingType: trainingSlots.trainingType,
-          bookedCount: trainingSlots.bookedCount,
-          capacity: trainingSlots.capacity,
           localDate: trainingDays.localDate,
         })
         .from(bookings)
@@ -227,6 +228,7 @@ export class FreezesService {
         )
         .for('update', { of: trainingSlots });
       const ahead = toCancel.filter((b) => slotStartsAt(b.localDate, b.slotTime) > now);
+      const freed: typeof ahead = [];
       if (ahead.length > 0) {
         await tx
           .update(bookings)
@@ -247,28 +249,23 @@ export class FreezesService {
           now.toJSDate(),
         );
         for (const b of ahead) {
-          const seats = withGuest.has(b.id) ? 2 : 1;
-          await tx
-            .update(trainingSlots)
-            .set({ bookedCount: sql`GREATEST(${trainingSlots.bookedCount} - ${seats}, 0)` })
-            .where(eq(trainingSlots.id, b.slotId));
+          if (await freeSeats(tx, b.slotId, withGuest.has(b.id) ? 2 : 1)) freed.push(b);
         }
       }
       // No «З'явилось місце» while frozen
       await tx.update(vacancyAlerts).set({ active: false }).where(eq(vacancyAlerts.memberId, done.memberId));
-      const freed = ahead.filter((b) => b.trainingType === GROUP_TYPE && b.bookedCount >= b.capacity);
       return { memberId: done.memberId, freed };
     });
 
     for (const b of freed) {
-      await this.push('VACANCY', `vacancy:${b.slotId}:${b.id}`, {
+      await this.notifications.enqueueAndProcess('VACANCY', `vacancy:${b.slotId}:${b.id}`, {
         slotId: b.slotId,
         slotTime: b.slotTime,
         localDate: b.localDate,
         excludeMemberId: memberId,
       });
     }
-    await this.push('FREEZE_DECIDED', `freeze-decided:${freezeId}`, {
+    await this.notifications.enqueueAndProcess('FREEZE_DECIDED', `freeze-decided:${freezeId}`, {
       memberId,
       kind: 'freeze',
       approved: true,
@@ -288,7 +285,11 @@ export class FreezesService {
       if (!done) throw new ConflictException('Freeze was already decided');
       return done.memberId;
     });
-    await this.push('FREEZE_DECIDED', `freeze-decided:${freezeId}`, { memberId, kind: 'freeze', approved: false });
+    await this.notifications.enqueueAndProcess('FREEZE_DECIDED', `freeze-decided:${freezeId}`, {
+      memberId,
+      kind: 'freeze',
+      approved: false,
+    });
     return { ok: true };
   }
 
@@ -320,7 +321,7 @@ export class FreezesService {
       await this.moveDates(tx, freezeId, -back);
       return freeze.memberId;
     });
-    await this.push('FREEZE_DECIDED', `unfreeze-decided:${freezeId}:${now.getTime()}`, {
+    await this.notifications.enqueueAndProcess('FREEZE_DECIDED', `unfreeze-decided:${freezeId}:${now.getTime()}`, {
       memberId,
       kind: 'unfreeze',
       approved: true,
@@ -343,7 +344,7 @@ export class FreezesService {
       if (!done) throw new ConflictException('Unfreeze was already decided');
       return done.memberId;
     });
-    await this.push('FREEZE_DECIDED', `unfreeze-decided:${freezeId}:${now.getTime()}`, {
+    await this.notifications.enqueueAndProcess('FREEZE_DECIDED', `unfreeze-decided:${freezeId}:${now.getTime()}`, {
       memberId,
       kind: 'unfreeze',
       approved: false,
@@ -483,19 +484,6 @@ export class FreezesService {
       .limit(1);
     if (!member) throw new NotFoundException('Member not found');
     return member;
-  }
-
-  // A failed push never fails the request
-  private async push(
-    type: 'FREEZE_REQUESTED' | 'FREEZE_DECIDED' | 'VACANCY',
-    dedupeKey: string,
-    payload: Record<string, unknown>,
-  ) {
-    try {
-      await this.notifications.enqueueAndProcess(type, dedupeKey, payload);
-    } catch (err) {
-      this.logger.error(`Push ${dedupeKey} failed`, err);
-    }
   }
 }
 

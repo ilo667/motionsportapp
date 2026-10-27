@@ -28,22 +28,27 @@ export class NotificationService {
     private readonly vacancyAlerts: VacancyAlertsService,
   ) {}
 
+  // Never throws: a failed push never fails the request that sent it (the member's cancel, the trainer's «Відхилити»…)
   async enqueueAndProcess(eventType: EventType, dedupeKey: string, payload: Record<string, unknown>) {
-    const inserted = await this.database.db
-      .insert(notificationEvents)
-      .values({ eventType, dedupeKey, payload, status: 'PENDING' })
-      .onConflictDoNothing()
-      .returning({ id: notificationEvents.id });
+    try {
+      const inserted = await this.database.db
+        .insert(notificationEvents)
+        .values({ eventType, dedupeKey, payload, status: 'PENDING' })
+        .onConflictDoNothing()
+        .returning({ id: notificationEvents.id });
 
-    if (inserted.length === 0) return; // already sent
+      if (inserted.length === 0) return; // already sent
 
-    const [event] = await this.database.db
-      .select()
-      .from(notificationEvents)
-      .where(eq(notificationEvents.id, inserted[0].id))
-      .limit(1);
+      const [event] = await this.database.db
+        .select()
+        .from(notificationEvents)
+        .where(eq(notificationEvents.id, inserted[0].id))
+        .limit(1);
 
-    if (event) await this.processEvent(event);
+      if (event) await this.processEvent(event);
+    } catch (err) {
+      this.logger.error(`Push ${dedupeKey} failed`, err);
+    }
   }
 
   // Sent once, right away. A failed event stays FAILED (logged); there are no retries (push delivery isn't

@@ -182,6 +182,7 @@ describe('Disabling a trainer', () => {
           { id: NEW, disabledAt: null },
         ],
         slots,
+        [], // cancelSlotsTx: the slot row lock, then the bookings on them
         booked,
       ],
       [[{ id: GONE }], [], [{ id: 'm-1' }, { id: 'm-2' }, { id: 'm-3' }]],
