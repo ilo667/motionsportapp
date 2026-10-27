@@ -161,7 +161,6 @@ export const bookings = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancellationReason: text('cancellation_reason'),
-    paymentStatus: text('payment_status'), // null = free | 'PENDING' | 'PAID'
     // Set when the member moved this booking to another slot (19:00 → 20:00); null + reason = plain cancel
     switchedToSlotId: uuid('switched_to_slot_id').references(() => trainingSlots.id),
     // A late cancellation by the member (booking/cancel-fee.ts): FULL = the training is spent from what pays for it,
@@ -178,7 +177,6 @@ export const bookings = pgTable(
       .on(table.memberId, table.slotId)
       .where(sql`${table.status} = 'ACTIVE'`),
     oneOf('bookings_status_check', 'status', ['ACTIVE', 'CANCELLED']),
-    oneOf('bookings_payment_status_check', 'payment_status', ['PENDING', 'PAID']),
     oneOf('bookings_cancel_fee_check', 'cancel_fee', ['FULL', 'HALF']),
     // A training's participants and cancellations; a member's visits and cancellations (any status)
     index('bookings_slot_id_idx').on(table.slotId),
@@ -332,9 +330,10 @@ export const payments = pgTable(
   'payments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    // Old per-training payments (removed 2026-10-23) point at a booking; everything since pays a purchase
-    bookingId: uuid('booking_id').references(() => bookings.id),
-    purchaseId: uuid('purchase_id').references((): AnyPgColumn => purchases.id),
+    // The purchase it pays (per-training payments were removed on 2026-10-23, their rows on 2026-10-27)
+    purchaseId: uuid('purchase_id')
+      .notNull()
+      .references((): AnyPgColumn => purchases.id),
     // Constraint name as it already exists in the DB (created by a one-off SQL script)
     orderId: text('order_id').notNull().unique('payments_order_id_key'),
     amount: integer('amount').notNull(),
@@ -354,7 +353,6 @@ export const payments = pgTable(
   },
   (table) => [
     oneOf('payments_status_check', 'status', ['PENDING', 'PAID', 'FAILED', 'EXPIRED', 'REPLACED']),
-    check('payments_owner_check', sql`booking_id IS NOT NULL OR purchase_id IS NOT NULL`),
     index('payments_purchase_id_idx').on(table.purchaseId),
     // Stale PENDING payments, looked for on every schedule load (expireStale)
     index('payments_status_created_at_idx').on(table.status, table.createdAt),

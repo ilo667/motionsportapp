@@ -214,15 +214,6 @@ describe('PaymentService — handleCallback', () => {
     const result = await svc.handleCallback(data, sig);
     expect(result).toEqual({ ok: true });
   });
-
-  it('an old per-training payment only keeps the evidence', async () => {
-    const { db, sets } = makeDb([[{ id: 'pay-1', purchaseId: null, bookingId: 'booking-1', status: 'PENDING' }]]);
-    const svc = makeService(db);
-    const data = liqpayEncode({ order_id: 'mg-old', status: 'success' });
-    await expect(svc.handleCallback(data, liqpaySign('priv_key', data))).resolves.toEqual({ ok: true });
-    expect(sets).toEqual([expect.objectContaining({ rawCallback: expect.objectContaining({ status: 'success' }) })]);
-    expect(svc.mockEntitlements.activate).not.toHaveBeenCalled();
-  });
 });
 
 describe('PaymentService — handleCallback failure', () => {

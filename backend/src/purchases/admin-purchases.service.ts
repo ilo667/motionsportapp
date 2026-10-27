@@ -1,5 +1,5 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { ClockService } from '../clock/clock.service';
 import {
@@ -78,7 +78,7 @@ export class AdminPurchasesService {
       .orderBy(asc(payments.updatedAt));
     const views = await purchaseViews(
       this.database.db,
-      rows.map((r) => r.purchaseId!),
+      rows.map((r) => r.purchaseId),
     );
     return rows.map(({ purchaseId, paidAt, ...r }) => ({
       ...r,
@@ -292,9 +292,5 @@ export class AdminPurchasesService {
 
 // LiqPay said success, but the payment was never applied (PaymentService.needsManualHandling)
 function strayPayment() {
-  return and(
-    isNotNull(payments.purchaseId),
-    ne(payments.status, 'PAID'),
-    sql`${payments.rawCallback}->>'status' in ('success', 'sandbox')`,
-  );
+  return and(ne(payments.status, 'PAID'), sql`${payments.rawCallback}->>'status' in ('success', 'sandbox')`);
 }

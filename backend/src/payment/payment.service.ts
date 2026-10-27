@@ -1,5 +1,5 @@
 import { Injectable, ConflictException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { and, eq, inArray, isNotNull, lt, ne } from 'drizzle-orm';
+import { and, eq, inArray, lt, ne } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { payments, purchases, purchaseItems } from '../database/schema';
 import { ClockService } from '../clock/clock.service';
@@ -174,12 +174,6 @@ export class PaymentService {
     const [payment] = await this.database.db.select().from(payments).where(eq(payments.orderId, orderId)).limit(1);
 
     if (!payment) return { ok: true };
-    // Old per-training payments (before purchases): nothing to activate any more, keep the evidence
-    if (!payment.purchaseId) {
-      this.logger.warn(`LiqPay callback: order=${orderId} is an old per-training payment — ignored`);
-      await this.saveRawCallback(payment.id, decoded);
-      return { ok: true };
-    }
     if (payment.status === 'PENDING') {
       await this.applyLiqpayStatus(payment, decoded);
       return { ok: true };
@@ -254,7 +248,7 @@ export class PaymentService {
         ? remote.err_code
         : undefined;
     this.logger.log(`Status check: order=${orderId} → ${status}${errCode ? ` errCode=${errCode}` : ''}`);
-    if (status === 'PAID' && payment.slotId && payment.purchaseId) {
+    if (status === 'PAID' && payment.slotId) {
       // Paid just now: the booking was made in the same transaction
       const [after] = await this.database.db
         .select({ bookingId: purchases.bookingId })
@@ -272,7 +266,7 @@ export class PaymentService {
     const stale = await this.database.db
       .select({ id: payments.id, purchaseId: payments.purchaseId, orderId: payments.orderId })
       .from(payments)
-      .where(and(eq(payments.status, 'PENDING'), lt(payments.createdAt, cutoff), isNotNull(payments.purchaseId)))
+      .where(and(eq(payments.status, 'PENDING'), lt(payments.createdAt, cutoff)))
       .limit(EXPIRE_BATCH);
 
     // In parallel: runs on every schedule load, so a slow LiqPay costs one timeout, not one per payment
@@ -282,7 +276,7 @@ export class PaymentService {
   }
 
   // true when this call cancelled the payment
-  private async expireOne(p: { id: string; purchaseId: string | null; orderId: string }): Promise<boolean> {
+  private async expireOne(p: { id: string; purchaseId: string; orderId: string }): Promise<boolean> {
     // Reconcile before cancelling — the callback may have been lost while the member actually paid
     const remote = await this.fetchLiqpayStatus(p.orderId);
     if (!remote) {
@@ -307,11 +301,10 @@ export class PaymentService {
   // Every transition is compare-and-set (UPDATE … WHERE status = expected RETURNING): concurrent requests
   // (callback retries, several clients triggering expireStale at once) can't apply the same transition twice.
   private async applyLiqpayStatus(
-    payment: { id: string; purchaseId: string | null },
+    payment: { id: string; purchaseId: string },
     liqpay: Record<string, unknown>,
   ): Promise<PaymentStatus> {
     const purchaseId = payment.purchaseId;
-    if (!purchaseId) return 'PENDING'; // old per-training payment: nothing to apply
     const status = liqpay.status as string;
 
     if (SUCCESS_STATUSES.includes(status)) {
@@ -398,7 +391,7 @@ export class PaymentService {
   // Returns false when the payment was no longer PENDING (another request got there first) — then nothing changes.
   // The purchase ends only if it still awaited payment, so it can't be ended twice.
   private async cancelPayment(
-    payment: { id: string; purchaseId: string | null },
+    payment: { id: string; purchaseId: string },
     status: 'FAILED' | 'EXPIRED',
     rawCallback?: Record<string, unknown>,
   ): Promise<boolean> {
@@ -410,12 +403,10 @@ export class PaymentService {
         .returning({ id: payments.id });
       if (!won) return false;
 
-      if (payment.purchaseId) {
-        await tx
-          .update(purchases)
-          .set({ status, decidedAt: this.clock.now().toJSDate() })
-          .where(and(eq(purchases.id, payment.purchaseId), eq(purchases.status, 'PENDING')));
-      }
+      await tx
+        .update(purchases)
+        .set({ status, decidedAt: this.clock.now().toJSDate() })
+        .where(and(eq(purchases.id, payment.purchaseId), eq(purchases.status, 'PENDING')));
       return true;
     });
   }
