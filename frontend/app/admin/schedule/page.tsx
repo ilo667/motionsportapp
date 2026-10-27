@@ -5,6 +5,7 @@ import { api, SkippedTraining, TrainerSchedule } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { errorText } from "@/lib/apiErrors";
+import { trainingsCount } from "@/lib/plural";
 
 // Weekdays as the backend counts them (1 = Пн … 7 = Нд)
 const WEEKDAYS = [
@@ -40,7 +41,7 @@ function savedText(autoCreate: boolean, added?: number, skipped?: SkippedTrainin
     else lines.push({ key, date: s.date, times: [s.slotTime], reason: SKIP_REASONS[s.reason] });
   }
   return {
-    text: `Збережено. У календар додано ${added} ${plural(added, ["тренування", "тренування", "тренувань"])}`,
+    text: `Збережено. У календар додано ${trainingsCount(added)}`,
     skipped: lines.map((l) => `${shortDate(l.date)} о ${listTimes(l.times)} (${l.reason})`),
   };
 }
@@ -55,16 +56,6 @@ function shortDate(date: string) {
   const d = new Date(date + "T12:00:00");
   const weekday = d.toLocaleDateString("uk-UA", { weekday: "short" });
   return `${weekday} ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-// Ukrainian forms for 1, 2–4 and 5+ («1 тренування», «3 дати», «21 дату»)
-function plural(n: number, [one, few, many]: [string, string, string]) {
-  const tens = n % 100;
-  const ones = n % 10;
-  if (tens >= 11 && tens <= 14) return many;
-  if (ones === 1) return one;
-  if (ones >= 2 && ones <= 4) return few;
-  return many;
 }
 
 // «Розклад групових»: the trainer's regular group trainings, created 3 weeks ahead by themselves
