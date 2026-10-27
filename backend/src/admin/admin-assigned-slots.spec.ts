@@ -4,6 +4,8 @@ import { validate } from 'class-validator';
 import { DateTime } from 'luxon';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { AdminScheduleService } from './admin-schedule.service';
+import { AdminMembersService } from './admin-members.service';
+import { AdminTrainersService } from './admin-trainers.service';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { attendance, packageSpends } from '../database/schema';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
@@ -80,6 +82,14 @@ const now = DateTime.fromObject({ year: 2026, month: 10, day: 20, hour: 12 }, { 
 
 function makeService(db: any, entitlements: any = { syncSpend: jest.fn() }) {
   return new AdminScheduleService({ db } as any, {} as any, { now: () => now }, entitlements);
+}
+
+function makeMembers(db: any, entitlements: any = {}) {
+  return new AdminMembersService({ db } as any, { now: () => now }, entitlements);
+}
+
+function makeTrainers(db: any) {
+  return new AdminTrainersService({ db } as any, {} as any, { now: () => now });
 }
 
 async function errorsOf(cls: any, body: object) {
@@ -495,7 +505,7 @@ describe('Cancellation reasons for the trainer', () => {
   it('client history: adds the training date and time', async () => {
     // visibility check (own or unassigned client), then the history
     const { db } = makeDb([[{ id: M1 }], [rows[0]]]);
-    const [entry] = await makeService(db).getMemberCancellations('trainer-1', M1);
+    const [entry] = await makeMembers(db).getMemberCancellations('trainer-1', M1);
     expect(entry).toEqual(expect.objectContaining({ localDate: '2026-10-22', slotTime: '19:00', reason: 'Захворіла' }));
   });
 });
@@ -503,7 +513,7 @@ describe('Cancellation reasons for the trainer', () => {
 describe('Clients per trainer', () => {
   it("hides history of another trainer's client (404)", async () => {
     const { db } = makeDb([[]]);
-    await expect(makeService(db).getMemberCancellations('trainer-1', M1)).rejects.toThrow(NotFoundException);
+    await expect(makeMembers(db).getMemberCancellations('trainer-1', M1)).rejects.toThrow(NotFoundException);
   });
 
   it('a trainer sees own and unassigned clients only', () => {
@@ -517,14 +527,14 @@ describe('Clients per trainer', () => {
     const { db } = makeDb([[{ id: 'trainer-2' }]], () => []);
     const where = jest.fn(() => ({ returning: () => Promise.resolve([]) }));
     db.update = jest.fn(() => ({ set: () => ({ where }) }));
-    await expect(makeService(db).assignTrainer('trainer-1', M1, 'trainer-2')).rejects.toThrow(NotFoundException);
+    await expect(makeMembers(db).assignTrainer('trainer-1', M1, 'trainer-2')).rejects.toThrow(NotFoundException);
     const cond = new PgDialect().sqlToQuery((where.mock.calls[0] as unknown[])[0] as any);
     expect(cond.sql).toContain('disabled_at is null');
   });
 
   it('reassigns a client to another trainer', async () => {
     const { db, sets } = makeDb([[{ id: 'trainer-2' }]], () => [{ id: M1, trainerId: 'trainer-2' }]);
-    await expect(makeService(db).assignTrainer('trainer-1', M1, 'trainer-2')).resolves.toEqual({
+    await expect(makeMembers(db).assignTrainer('trainer-1', M1, 'trainer-2')).resolves.toEqual({
       id: M1,
       trainerId: 'trainer-2',
     });
@@ -533,20 +543,20 @@ describe('Clients per trainer', () => {
 
   it('refuses an unknown trainer', async () => {
     const { db } = makeDb([[]]);
-    await expect(makeService(db).assignTrainer('trainer-1', M1, 'nobody')).rejects.toThrow('Trainer not found');
+    await expect(makeMembers(db).assignTrainer('trainer-1', M1, 'nobody')).rejects.toThrow('Trainer not found');
     expect(db.update).not.toHaveBeenCalled();
   });
 
   it("cannot reassign another trainer's client (update matches nothing → 404)", async () => {
     const { db } = makeDb([[{ id: 'trainer-2' }]], () => []);
-    await expect(makeService(db).assignTrainer('trainer-1', M1, 'trainer-2')).rejects.toThrow('Member not found');
+    await expect(makeMembers(db).assignTrainer('trainer-1', M1, 'trainer-2')).rejects.toThrow('Member not found');
   });
 
   it('only an enabled trainer can get a client (a disabled one answers 404 like a missing one)', async () => {
     const { db } = makeDb();
     const where = jest.fn(() => ({ limit: () => Promise.resolve([]) }));
     db.select = jest.fn(() => ({ from: () => ({ where }) }));
-    await expect(makeService(db).assignTrainer('trainer-1', M1, 'trainer-2')).rejects.toThrow('Trainer not found');
+    await expect(makeMembers(db).assignTrainer('trainer-1', M1, 'trainer-2')).rejects.toThrow('Trainer not found');
     const cond = new PgDialect().sqlToQuery((where.mock.calls[0] as unknown[])[0] as any);
     expect(cond.sql).toContain('"admins"."disabled_at" is null');
     expect(db.update).not.toHaveBeenCalled();
@@ -554,7 +564,7 @@ describe('Clients per trainer', () => {
 
   it('trainer list never selects password hashes, and says who disabled whom', async () => {
     const { db } = makeDb([[{ id: 'trainer-1', username: 'ilona' }]]);
-    await expect(makeService(db).getTrainers()).resolves.toEqual([{ id: 'trainer-1', username: 'ilona' }]);
+    await expect(makeTrainers(db).getTrainers()).resolves.toEqual([{ id: 'trainer-1', username: 'ilona' }]);
     expect(Object.keys(db.select.mock.calls[0][0]).sort()).toEqual([
       'createdAt',
       'disabledAt',
@@ -669,7 +679,7 @@ describe('History of past trainings', () => {
 
   it("a client's visits go up to today in the service clock, not the database's", async () => {
     const { db, wheres } = recordingDb([[{ id: 'm1' }], []]);
-    await makeService(db).getMemberVisits(TRAINER, 'm1');
+    await makeMembers(db).getMemberVisits(TRAINER, 'm1');
     expect(wheres[1].params).toContain('2026-10-20');
   });
 
@@ -678,7 +688,7 @@ describe('History of past trainings', () => {
     const select = db.select;
     let fields: any;
     db.select = (f: unknown) => ((fields = f), select());
-    await makeService(db, { summaries: jest.fn().mockResolvedValue(new Map()) }).getMembers(TRAINER);
+    await makeMembers(db, { summaries: jest.fn().mockResolvedValue(new Map()) }).getMembers(TRAINER);
     const { params } = new PgDialect().sqlToQuery(fields.recentCancellations);
     expect(params).toEqual([now.minus({ days: 30 }).toJSDate()]);
   });

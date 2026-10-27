@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { DateTime } from 'luxon';
 import { PgDialect } from 'drizzle-orm/pg-core';
-import { AdminScheduleService } from './admin-schedule.service';
+import { AdminTrainersService } from './admin-trainers.service';
 import { AdminScheduleController } from './admin-schedule.controller';
 import { SessionGuard } from '../auth/session.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
@@ -74,7 +74,7 @@ function makeDb(reads: unknown[][], writes: unknown[][] = []) {
 
 function makeService(db: any) {
   const notifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
-  const service = new AdminScheduleService({ db } as any, notifications as any, { now: () => NOW }, {} as any);
+  const service = new AdminTrainersService({ db } as any, notifications as any, { now: () => NOW });
   return { service, notifications };
 }
 

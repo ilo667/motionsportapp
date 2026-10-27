@@ -3,7 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { AdminScheduleService } from './admin-schedule.service';
+import { AdminMembersService } from './admin-members.service';
 import { AdminScheduleController } from './admin-schedule.controller';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { UpdateMemberNoteDto } from './dto/update-member-note.dto';
@@ -41,7 +41,7 @@ function makeDb(result: unknown[]) {
 function makeService(db: any, summaries = new Map()) {
   const entitlements = { summaries: jest.fn().mockResolvedValue(summaries) };
   const clock = { now: () => DateTime.fromISO('2026-10-26T12:00:00', { zone: 'Europe/Kyiv' }) };
-  return new AdminScheduleService({ db } as any, {} as any, clock, entitlements as any);
+  return new AdminMembersService({ db } as any, clock, entitlements as any);
 }
 
 describe('Admin members — trainer note', () => {

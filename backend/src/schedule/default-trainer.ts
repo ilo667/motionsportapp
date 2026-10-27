@@ -1,4 +1,4 @@
-import { asc, eq, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, isNull, or } from 'drizzle-orm';
 import { admins, members } from '../database/schema';
 import type { DatabaseService } from '../database/database.service';
 
@@ -29,4 +29,14 @@ export async function getMemberTrainerId(db: Q, memberId?: string): Promise<stri
 // Anyone else's client answers 404 like a missing one. A condition on `members`
 export function visibleTo(trainerId: string) {
   return or(eq(members.trainerId, trainerId), isNull(members.trainerId))!;
+}
+
+// A trainer who can still sign in and take clients (a disabled one answers 404 like a missing one)
+export async function enabledTrainer(db: Q, trainerId: string) {
+  const [trainer] = await db
+    .select({ id: admins.id })
+    .from(admins)
+    .where(and(eq(admins.id, trainerId), isNull(admins.disabledAt)))
+    .limit(1);
+  return trainer ?? null;
 }

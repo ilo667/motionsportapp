@@ -18,12 +18,9 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
-import { DisableTrainerDto } from './dto/disable-trainer.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
-import { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { SlotMembersDto } from './dto/update-slot-members.dto';
-import { AssignTrainerDto } from './dto/assign-trainer.dto';
 
 @Controller('admin')
 @UseGuards(SessionGuard, AdminGuard)
@@ -43,62 +40,9 @@ export class AdminScheduleController {
     );
   }
 
-  @Get('members')
-  getMembers(@CurrentUser() user: SessionUser) {
-    return this.adminScheduleService.getMembers(user.id);
-  }
-
-  @Get('members/:memberId')
-  getMember(@Param('memberId', ParseUUIDPipe) memberId: string, @CurrentUser() user: SessionUser) {
-    return this.adminScheduleService.getMember(user.id, memberId);
-  }
-
-  @Get('members/:memberId/visits')
-  getMemberVisits(@Param('memberId', ParseUUIDPipe) memberId: string, @CurrentUser() user: SessionUser) {
-    return this.adminScheduleService.getMemberVisits(user.id, memberId);
-  }
-
-  @Get('trainers')
-  getTrainers() {
-    return this.adminScheduleService.getTrainers();
-  }
-
-  @Post('trainers/:trainerId/disable')
-  @HttpCode(HttpStatus.OK)
-  disableTrainer(
-    @Param('trainerId', ParseUUIDPipe) trainerId: string,
-    @Body() dto: DisableTrainerDto,
-    @CurrentUser() user: SessionUser,
-  ) {
-    return this.adminScheduleService.disableTrainer(user.id, trainerId, dto.transferToId);
-  }
-
-  @Patch('members/:memberId/trainer')
-  assignTrainer(
-    @Param('memberId', ParseUUIDPipe) memberId: string,
-    @Body() dto: AssignTrainerDto,
-    @CurrentUser() user: SessionUser,
-  ) {
-    return this.adminScheduleService.assignTrainer(user.id, memberId, dto.trainerId);
-  }
-
-  @Get('members/:memberId/cancellations')
-  getMemberCancellations(@Param('memberId', ParseUUIDPipe) memberId: string, @CurrentUser() user: SessionUser) {
-    return this.adminScheduleService.getMemberCancellations(user.id, memberId);
-  }
-
   @Get('slots/:slotId/cancellations')
   getSlotCancellations(@Param('slotId', ParseUUIDPipe) slotId: string, @CurrentUser() user: SessionUser) {
     return this.adminScheduleService.getSlotCancellations(user.id, slotId);
-  }
-
-  @Patch('members/:memberId/note')
-  updateMemberNote(
-    @Param('memberId', ParseUUIDPipe) memberId: string,
-    @Body() dto: UpdateMemberNoteDto,
-    @CurrentUser() user: SessionUser,
-  ) {
-    return this.adminScheduleService.updateMemberNote(user.id, memberId, dto);
   }
 
   @Get('calendar')
