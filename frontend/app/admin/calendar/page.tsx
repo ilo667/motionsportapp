@@ -11,17 +11,14 @@ import timeGridPlugin from "@fullcalendar/react/timegrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
 import ukLocale from "@fullcalendar/react/locales/uk";
 import type { DatesSetInfo, EventClickInfo, DateClickInfo } from "@fullcalendar/react";
-import Link from "next/link";
-import { api, AdminMember, CalendarSlot, Cancellation, TrainerSchedule, TrainingType } from "@/lib/api";
+import { api, AdminMember, CalendarSlot, TrainerSchedule, TrainingType } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { useIsClient } from "@/lib/clientStore";
-import { TYPE_COLORS, TYPE_LABEL, TYPE_LABEL_PLURAL } from "@/lib/trainingTypes";
-import { memberLabel } from "./memberLabel";
-import { CancellationList } from "@/components/admin/CancellationList";
+import { TYPE_COLORS, TYPE_LABEL_PLURAL } from "@/lib/trainingTypes";
 import { AdminMenu } from "@/components/admin/AdminMenu";
-import { errorText } from "@/lib/apiErrors";
-import { longDay } from "@/lib/dates";
-import { Modal } from "@/components/Modal";
+import { AddSlotModal } from "./AddSlotModal";
+import { EditSlotModal } from "./EditSlotModal";
+import { TYPES, weekdayOf } from "./slotForm";
 
 // Short labels for calendar events — full names don't fit a day column
 const TYPE_SHORT: Record<TrainingType, string> = {
@@ -29,12 +26,6 @@ const TYPE_SHORT: Record<TrainingType, string> = {
   персональні: "Перс.",
   спліт: "Спліт",
 };
-
-const TYPES: TrainingType[] = ["групові", "персональні", "спліт"];
-// Member pickers per type: персональні exactly 1, спліт 1 required + 2 optional
-const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, персональні: 1, спліт: 3 };
-const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
-const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 
 function hourOf(slotTime: string) {
   return parseInt(slotTime.slice(0, 2), 10);
@@ -45,16 +36,12 @@ function clickableDayClass(info: { isPast: boolean }) {
   return info.isPast ? "" : "mg-clickable";
 }
 
-// The backend's weekday of a date: 1 = Пн … 7 = Нд
-function weekdayOf(date: string) {
-  return new Date(date + "T12:00:00").getDay() || 7;
-}
-
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
-type Modal = { mode: "add"; date: string } | { mode: "edit"; slot: CalendarSlot };
+// The modal open now: «Додати тренування» on a day (time prefilled from the week view), or a clicked training
+type OpenModal = { mode: "add"; date: string; time: string } | { mode: "edit"; slot: CalendarSlot };
 
 export default function CalendarPage() {
   const router = useRouter();
@@ -65,15 +52,7 @@ export default function CalendarPage() {
   // Months covering the visible range ("2026-10,2026-11"): a week can span two months
   const [visibleMonths, setVisibleMonths] = useState("");
 
-  const [modal, setModal] = useState<Modal | null>(null);
-  const [selectedType, setSelectedType] = useState<TrainingType>("групові");
-  const [time, setTime] = useState("");
-  // One entry per member picker; "" = not chosen
-  const [memberIds, setMemberIds] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  // Loaded when an event's modal opens; keyed by slot so a late answer for another slot is ignored
-  const [cancellations, setCancellations] = useState<{ slotId: string; items: Cancellation[] } | null>(null);
+  const [modal, setModal] = useState<OpenModal | null>(null);
 
   const handleAuthError = useCallback(
     (err: unknown) => {
@@ -86,9 +65,6 @@ export default function CalendarPage() {
   // «Розклад групових»: the opening time (a group training before it can't be booked, warned in the modal),
   // which trainings repeat weekly (↻), and where «Щотижня» adds a time
   const [schedule, setSchedule] = useState<TrainerSchedule | null>(null);
-  const opensAt = schedule?.bookingOpensAt ?? "";
-  // Group trainings only: «Лише цього дня» or «Щотижня» (adds the time to the schedule)
-  const [weekly, setWeekly] = useState(false);
   useEffect(() => {
     api
       .getMySchedule()
@@ -169,46 +145,15 @@ export default function CalendarPage() {
   const minHour = Math.min(17, ...slots.map((s) => hourOf(s.slotTime)));
   const maxHour = Math.min(24, Math.max(22, ...slots.map((s) => hourOf(s.slotTime) + 2)));
 
-  const fieldsFor = (type: TrainingType, ids: string[] = []) =>
-    Array.from({ length: MEMBER_FIELDS[type] }, (_, i) => ids[i] ?? "");
-
-  const openAddModal = (date: string, clickedTime = "") => {
-    setSelectedType("групові");
-    setTime(clickedTime);
-    setWeekly(false);
-    setMemberIds([]);
-    setError("");
-    setModal({ mode: "add", date });
-  };
-
   const openEditModal = (slot: CalendarSlot) => {
-    setSelectedType(slot.trainingType);
-    setTime(slot.slotTime);
-    setMemberIds(
-      fieldsFor(
-        slot.trainingType,
-        slot.members.map((m) => m.id),
-      ),
-    );
-    setError("");
     setModal({ mode: "edit", slot });
-    setCancellations(null);
-    api
-      .getSlotCancellations(slot.slotId)
-      .then((items) => setCancellations({ slotId: slot.slotId, items }))
-      .catch(() => setCancellations({ slotId: slot.slotId, items: [] }));
     // The calendar was loaded earlier: a member may have cancelled or been marked since, so the modal shows the
-    // training as it is now (the cancellations above are fresh too)
+    // training as it is now (its cancellations are loaded fresh by the modal)
     fetchMonths(visibleMonths).then((data) => {
       const fresh = data?.find((s) => s.slotId === slot.slotId);
       if (fresh)
         setModal((m) => (m?.mode === "edit" && m.slot.slotId === slot.slotId ? { mode: "edit", slot: fresh } : m));
     });
-  };
-
-  const selectType = (type: TrainingType) => {
-    setSelectedType(type);
-    setMemberIds((ids) => fieldsFor(type, ids));
   };
 
   const handleEventClick = (arg: EventClickInfo) => {
@@ -222,87 +167,14 @@ export default function CalendarPage() {
     const date = arg.dateStr.slice(0, 10);
     const clicked = new Date(date + "T12:00:00");
     if (clicked < today) return;
-    openAddModal(date, arg.dateStr.slice(11, 16));
+    setModal({ mode: "add", date, time: arg.dateStr.slice(11, 16) });
   };
 
-  const chosenMembers = memberIds.filter(Boolean);
-
-  const run = async (fn: () => Promise<unknown>, fallback: string) => {
-    setSaving(true);
-    setError("");
-    try {
-      await fn();
-      await fetchMonths(visibleMonths);
-      setModal(null);
-    } catch (err: unknown) {
-      setError(errorText(err, fallback));
-    } finally {
-      setSaving(false);
-    }
+  // A modal saved: the calendar reloads, the modal closes
+  const done = async () => {
+    await fetchMonths(visibleMonths);
+    setModal(null);
   };
-
-  const handleAdd = () => {
-    if (modal?.mode !== "add") return;
-    if (!TIME_RE.test(time)) return setError("Вкажіть час з кроком 15 хвилин, наприклад 18:30");
-    if (selectedType === "групові") {
-      if (!weekly) return run(() => api.upsertGroupSlot(modal.date, time), "Помилка збереження. Спробуйте ще раз.");
-      return addWeekly(modal.date, time);
-    }
-    if (!memberIds[0]) return setError("Виберіть людину");
-    return run(
-      () =>
-        api.createAssignedSlot(modal.date, { slotTime: time, trainingType: selectedType, memberIds: chosenMembers }),
-      "Помилка збереження. Спробуйте ще раз.",
-    );
-  };
-
-  // «Щотижня»: the time goes into «Розклад групових» first (its rules checked there, nothing saved on an error),
-  // which adds the trainings 3 weeks ahead; then this date itself, which can be further ahead or a cancelled day
-  const addWeekly = async (date: string, slotTime: string) => {
-    if (!schedule) return setError("Розклад не завантажився. Оновіть сторінку.");
-    const weekday = weekdayOf(date);
-    const has = schedule.times.some((t) => t.weekday === weekday && t.slotTime === slotTime);
-    const next: TrainerSchedule = {
-      ...schedule,
-      autoCreate: true,
-      times: has ? schedule.times : [...schedule.times, { weekday, slotTime }],
-    };
-    setSaving(true);
-    setError("");
-    try {
-      const { bookingOpensAt, autoCreate, times } = await api.saveMySchedule(next);
-      setSchedule({ bookingOpensAt, autoCreate, times });
-    } catch (err: unknown) {
-      setSaving(false);
-      return setError(errorText(err, "Помилка збереження. Спробуйте ще раз."));
-    }
-    setSaving(false);
-    return run(
-      () => api.upsertGroupSlot(date, slotTime),
-      "Щотижня збережено, але на цю дату не додалось. Спробуйте ще раз.",
-    );
-  };
-
-  const handleSaveMembers = () => {
-    if (modal?.mode !== "edit") return;
-    if (!memberIds[0]) return setError("Виберіть людину");
-    return run(() => api.updateSlotMembers(modal.slot.slotId, chosenMembers), "Помилка збереження. Спробуйте ще раз.");
-  };
-
-  const handleCancelSlot = () => {
-    if (modal?.mode !== "edit") return;
-    return run(() => api.cancelSlot(modal.slot.slotId), "Помилка. Спробуйте ще раз.");
-  };
-
-  const modalDate = modal ? (modal.mode === "add" ? modal.date : modal.slot.localDate) : "";
-  const editing = modal?.mode === "edit" ? modal.slot : null;
-  const assigned = selectedType !== "групові";
-  // The trainer's own and unassigned clients, plus anyone already on this training (another trainer's client
-  // must not silently disappear from the picker and be dropped on save)
-  const pickerMembers: { id: string; displayName: string; memberCode?: string }[] = [
-    ...members,
-    ...(editing?.members.filter((sm) => !members.some((m) => m.id === sm.id)) ?? []),
-  ];
 
   return (
     <PageLayout variant="top" action={<AdminMenu />}>
@@ -384,177 +256,26 @@ export default function CalendarPage() {
         )}
       </div>
 
-      {modal && (
-        <Modal variant="card" onDismiss={() => setModal(null)} labelledBy="calendar-modal-title">
-          <div>
-            <p className="text-muted text-xs uppercase tracking-wide mb-1">{longDay(modalDate)}</p>
-            <p id="calendar-modal-title" className="font-geologica font-semibold text-heading">
-              {editing ? `${TYPE_LABEL[editing.trainingType]} ${editing.slotTime}` : "Додати тренування"}
-            </p>
-            {editing?.trainingType === "групові" && (
-              <p className="text-muted text-xs mt-1">
-                Записано {editing.bookedCount} з {editing.capacity}
-              </p>
-            )}
-            {editing && repeatsWeekly(editing) && (
-              <p className="text-muted text-xs mt-1">
-                ↻ Повторюється щотижня. «Скасувати» прибере лише цей день; щоб прибрати щотижневе, відкрийте{" "}
-                <Link href="/admin/schedule" className="text-accent hover:underline">
-                  «Розклад групових»
-                </Link>
-              </p>
-            )}
-          </div>
-
-          {editing && editing.trainingType !== "групові" && editing.members.length > 0 && (
-            <ul className="space-y-1">
-              {editing.members.map((m) => {
-                const label = memberLabel(m);
-                return (
-                  <li key={m.id} className="flex items-center justify-between text-sm">
-                    <span className="text-body">{m.displayName}</span>
-                    <span className={label.className}>{label.text}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          {editing && cancellations?.slotId === editing.slotId && (
-            <CancellationList title="Скасували" items={cancellations.items} withDate />
-          )}
-
-          {/* Тип — тільки при додаванні. Ще одне тренування в цей день: клікніть день знову */}
-          {!editing && (
-            <div className="flex flex-col space-y-2">
-              {TYPES.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => selectType(t)}
-                  className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${selectedType === t ? "" : "border-line"}`}
-                  style={
-                    selectedType === t
-                      ? {
-                          borderColor: TYPE_COLORS[t].border,
-                          backgroundColor: TYPE_COLORS[t].bg,
-                          color: TYPE_COLORS[t].text,
-                        }
-                      : {}
-                  }
-                >
-                  <span>{TYPE_LABEL_PLURAL[t]}</span>
-                  {selectedType === t && <span>✓</span>}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {!editing && (
-            <div>
-              <label htmlFor="slot-time" className="block text-muted text-xs mb-2 uppercase tracking-wide">
-                Час
-              </label>
-              <input
-                id="slot-time"
-                type="time"
-                step={900}
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                // iOS Safari gives a time input its own min width and ignores w-full without these
-                className={`${FIELD_CLASS} block min-w-0 appearance-none [color-scheme:dark] [&::-webkit-date-and-time-value]:text-left`}
-              />
-              {!assigned && opensAt && TIME_RE.test(time) && time <= opensAt && (
-                <p className="text-warn text-xs mt-2">
-                  Запис відкривається о {opensAt}, тож на це тренування записатися не вийде
-                </p>
-              )}
-            </div>
-          )}
-
-          {!editing && !assigned && (
-            <div className="space-y-2">
-              <div className="flex space-x-2">
-                {[
-                  { value: false, label: "Лише цього дня" },
-                  { value: true, label: "Щотижня" },
-                ].map((o) => (
-                  <button
-                    key={o.label}
-                    onClick={() => setWeekly(o.value)}
-                    aria-pressed={weekly === o.value}
-                    className={`flex-1 px-2 py-2 rounded-lg border text-xs whitespace-nowrap transition-colors ${weekly === o.value ? "border-accent text-accent" : "border-line text-muted"}`}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-              {weekly && (
-                <p className="text-muted text-xs">
-                  Додасться в «Розклад групових»: щотижня в цей день
-                  {schedule && !schedule.autoCreate
-                    ? ". У розкладі увімкнеться «Автоматично додавати на 3 тижні наперед»"
-                    : ""}
-                </p>
-              )}
-            </div>
-          )}
-
-          {assigned && (
-            <div className="flex flex-col space-y-2">
-              <p className="text-muted text-xs uppercase tracking-wide">
-                {selectedType === "спліт" ? "Люди (до трьох)" : "Людина"}
-              </p>
-              {memberIds.map((id, i) => (
-                <select
-                  key={i}
-                  aria-label={`Людина ${i + 1}`}
-                  value={id}
-                  onChange={(e) => setMemberIds((ids) => ids.map((v, j) => (j === i ? e.target.value : v)))}
-                  className={FIELD_CLASS}
-                >
-                  <option value="">{i === 0 ? "Виберіть людину" : "Не вибрано (необовʼязково)"}</option>
-                  {pickerMembers
-                    .filter((m) => m.id === id || !memberIds.includes(m.id))
-                    .map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.memberCode ? `${m.displayName} · ${m.memberCode}` : m.displayName}
-                      </option>
-                    ))}
-                </select>
-              ))}
-              <p className="text-muted text-xs">Тренування побачать тільки вибрані люди</p>
-            </div>
-          )}
-
-          {error && <p className="text-danger text-sm">{error}</p>}
-
-          <div className="flex flex-col space-y-2">
-            {(!editing || assigned) && (
-              <button
-                onClick={editing ? handleSaveMembers : handleAdd}
-                disabled={saving}
-                className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
-              >
-                {saving ? "Зачекайте..." : "Зберегти"}
-              </button>
-            )}
-            {editing && (
-              <button
-                onClick={handleCancelSlot}
-                disabled={saving}
-                className="btn-ghost hover-danger w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"
-              >
-                Скасувати тренування {editing.slotTime}
-              </button>
-            )}
-            <button
-              onClick={() => setModal(null)}
-              className="text-muted text-sm py-2 transition-colors hover:text-body"
-            >
-              Закрити
-            </button>
-          </div>
-        </Modal>
+      {modal?.mode === "add" && (
+        <AddSlotModal
+          date={modal.date}
+          initialTime={modal.time}
+          schedule={schedule}
+          onScheduleSaved={setSchedule}
+          members={members}
+          onDone={done}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.mode === "edit" && (
+        <EditSlotModal
+          key={modal.slot.slotId}
+          slot={modal.slot}
+          repeatsWeekly={repeatsWeekly(modal.slot)}
+          members={members}
+          onDone={done}
+          onClose={() => setModal(null)}
+        />
       )}
     </PageLayout>
   );
