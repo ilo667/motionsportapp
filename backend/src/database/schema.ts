@@ -125,6 +125,8 @@ export const trainingSlots = pgTable(
     oneOf('training_slots_training_type_check', 'training_type', [GROUP_TYPE, ...ASSIGNED_TYPES]),
     // Safety net for the seat counter: never below zero, never more people than seats
     check('training_slots_booked_count_check', sql`booked_count >= 0 AND booked_count <= capacity AND capacity > 0`),
+    // Only a cancelled training has a cancellation time
+    check('training_slots_cancelled_at_check', sql`status = 'CANCELLED' OR cancelled_at IS NULL`),
   ],
 );
 
