@@ -51,10 +51,10 @@ function HistorySlot({
       <div className="flex items-center justify-between space-x-2">
         <span className="font-geologica font-semibold text-heading">{slot.slotTime}</span>
         {slot.status === "CANCELLED" ? (
-          <span className="text-xs text-danger border border-danger/40 rounded-full px-2">Скасовано</span>
+          <span className="text-xs text-danger border border-danger/40 rounded-full px-2 py-0.5">Скасовано</span>
         ) : (
           <span
-            className="text-xs border rounded-full px-2"
+            className="text-xs border rounded-full px-2 py-0.5"
             style={{ backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }}
           >
             {TYPE_LABEL[slot.trainingType]} · {present}/{slot.participants.length}
@@ -73,7 +73,9 @@ function HistorySlot({
                   {p.displayName}
                   {p.switchedFromTime && <span className="ml-2 text-xs text-warn">з {p.switchedFromTime}</span>}
                   {p.guestOf && (
-                    <span className="ml-2 text-xs text-subtle border border-line rounded-full px-2 py-0.5">гість</span>
+                    <span className="ml-2 text-xs text-subtle border border-line rounded-full px-2 py-0.5 py-0.5">
+                      гість
+                    </span>
                   )}
                 </span>
                 <AttendanceButton

@@ -74,12 +74,12 @@ export function CancellationList({ title, items, withDate = false }: Cancellatio
                   {c.label ?? c.displayName}
                   {c.switchedToTime ? (
                     !c.moveInLabel && (
-                      <span className="ml-2 text-xs text-warn bg-warn-bg border border-warn-line rounded-full px-2">
+                      <span className="ml-2 text-xs text-warn bg-warn-bg border border-warn-line rounded-full px-2 py-0.5">
                         на {c.switchedToTime}
                       </span>
                     )
                   ) : (
-                    <span className="ml-2 text-xs text-danger border border-danger/40 rounded-full px-2">
+                    <span className="ml-2 text-xs text-danger border border-danger/40 rounded-full px-2 py-0.5">
                       скасовано
                     </span>
                   )}
@@ -92,7 +92,7 @@ export function CancellationList({ title, items, withDate = false }: Cancellatio
               {fee && (
                 <div className="flex items-center justify-between space-x-2 mt-1">
                   <span
-                    className={`text-xs border rounded-full px-2 ${fee.waived ? "text-subtle border-line" : "text-warn bg-warn-bg border-warn-line"}`}
+                    className={`text-xs border rounded-full px-2 py-0.5 ${fee.waived ? "text-subtle border-line" : "text-warn bg-warn-bg border-warn-line"}`}
                   >
                     {feeLabel(fee)}
                   </span>
