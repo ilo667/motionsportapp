@@ -54,7 +54,7 @@ App setup (helmet, CORS, `ValidationPipe`, cookie parser) lives in **`configureA
 
 ### Auth
 
-Opaque session token (no JWT) in an `httpOnly`, `sameSite: strict` cookie named **`session`** (`secure` in production, 30 days). The DB stores only its SHA-256 in `sessions` (`principal_type` member | admin, `principal_id`, `expires_at`, `revoked_at`); logout revokes it. Every sign-in deletes the dead sessions (expired or revoked: `deleteDeadSessions` in `auth/dead-sessions.ts`), so the table holds only live ones. `SessionGuard` hashes the cookie, finds a live session and sets `req.user` (`SessionUser`: member or admin). Then `AdminGuard` (admin only) or `MemberGuard` (member only, e.g. payment checkout). `ValidationPipe(whitelist: true)` is global.
+Opaque session token (no JWT) in an `httpOnly`, `sameSite: strict` cookie named **`session`** (`secure` in production, 30 days). The DB stores only its SHA-256 in `sessions` (`principal_type` member | admin, `principal_id`, `expires_at`, `revoked_at`); logout revokes it. A dead session (expired or revoked) is kept 30 days, so a recent sign-in / sign-out can still be looked up; every sign-in deletes the older ones (`deleteDeadSessions` in `auth/dead-sessions.ts`). `SessionGuard` hashes the cookie, finds a live session and sets `req.user` (`SessionUser`: member or admin). Then `AdminGuard` (admin only) or `MemberGuard` (member only, e.g. payment checkout). `ValidationPipe(whitelist: true)` is global.
 
 Auth endpoints:
 - `POST /auth/member/register` — displayName + PIN → memberCode + recoveryCode
