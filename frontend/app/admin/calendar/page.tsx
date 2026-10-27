@@ -16,6 +16,7 @@ import { api, AdminMember, CalendarSlot, Cancellation, TrainerSchedule, Training
 import { PageLayout } from "@/components/PageLayout";
 import { useIsClient } from "@/lib/clientStore";
 import { TYPE_COLORS } from "@/lib/trainingTypes";
+import { trainingsCount } from "@/lib/plural";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 
@@ -38,11 +39,11 @@ const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, пер�
 const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
 const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 
-// A member of an assigned training: cancelled, paid (trainings left in a package of that type) or not paid
+// A member of an assigned training: cancelled, paid (spent from a package), trainings left to pay it, or not paid
 function memberLabel(m: { booked: boolean; spent: boolean; packageLeft: number }) {
-  if (!m.booked) return { text: "скасувала", className: "text-muted" };
+  if (!m.booked) return { text: "скасовано", className: "text-muted" };
   if (m.spent) return { text: "оплачено", className: "text-teal" };
-  if (m.packageLeft > 0) return { text: `оплачено · залишилось ${m.packageLeft}`, className: "text-teal" };
+  if (m.packageLeft > 0) return { text: `залишилось ${trainingsCount(m.packageLeft)}`, className: "text-teal" };
   return { text: "не оплачено", className: "text-muted" };
 }
 
@@ -137,8 +138,9 @@ export default function CalendarPage() {
     async (months: string) => {
       if (!months) return;
       try {
-        const data = await Promise.all(months.split(",").map((m) => api.getCalendar(m)));
-        setSlots(data.flat());
+        const data = (await Promise.all(months.split(",").map((m) => api.getCalendar(m)))).flat();
+        setSlots(data);
+        return data;
       } catch (err: unknown) {
         handleAuthError(err);
       }
@@ -223,6 +225,13 @@ export default function CalendarPage() {
       .getSlotCancellations(slot.slotId)
       .then((items) => setCancellations({ slotId: slot.slotId, items }))
       .catch(() => setCancellations({ slotId: slot.slotId, items: [] }));
+    // The calendar was loaded earlier: a member may have cancelled or been marked since, so the modal shows the
+    // training as it is now (the cancellations above are fresh too)
+    fetchMonths(visibleMonths).then((data) => {
+      const fresh = data?.find((s) => s.slotId === slot.slotId);
+      if (fresh)
+        setModal((m) => (m?.mode === "edit" && m.slot.slotId === slot.slotId ? { mode: "edit", slot: fresh } : m));
+    });
   };
 
   const selectType = (type: TrainingType) => {

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { api, AssignedSlotView } from "@/lib/api";
+import { trainingsCount } from "@/lib/plural";
 import { CancellationReasonModal } from "./CancellationReasonModal";
 
 const TYPE_LABELS: Record<AssignedSlotView["trainingType"], string> = {
@@ -25,13 +26,6 @@ interface AssignedSlotCardProps {
 
 // Personal / split the trainer assigned to this member. The member is booked already; the training is paid
 // from a package when the trainer marks attendance. No package left → «Оплатити» opens the purchase flow
-// «1 тренування», «3 тренування», «8 тренувань»
-function trainingsLeft(n: number) {
-  const tens = n % 100;
-  const ones = n % 10;
-  return `${n} ${tens < 11 || tens > 14 ? (ones >= 1 && ones <= 4 ? "тренування" : "тренувань") : "тренувань"}`;
-}
-
 export function AssignedSlotCard({ slot, onMutate }: AssignedSlotCardProps) {
   const [cancelOpen, setCancelOpen] = useState(false);
 
@@ -62,7 +56,7 @@ export function AssignedSlotCard({ slot, onMutate }: AssignedSlotCardProps) {
             {slot.spent ? (
               <p className="text-sm text-body">оплачено</p>
             ) : slot.packageLeft > 0 ? (
-              <p className="text-sm text-body">Залишилось {trainingsLeft(slot.packageLeft)}</p>
+              <p className="text-sm text-body">Залишилось {trainingsCount(slot.packageLeft)}</p>
             ) : (
               <Link
                 href={`/purchases?type=${encodeURIComponent(slot.trainingType)}`}
