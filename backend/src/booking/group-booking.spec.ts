@@ -93,6 +93,13 @@ describe('tryBookGroup — booking inside someone else’s transaction, never th
     expect(inserts).toEqual([]);
   });
 
+  // Cancelled late and paid for it: booking the same training again would spend it twice
+  it('the member cancelled this training late: LATE_CANCELLED, nothing inserted', async () => {
+    const { tx, inserts } = makeTx([MEMBER, [slot], TRAINER, [], [{ slotId: 'slot-1' }]]);
+    expect(await tryBookGroup(tx, at(15), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'LATE_CANCELLED' });
+    expect(inserts).toEqual([]);
+  });
+
   it('a full slot: FULL, nothing inserted', async () => {
     const { tx, inserts } = makeTx([MEMBER, [{ ...slot, bookedCount: 8 }], TRAINER, []]);
     expect(await tryBookGroup(tx, at(15), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'FULL' });

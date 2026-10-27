@@ -142,6 +142,16 @@ describe('Trainer — client purchases', () => {
     expect(db.delete).toHaveBeenCalled(); // a mark on it goes too
   });
 
+  // The member cancelled it (late, so a pass paid for it): «Відхилити» leaves that booking and its spend alone
+  it('rejecting cash for a booking the member already cancelled deletes no mark or spend', async () => {
+    let call = 0;
+    const { db } = makeDb([], () => (call++ === 0 ? [{ id: 'purchase-1', bookingId: 'b1', slotId: 's1' }] : []));
+    db.delete = jest.fn(() => ({ where: () => Promise.resolve() }));
+    const { svc } = makeService(db);
+    await svc.rejectCash('trainer-1', 'purchase-1');
+    expect(db.delete).not.toHaveBeenCalled();
+  });
+
   it('rejecting cash with no booking (bought in «Мої покупки») touches only the purchase', async () => {
     const { db } = makeDb([]);
     const { svc } = makeService(db);

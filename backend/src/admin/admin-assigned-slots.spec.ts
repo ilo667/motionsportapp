@@ -700,6 +700,19 @@ describe('Cancelling a training gives the trainings back', () => {
     expect(deleted).toEqual(expect.arrayContaining([packageSpends, attendance]));
   });
 
+  // The member cancelled late first: that spend and its fee stay (only «Не списувати» forgives it)
+  it("leaves a member's late cancellation as it was: spends go back only from active bookings", async () => {
+    const { db, sets } = makeDb([[mySlot], [{ memberId: M1 }], [{ localDate: '2026-10-20' }], [mySlot]]);
+    const svc = new AdminScheduleService({ db } as any, notifications as any, { now: () => now }, {
+      syncSpend: jest.fn(),
+    } as any);
+    await svc.updateSlot(TRAINER, 's1', { status: 'CANCELLED' });
+    const deleted = db.delete.mock.calls.map((c: unknown[]) => c[0]);
+    expect(deleted.filter((t: unknown) => t === packageSpends)).toHaveLength(1);
+    expect(sets).not.toContainEqual({ cancelFee: null });
+    expect(sets).not.toContainEqual({ status: 'CANCELLED' }); // no half refund dropped
+  });
+
   it('«Скасувати мої тренування цього дня» does the same for every cancelled training', async () => {
     const { db } = makeDb([[{ id: 'day-1', localDate: '2026-10-25' }], [{ id: 's1', slotTime: '18:00' }], []]);
     const svc = new AdminScheduleService({ db } as any, notifications as any, { now: () => now }, {
