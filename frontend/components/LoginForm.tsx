@@ -134,7 +134,7 @@ export function LoginForm({ variant }: { variant: "member" | "admin" }) {
 
   return (
     <PageLayout>
-      <Link href="/" className="inline-flex items-center text-sm text-muted hover:text-body transition-colors mb-6">
+      <Link href="/" className="inline-flex items-center text-sm text-subtle hover:text-body transition-colors mb-6">
         ← Назад
       </Link>
       <h1

@@ -104,7 +104,7 @@ export function PurchaseFlow({
   const back = (to: Step | "close") => (
     <button
       onClick={() => (to === "close" ? onClose() : setStep(to))}
-      className="text-muted text-sm hover:text-body transition-colors mb-4"
+      className="text-subtle text-sm hover:text-body transition-colors mb-4"
     >
       ← Назад
     </button>
