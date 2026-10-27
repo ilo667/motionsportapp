@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { api, Trainer, TrainerInvite } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
+import { Modal } from "@/components/Modal";
 
 const FIELD = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 const MIN_PASSWORD = 10;
@@ -164,50 +165,46 @@ function DisableDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-background/70" />
-      <div
-        className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-5 space-y-4 max-h-full overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="font-geologica font-semibold text-heading">Вимкнути {trainer.username}?</p>
-        <div>
-          <label htmlFor="transfer-to" className="block text-muted text-xs mb-2 uppercase tracking-wide">
-            Клієнти перейдуть до
-          </label>
-          <select
-            id="transfer-to"
-            value={transferToId}
-            onChange={(e) => setTransferToId(e.target.value)}
-            className={FIELD}
-          >
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.username}
-              </option>
-            ))}
-          </select>
-        </div>
-        <p className="text-body text-sm">
-          {trainer.username} більше не зможе увійти. Його клієнти й готівкові оплати, які чекають на підтвердження,
-          перейдуть до обраного тренера. Тренування, що ще не закінчились, буде скасовано, а записані клієнти отримають
-          сповіщення. Вимкнення не можна скасувати.
-        </p>
-        {error && <p className="text-danger text-sm">{error}</p>}
-        <div className="flex flex-col space-y-2">
-          <button
-            onClick={disable}
-            disabled={busy || !transferToId}
-            className="btn-ghost hover-danger w-full py-3 rounded-lg border border-danger text-danger text-sm transition-colors disabled:opacity-60"
-          >
-            {busy ? "Зачекайте..." : "Вимкнути"}
-          </button>
-          <button onClick={onClose} className="text-muted text-sm py-2 transition-colors hover:text-body">
-            Закрити
-          </button>
-        </div>
+    <Modal variant="card" onDismiss={onClose} labelledBy="disable-trainer-title">
+      <p id="disable-trainer-title" className="font-geologica font-semibold text-heading">
+        Вимкнути {trainer.username}?
+      </p>
+      <div>
+        <label htmlFor="transfer-to" className="block text-muted text-xs mb-2 uppercase tracking-wide">
+          Клієнти перейдуть до
+        </label>
+        <select
+          id="transfer-to"
+          value={transferToId}
+          onChange={(e) => setTransferToId(e.target.value)}
+          className={FIELD}
+        >
+          {targets.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.username}
+            </option>
+          ))}
+        </select>
       </div>
-    </div>
+      <p className="text-body text-sm">
+        {trainer.username} більше не зможе увійти. Його клієнти й готівкові оплати, які чекають на підтвердження,
+        перейдуть до обраного тренера. Тренування, що ще не закінчились, буде скасовано, а записані клієнти отримають
+        сповіщення. Вимкнення не можна скасувати.
+      </p>
+      {error && <p className="text-danger text-sm">{error}</p>}
+      <div className="flex flex-col space-y-2">
+        <button
+          onClick={disable}
+          disabled={busy || !transferToId}
+          className="btn-ghost hover-danger w-full py-3 rounded-lg border border-danger text-danger text-sm transition-colors disabled:opacity-60"
+        >
+          {busy ? "Зачекайте..." : "Вимкнути"}
+        </button>
+        <button onClick={onClose} className="text-muted text-sm py-2 transition-colors hover:text-body">
+          Закрити
+        </button>
+      </div>
+    </Modal>
   );
 }
 

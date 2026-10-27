@@ -5,6 +5,7 @@ import { api, CatalogItem, MyPurchases } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
 import { formatUah } from "./PurchaseFlow";
 import { errorText } from "@/lib/apiErrors";
+import { Modal } from "@/components/Modal";
 
 // «Записатись» without a group pass: buy a single visit or a pass by LiqPay (booked once paid), or pay cash to the
 // trainer in the hall (booked right away, the trainer confirms the money)
@@ -56,101 +57,93 @@ export function GroupPassModal({
   const label = (item: CatalogItem) => (item.optionLabel ? `${item.title} · ${item.optionLabel}` : item.title);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onDismiss();
-      }}
-    >
-      <div className="absolute inset-0 bg-background/70" />
-      <div className="relative w-full max-w-[480px] mx-auto bg-surface rounded-t-[20px] sm:rounded-2xl px-5 pt-6 pb-8 shadow-xl border border-line">
-        {step === "booked" ? (
-          <>
-            <h2 className="font-geologica font-semibold text-lg text-heading mb-1">Записано на {slotTime}</h2>
-            <p className="text-body text-sm mb-4">Оплатіть тренеру в залі, і він підтвердить оплату.</p>
-            <button
-              onClick={onDismiss}
-              className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors"
-            >
-              Добре
-            </button>
-          </>
-        ) : (
-          <>
-            <h2 className="font-geologica font-semibold text-lg text-heading mb-1">Групове тренування {slotTime}</h2>
-            <div className="mb-4" />
+    <Modal onDismiss={onDismiss}>
+      {step === "booked" ? (
+        <>
+          <h2 className="font-geologica font-semibold text-lg text-heading mb-1">Записано на {slotTime}</h2>
+          <p className="text-body text-sm mb-4">Оплатіть тренеру в залі, і він підтвердить оплату.</p>
+          <button
+            onClick={onDismiss}
+            className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors"
+          >
+            Добре
+          </button>
+        </>
+      ) : (
+        <>
+          <h2 className="font-geologica font-semibold text-lg text-heading mb-1">Групове тренування {slotTime}</h2>
+          <div className="mb-4" />
 
-            {!data && !error && <p className="text-muted text-sm">Завантаження...</p>}
+          {!data && !error && <p className="text-muted text-sm">Завантаження...</p>}
 
-            {data && (
-              <div className="flex flex-col space-y-2">
-                {step === "choose" ? (
-                  <>
-                    {single && (
-                      <button
-                        onClick={() => buy(single, "LIQPAY")}
-                        disabled={busy}
-                        className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
-                      >
-                        Купити разово · {formatUah(single.amountUah)}
-                      </button>
-                    )}
-                    {pass && (
-                      <button
-                        onClick={() => buy(pass, "LIQPAY")}
-                        disabled={busy}
-                        className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
-                      >
-                        Купити абонемент · {pass.optionLabel} · {formatUah(pass.amountUah)}
-                      </button>
-                    )}
-                    {data.canPayCash && (
-                      <button
-                        onClick={() => setStep("cash")}
-                        disabled={busy}
-                        className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"
-                      >
-                        Оплатити готівкою
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  [single, pass]
-                    .filter((x): x is CatalogItem => !!x)
-                    .map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => buy(item, "CASH")}
-                        disabled={busy}
-                        className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
-                      >
-                        {label(item)} · {formatUah(item.amountUah)}
-                      </button>
-                    ))
-                )}
-              </div>
-            )}
+          {data && (
+            <div className="flex flex-col space-y-2">
+              {step === "choose" ? (
+                <>
+                  {single && (
+                    <button
+                      onClick={() => buy(single, "LIQPAY")}
+                      disabled={busy}
+                      className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+                    >
+                      Купити разово · {formatUah(single.amountUah)}
+                    </button>
+                  )}
+                  {pass && (
+                    <button
+                      onClick={() => buy(pass, "LIQPAY")}
+                      disabled={busy}
+                      className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+                    >
+                      Купити абонемент · {pass.optionLabel} · {formatUah(pass.amountUah)}
+                    </button>
+                  )}
+                  {data.canPayCash && (
+                    <button
+                      onClick={() => setStep("cash")}
+                      disabled={busy}
+                      className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"
+                    >
+                      Оплатити готівкою
+                    </button>
+                  )}
+                </>
+              ) : (
+                [single, pass]
+                  .filter((x): x is CatalogItem => !!x)
+                  .map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => buy(item, "CASH")}
+                      disabled={busy}
+                      className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+                    >
+                      {label(item)} · {formatUah(item.amountUah)}
+                    </button>
+                  ))
+              )}
+            </div>
+          )}
 
-            {error && (
-              <p className="text-danger text-sm mt-3">
-                {error}{" "}
-                {error.includes("Мій абонемент") && (
-                  <Link href="/purchases" className="underline">
-                    Відкрити
-                  </Link>
-                )}
-              </p>
-            )}
+          {error && (
+            <p className="text-danger text-sm mt-3">
+              {error}{" "}
+              {error.includes("Мій абонемент") && (
+                <Link href="/purchases" className="underline">
+                  Відкрити
+                </Link>
+              )}
+            </p>
+          )}
 
-            <button
-              onClick={() => (step === "cash" ? setStep("choose") : onDismiss())}
-              className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors mt-2"
-            >
-              Назад
-            </button>
-          </>
-        )}
-      </div>
-    </div>
+          <button
+            onClick={() => (step === "cash" ? setStep("choose") : onDismiss())}
+            className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors mt-2"
+          >
+            Назад
+          </button>
+        </>
+      )}
+    </Modal>
   );
 }

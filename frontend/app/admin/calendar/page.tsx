@@ -21,6 +21,7 @@ import { CancellationList } from "@/components/admin/CancellationList";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { errorText } from "@/lib/apiErrors";
 import { longDay } from "@/lib/dates";
+import { Modal } from "@/components/Modal";
 
 // Short labels for calendar events — full names don't fit a day column
 const TYPE_SHORT: Record<TrainingType, string> = {
@@ -384,185 +385,176 @@ export default function CalendarPage() {
       </div>
 
       {modal && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-          onClick={() => setModal(null)}
-        >
-          <div className="absolute inset-0 bg-background/70" />
-          <div
-            className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-5 space-y-4 max-h-full overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div>
-              <p className="text-muted text-xs uppercase tracking-wide mb-1">{longDay(modalDate)}</p>
-              <p className="font-geologica font-semibold text-heading">
-                {editing ? `${TYPE_LABEL[editing.trainingType]} ${editing.slotTime}` : "Додати тренування"}
+        <Modal variant="card" onDismiss={() => setModal(null)} labelledBy="calendar-modal-title">
+          <div>
+            <p className="text-muted text-xs uppercase tracking-wide mb-1">{longDay(modalDate)}</p>
+            <p id="calendar-modal-title" className="font-geologica font-semibold text-heading">
+              {editing ? `${TYPE_LABEL[editing.trainingType]} ${editing.slotTime}` : "Додати тренування"}
+            </p>
+            {editing?.trainingType === "групові" && (
+              <p className="text-muted text-xs mt-1">
+                Записано {editing.bookedCount} з {editing.capacity}
               </p>
-              {editing?.trainingType === "групові" && (
-                <p className="text-muted text-xs mt-1">
-                  Записано {editing.bookedCount} з {editing.capacity}
-                </p>
-              )}
-              {editing && repeatsWeekly(editing) && (
-                <p className="text-muted text-xs mt-1">
-                  ↻ Повторюється щотижня. «Скасувати» прибере лише цей день; щоб прибрати щотижневе, відкрийте{" "}
-                  <Link href="/admin/schedule" className="text-accent hover:underline">
-                    «Розклад групових»
-                  </Link>
+            )}
+            {editing && repeatsWeekly(editing) && (
+              <p className="text-muted text-xs mt-1">
+                ↻ Повторюється щотижня. «Скасувати» прибере лише цей день; щоб прибрати щотижневе, відкрийте{" "}
+                <Link href="/admin/schedule" className="text-accent hover:underline">
+                  «Розклад групових»
+                </Link>
+              </p>
+            )}
+          </div>
+
+          {editing && editing.trainingType !== "групові" && editing.members.length > 0 && (
+            <ul className="space-y-1">
+              {editing.members.map((m) => {
+                const label = memberLabel(m);
+                return (
+                  <li key={m.id} className="flex items-center justify-between text-sm">
+                    <span className="text-body">{m.displayName}</span>
+                    <span className={label.className}>{label.text}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {editing && cancellations?.slotId === editing.slotId && (
+            <CancellationList title="Скасували" items={cancellations.items} withDate />
+          )}
+
+          {/* Тип — тільки при додаванні. Ще одне тренування в цей день: клікніть день знову */}
+          {!editing && (
+            <div className="flex flex-col space-y-2">
+              {TYPES.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => selectType(t)}
+                  className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${selectedType === t ? "" : "border-line"}`}
+                  style={
+                    selectedType === t
+                      ? {
+                          borderColor: TYPE_COLORS[t].border,
+                          backgroundColor: TYPE_COLORS[t].bg,
+                          color: TYPE_COLORS[t].text,
+                        }
+                      : {}
+                  }
+                >
+                  <span>{TYPE_LABEL_PLURAL[t]}</span>
+                  {selectedType === t && <span>✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {!editing && (
+            <div>
+              <label htmlFor="slot-time" className="block text-muted text-xs mb-2 uppercase tracking-wide">
+                Час
+              </label>
+              <input
+                id="slot-time"
+                type="time"
+                step={900}
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                // iOS Safari gives a time input its own min width and ignores w-full without these
+                className={`${FIELD_CLASS} block min-w-0 appearance-none [color-scheme:dark] [&::-webkit-date-and-time-value]:text-left`}
+              />
+              {!assigned && opensAt && TIME_RE.test(time) && time <= opensAt && (
+                <p className="text-warn text-xs mt-2">
+                  Запис відкривається о {opensAt}, тож на це тренування записатися не вийде
                 </p>
               )}
             </div>
+          )}
 
-            {editing && editing.trainingType !== "групові" && editing.members.length > 0 && (
-              <ul className="space-y-1">
-                {editing.members.map((m) => {
-                  const label = memberLabel(m);
-                  return (
-                    <li key={m.id} className="flex items-center justify-between text-sm">
-                      <span className="text-body">{m.displayName}</span>
-                      <span className={label.className}>{label.text}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-
-            {editing && cancellations?.slotId === editing.slotId && (
-              <CancellationList title="Скасували" items={cancellations.items} withDate />
-            )}
-
-            {/* Тип — тільки при додаванні. Ще одне тренування в цей день: клікніть день знову */}
-            {!editing && (
-              <div className="flex flex-col space-y-2">
-                {TYPES.map((t) => (
+          {!editing && !assigned && (
+            <div className="space-y-2">
+              <div className="flex space-x-2">
+                {[
+                  { value: false, label: "Лише цього дня" },
+                  { value: true, label: "Щотижня" },
+                ].map((o) => (
                   <button
-                    key={t}
-                    onClick={() => selectType(t)}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${selectedType === t ? "" : "border-line"}`}
-                    style={
-                      selectedType === t
-                        ? {
-                            borderColor: TYPE_COLORS[t].border,
-                            backgroundColor: TYPE_COLORS[t].bg,
-                            color: TYPE_COLORS[t].text,
-                          }
-                        : {}
-                    }
+                    key={o.label}
+                    onClick={() => setWeekly(o.value)}
+                    aria-pressed={weekly === o.value}
+                    className={`flex-1 px-2 py-2 rounded-lg border text-xs whitespace-nowrap transition-colors ${weekly === o.value ? "border-accent text-accent" : "border-line text-muted"}`}
                   >
-                    <span>{TYPE_LABEL_PLURAL[t]}</span>
-                    {selectedType === t && <span>✓</span>}
+                    {o.label}
                   </button>
                 ))}
               </div>
-            )}
-
-            {!editing && (
-              <div>
-                <label htmlFor="slot-time" className="block text-muted text-xs mb-2 uppercase tracking-wide">
-                  Час
-                </label>
-                <input
-                  id="slot-time"
-                  type="time"
-                  step={900}
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  // iOS Safari gives a time input its own min width and ignores w-full without these
-                  className={`${FIELD_CLASS} block min-w-0 appearance-none [color-scheme:dark] [&::-webkit-date-and-time-value]:text-left`}
-                />
-                {!assigned && opensAt && TIME_RE.test(time) && time <= opensAt && (
-                  <p className="text-warn text-xs mt-2">
-                    Запис відкривається о {opensAt}, тож на це тренування записатися не вийде
-                  </p>
-                )}
-              </div>
-            )}
-
-            {!editing && !assigned && (
-              <div className="space-y-2">
-                <div className="flex space-x-2">
-                  {[
-                    { value: false, label: "Лише цього дня" },
-                    { value: true, label: "Щотижня" },
-                  ].map((o) => (
-                    <button
-                      key={o.label}
-                      onClick={() => setWeekly(o.value)}
-                      aria-pressed={weekly === o.value}
-                      className={`flex-1 px-2 py-2 rounded-lg border text-xs whitespace-nowrap transition-colors ${weekly === o.value ? "border-accent text-accent" : "border-line text-muted"}`}
-                    >
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-                {weekly && (
-                  <p className="text-muted text-xs">
-                    Додасться в «Розклад групових»: щотижня в цей день
-                    {schedule && !schedule.autoCreate
-                      ? ". У розкладі увімкнеться «Автоматично додавати на 3 тижні наперед»"
-                      : ""}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {assigned && (
-              <div className="flex flex-col space-y-2">
-                <p className="text-muted text-xs uppercase tracking-wide">
-                  {selectedType === "спліт" ? "Люди (до трьох)" : "Людина"}
+              {weekly && (
+                <p className="text-muted text-xs">
+                  Додасться в «Розклад групових»: щотижня в цей день
+                  {schedule && !schedule.autoCreate
+                    ? ". У розкладі увімкнеться «Автоматично додавати на 3 тижні наперед»"
+                    : ""}
                 </p>
-                {memberIds.map((id, i) => (
-                  <select
-                    key={i}
-                    aria-label={`Людина ${i + 1}`}
-                    value={id}
-                    onChange={(e) => setMemberIds((ids) => ids.map((v, j) => (j === i ? e.target.value : v)))}
-                    className={FIELD_CLASS}
-                  >
-                    <option value="">{i === 0 ? "Виберіть людину" : "Не вибрано (необовʼязково)"}</option>
-                    {pickerMembers
-                      .filter((m) => m.id === id || !memberIds.includes(m.id))
-                      .map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.memberCode ? `${m.displayName} · ${m.memberCode}` : m.displayName}
-                        </option>
-                      ))}
-                  </select>
-                ))}
-                <p className="text-muted text-xs">Тренування побачать тільки вибрані люди</p>
-              </div>
-            )}
-
-            {error && <p className="text-danger text-sm">{error}</p>}
-
-            <div className="flex flex-col space-y-2">
-              {(!editing || assigned) && (
-                <button
-                  onClick={editing ? handleSaveMembers : handleAdd}
-                  disabled={saving}
-                  className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
-                >
-                  {saving ? "Зачекайте..." : "Зберегти"}
-                </button>
               )}
-              {editing && (
-                <button
-                  onClick={handleCancelSlot}
-                  disabled={saving}
-                  className="btn-ghost hover-danger w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"
-                >
-                  Скасувати тренування {editing.slotTime}
-                </button>
-              )}
-              <button
-                onClick={() => setModal(null)}
-                className="text-muted text-sm py-2 transition-colors hover:text-body"
-              >
-                Закрити
-              </button>
             </div>
+          )}
+
+          {assigned && (
+            <div className="flex flex-col space-y-2">
+              <p className="text-muted text-xs uppercase tracking-wide">
+                {selectedType === "спліт" ? "Люди (до трьох)" : "Людина"}
+              </p>
+              {memberIds.map((id, i) => (
+                <select
+                  key={i}
+                  aria-label={`Людина ${i + 1}`}
+                  value={id}
+                  onChange={(e) => setMemberIds((ids) => ids.map((v, j) => (j === i ? e.target.value : v)))}
+                  className={FIELD_CLASS}
+                >
+                  <option value="">{i === 0 ? "Виберіть людину" : "Не вибрано (необовʼязково)"}</option>
+                  {pickerMembers
+                    .filter((m) => m.id === id || !memberIds.includes(m.id))
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.memberCode ? `${m.displayName} · ${m.memberCode}` : m.displayName}
+                      </option>
+                    ))}
+                </select>
+              ))}
+              <p className="text-muted text-xs">Тренування побачать тільки вибрані люди</p>
+            </div>
+          )}
+
+          {error && <p className="text-danger text-sm">{error}</p>}
+
+          <div className="flex flex-col space-y-2">
+            {(!editing || assigned) && (
+              <button
+                onClick={editing ? handleSaveMembers : handleAdd}
+                disabled={saving}
+                className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+              >
+                {saving ? "Зачекайте..." : "Зберегти"}
+              </button>
+            )}
+            {editing && (
+              <button
+                onClick={handleCancelSlot}
+                disabled={saving}
+                className="btn-ghost hover-danger w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"
+              >
+                Скасувати тренування {editing.slotTime}
+              </button>
+            )}
+            <button
+              onClick={() => setModal(null)}
+              className="text-muted text-sm py-2 transition-colors hover:text-body"
+            >
+              Закрити
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </PageLayout>
   );

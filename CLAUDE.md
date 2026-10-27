@@ -202,6 +202,7 @@ Deliberate copies (kept in sync by code, checked consistent on 2026-10-23): a pa
 ### Frontend conventions
 
 - All backend calls go through `frontend/lib/api.ts` (typed fetch wrapper, `credentials: 'include'`)
+- Modals: `components/Modal.tsx` (`variant="sheet"` comes up from the bottom on a phone, `"card"` for the calendar and «Тренери»): the overlay, click outside / Escape to close (`canDismiss={false}` while saving), `role="dialog"`. Don't build another overlay by hand
 - Dates: `frontend/lib/dates.ts` (`ddmm` «27.10», `longDay` «понеділок, 27 жовтня», `shortDay` «27 жовт.», `kyivDateTime` «20 жовт., 15:02») and `lib/kyivTime.ts` («15:02»). A training day ('YYYY-MM-DD') is a date, not a moment: format it as noon UTC in UTC (local noon formatted in Kyiv time is the next day in a browser at UTC−10); a moment from the API (`…At`) in Kyiv time
 - Errors shown to a person go through **`errorText(err, fallback, own?)`** (`frontend/lib/apiErrors.ts`): one table backend message → Ukrainian text; an unknown message or a network failure shows the fallback, **never the backend's English**. A new backend error a person can hit gets a row there (the needle must be part of the backend message); `own` words the same error for one place
 - Tailwind CSS v4 — design tokens defined inline in `globals.css` under `@theme`. Use named tokens (`text-accent`, `bg-teal`, `text-muted`, etc.), not arbitrary hex values

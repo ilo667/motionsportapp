@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { api, CancelFeePreview } from "@/lib/api";
 import { feeWarning } from "@/lib/cancelFee";
+import { Modal } from "@/components/Modal";
 
 interface Props {
   action: "cancel" | "switch";
@@ -44,46 +45,40 @@ export function CancellationReasonModal({ action, switchTime, slotId, onConfirm,
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onDismiss();
-      }}
-    >
-      <div className="absolute inset-0 bg-background/70" />
-      <div className="relative w-full max-w-[480px] mx-auto bg-surface rounded-t-[20px] sm:rounded-2xl px-5 pt-6 pb-8 shadow-xl border border-line">
-        <h2 className="font-geologica font-semibold text-lg text-heading mb-1">{title}</h2>
-        {warning && (
-          <p className="text-warn bg-warn-bg border border-warn-line rounded-xl px-3 py-2.5 text-sm mb-4">
-            Скасування зараз: {warning.charAt(0).toLowerCase() + warning.slice(1)}
-          </p>
-        )}
-        <p className="text-muted text-sm mb-4">{prompt}</p>
+    <Modal onDismiss={onDismiss} labelledBy="cancel-reason-title">
+      <h2 id="cancel-reason-title" className="font-geologica font-semibold text-lg text-heading mb-1">
+        {title}
+      </h2>
+      {warning && (
+        <p className="text-warn bg-warn-bg border border-warn-line rounded-xl px-3 py-2.5 text-sm mb-4">
+          Скасування зараз: {warning.charAt(0).toLowerCase() + warning.slice(1)}
+        </p>
+      )}
+      <p className="text-muted text-sm mb-4">{prompt}</p>
 
-        <textarea
-          ref={textareaRef}
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={3}
-          placeholder="Напишіть причину..."
-          className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-body resize-none focus:outline-none focus:border-teal"
-        />
+      <textarea
+        ref={textareaRef}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        rows={3}
+        placeholder="Напишіть причину..."
+        className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-body resize-none focus:outline-none focus:border-teal"
+      />
 
-        <div className="flex flex-col space-y-2 mt-4">
-          <button
-            disabled={!canSubmit}
-            onClick={handleSubmit}
-            className={`w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 ${
-              action === "switch" ? "btn-primary" : "btn-danger"
-            }`}
-          >
-            {submitLabel}
-          </button>
-          <button onClick={onDismiss} className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors">
-            Назад
-          </button>
-        </div>
+      <div className="flex flex-col space-y-2 mt-4">
+        <button
+          disabled={!canSubmit}
+          onClick={handleSubmit}
+          className={`w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 ${
+            action === "switch" ? "btn-primary" : "btn-danger"
+          }`}
+        >
+          {submitLabel}
+        </button>
+        <button onClick={onDismiss} className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors">
+          Назад
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }

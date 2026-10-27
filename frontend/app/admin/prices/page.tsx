@@ -6,6 +6,7 @@ import { PriceList } from "@/components/PriceList";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { kyivDateTime } from "@/lib/dates";
+import { Modal } from "@/components/Modal";
 
 // Same limit as UpdatePriceDto on the backend
 const MAX_PRICE_UAH = 100_000;
@@ -28,59 +29,39 @@ function ConfirmModal({
   onDismiss: () => void;
 }) {
   const confirmRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    confirmRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onDismiss();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onDismiss]);
+  useEffect(() => confirmRef.current?.focus(), []);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !saving) onDismiss();
-      }}
-    >
-      <div className="absolute inset-0 bg-background/70 pointer-events-none" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="price-confirm-title"
-        className="relative w-full max-w-[480px] mx-auto bg-surface rounded-t-[20px] sm:rounded-2xl px-5 pt-6 pb-8 shadow-xl border border-line"
-      >
-        <h2 id="price-confirm-title" className="font-geologica font-semibold text-lg text-heading mb-2">
-          {itemName(item)}
-        </h2>
-        <p className="font-geologica text-2xl text-heading tabular-nums">
-          <s className="text-muted text-lg mr-2">{formatUah(item.amountUah)}</s>
-          {formatUah(amountUah)}
-        </p>
-        <p className="mt-3 mb-5 rounded-xl border border-line bg-background px-3 py-2.5 text-sm text-body">
-          Ціна зміниться <span className="text-heading font-medium">для всіх тренерів</span>. В історії буде видно, що
-          її змінили ви.
-        </p>
-        <div className="flex flex-col space-y-2">
-          <button
-            ref={confirmRef}
-            onClick={onConfirm}
-            disabled={saving}
-            className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
-          >
-            {saving ? "Збереження..." : "Так, змінити для всіх"}
-          </button>
-          <button
-            onClick={onDismiss}
-            disabled={saving}
-            className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors"
-          >
-            Скасувати
-          </button>
-        </div>
+    <Modal onDismiss={onDismiss} canDismiss={!saving} labelledBy="price-confirm-title">
+      <h2 id="price-confirm-title" className="font-geologica font-semibold text-lg text-heading mb-2">
+        {itemName(item)}
+      </h2>
+      <p className="font-geologica text-2xl text-heading tabular-nums">
+        <s className="text-muted text-lg mr-2">{formatUah(item.amountUah)}</s>
+        {formatUah(amountUah)}
+      </p>
+      <p className="mt-3 mb-5 rounded-xl border border-line bg-background px-3 py-2.5 text-sm text-body">
+        Ціна зміниться <span className="text-heading font-medium">для всіх тренерів</span>. В історії буде видно, що її
+        змінили ви.
+      </p>
+      <div className="flex flex-col space-y-2">
+        <button
+          ref={confirmRef}
+          onClick={onConfirm}
+          disabled={saving}
+          className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+        >
+          {saving ? "Збереження..." : "Так, змінити для всіх"}
+        </button>
+        <button
+          onClick={onDismiss}
+          disabled={saving}
+          className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors"
+        >
+          Скасувати
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }
 
