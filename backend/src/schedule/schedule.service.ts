@@ -23,13 +23,13 @@ import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
 import { loadFreezes } from '../freezes/freeze.store';
 import { frozenOn, plusDays } from '../freezes/rules';
 import { lateCancelledSlotIds } from '../booking/group-booking';
+import { passUsableOn } from '../purchases/validity';
 
 // An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
 const ASSIGNED_SHOWN_FOR_MINUTES = 60;
 
 type DayRow = typeof trainingDays.$inferSelect;
 
-// Group trainings appear by themselves on these weekdays, so they exist even if the trainer forgets
 // A schedule time left out of the calendar on a date: the training or the trainer's day there is cancelled, or the
 // time is taken (another training at that time, or a group within an hour). «Зберегти» lists them
 export type SkippedTraining = { date: string; slotTime: string; reason: 'cancelled' | 'taken' };
@@ -126,52 +126,12 @@ export class ScheduleService {
       )
       .orderBy(trainingSlots.slotTime);
 
-    let myBookingSlotId: string | null = null;
-    let myGuest: { name: string } | null = null;
-    const myVacancyAlertSlotIds = new Set<string>();
-    let lateCancelled = new Set<string>();
-
-    if (memberId && slots.length > 0) {
-      const [mine] = await this.database.db
-        .select({ id: bookings.id, slotId: bookings.slotId })
-        .from(bookings)
-        .where(
-          and(
-            eq(bookings.memberId, memberId),
-            inArray(
-              bookings.slotId,
-              slots.map((s) => s.id),
-            ),
-            eq(bookings.status, 'ACTIVE'),
-          ),
+    const mine = memberId
+      ? await this.memberOnSlots(
+          memberId,
+          slots.map((s) => s.id),
         )
-        .limit(1);
-      myBookingSlotId = mine?.slotId ?? null;
-      if (mine) {
-        const [guest] = await this.database.db
-          .select({ name: bookingGuests.name })
-          .from(bookingGuests)
-          .where(and(eq(bookingGuests.bookingId, mine.id), eq(bookingGuests.status, 'ACTIVE')))
-          .limit(1);
-        myGuest = guest ?? null;
-      }
-
-      const slotIds = slots.map((s) => s.id);
-      lateCancelled = await lateCancelledSlotIds(this.database.db, memberId, slotIds);
-      if (slotIds.length > 0) {
-        const alerts = await this.database.db
-          .select({ slotId: vacancyAlerts.slotId })
-          .from(vacancyAlerts)
-          .where(
-            and(
-              eq(vacancyAlerts.memberId, memberId),
-              eq(vacancyAlerts.active, true),
-              inArray(vacancyAlerts.slotId, slotIds),
-            ),
-          );
-        alerts.forEach((a) => myVacancyAlertSlotIds.add(a.slotId));
-      }
-    }
+      : null;
 
     const [ann] = await this.database.db
       .select({
@@ -197,12 +157,12 @@ export class ScheduleService {
         trainingType: s.trainingType,
         capacity: s.capacity,
         bookedCount: s.bookedCount,
-        isMyBooking: s.id === myBookingSlotId,
-        isMyVacancyAlert: myVacancyAlertSlotIds.has(s.id),
+        isMyBooking: s.id === mine?.bookedSlotId,
+        isMyVacancyAlert: !!mine?.alertSlotIds.has(s.id),
         // The guest the member brings to this training (only on their own booking)
-        myGuest: s.id === myBookingSlotId ? myGuest : null,
+        myGuest: s.id === mine?.bookedSlotId ? mine.guest : null,
         // The member cancelled it late (and paid): no booking it again
-        lateCancelled: lateCancelled.has(s.id),
+        lateCancelled: !!mine?.lateCancelled.has(s.id),
         // Booking, cancelling and switching for this training are over
         started: now >= slotStartsAt(targetDay.localDate, s.slotTime),
       })),
@@ -212,6 +172,43 @@ export class ScheduleService {
       frozenUntil,
       serverTime: now.toUTC().toISO(),
       announcement,
+    };
+  }
+
+  // The member on the day's group trainings: the one they are booked on (one a day) and their guest there, the ones
+  // they cancelled late, the ones they asked «Повідомити про місце» for
+  private async memberOnSlots(memberId: string, slotIds: string[]) {
+    const none = { bookedSlotId: null, guest: null, lateCancelled: new Set<string>(), alertSlotIds: new Set<string>() };
+    if (slotIds.length === 0) return none;
+    const db = this.database.db;
+    const [booking] = await db
+      .select({ id: bookings.id, slotId: bookings.slotId })
+      .from(bookings)
+      .where(and(eq(bookings.memberId, memberId), inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')))
+      .limit(1);
+    const [guest] = booking
+      ? await db
+          .select({ name: bookingGuests.name })
+          .from(bookingGuests)
+          .where(and(eq(bookingGuests.bookingId, booking.id), eq(bookingGuests.status, 'ACTIVE')))
+          .limit(1)
+      : [];
+    const lateCancelled = await lateCancelledSlotIds(db, memberId, slotIds);
+    const alerts = await db
+      .select({ slotId: vacancyAlerts.slotId })
+      .from(vacancyAlerts)
+      .where(
+        and(
+          eq(vacancyAlerts.memberId, memberId),
+          eq(vacancyAlerts.active, true),
+          inArray(vacancyAlerts.slotId, slotIds),
+        ),
+      );
+    return {
+      bookedSlotId: booking?.slotId ?? null,
+      guest: guest ?? null,
+      lateCancelled,
+      alertSlotIds: new Set(alerts.map((a) => a.slotId)),
     };
   }
 
@@ -291,22 +288,25 @@ export class ScheduleService {
         ),
       );
 
-    // Trainings left in the member's packages of each type: the card shows «з пакета» or «Оплатити»
+    // Trainings left that can pay for this training: packages of its type usable on its date, as the spend picks
+    // them (a burned or expired one counts nothing). The card shows «Залишилось N» or «Оплатити»
     const packages = await this.entitlements.packagesOf(memberId);
-    const leftOf = (type: string) =>
-      packages.filter((p) => p.trainingType === type).reduce((sum, p) => sum + Math.max(p.left, 0), 0);
+    const leftFor = (type: string, date: string) =>
+      packages
+        .filter((p) => p.trainingType === type && passUsableOn(p, date))
+        .reduce((sum, p) => sum + Math.max(p.left, 0), 0);
 
     return visible.map((r) => ({
       ...r,
       isMyBooking: mine.some((b) => b.slotId === r.id),
       spent: mine.some((b) => b.slotId === r.id && !!b.spentFrom),
-      packageLeft: leftOf(r.trainingType),
+      packageLeft: leftFor(r.trainingType, r.localDate),
       // Cancellation is allowed until the training starts
       started: now >= slotStartsAt(r.localDate, r.slotTime),
     }));
   }
 
-  // Group trainings of each trainer for the next 3 weeks, from their «Мій розклад» (the first trainer without one
+  // Group trainings of each trainer for the next 3 weeks, from their «Розклад групових» (the first trainer without one
   // keeps Mon/Wed/Fri 19:00 and 20:00). Only adds: a time already taken (by any training, even a cancelled one) is
   // left alone, a CANCELLED day is skipped, and so is a day where the trainer cancelled their own trainings (a
   // cancelled group, none active), so the trainer's changes are never undone. Without `trainerId`: every trainer,

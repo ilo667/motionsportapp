@@ -103,6 +103,37 @@ describe('ScheduleService — group pass', () => {
   });
 });
 
+describe("ScheduleService — the member on the day's group trainings", () => {
+  it('their booking and guest, a training cancelled late, a seat they wait for', async () => {
+    const { db } = makeDb([
+      [], // no assigned trainings
+      [{ trainerId: 'trainer-1' }],
+      [trainingDay],
+      HAS_GROUP,
+      slots,
+      [{ id: 'b1', slotId: 'slot-1' }], // booked on 19:00
+      [{ name: 'Оля' }], // with a guest
+      [{ slotId: 'slot-2' }], // cancelled 20:00 late
+      [{ slotId: 'slot-2' }], // waits for a seat on 20:00
+      [], // no announcement
+    ]);
+    const result = await makeService(db, kyivAt(15)).getNext('member-1');
+    expect(result.slots.map((s) => [s.id, s.isMyBooking, s.myGuest, s.lateCancelled, s.isMyVacancyAlert])).toEqual([
+      ['slot-1', true, { name: 'Оля' }, false, false],
+      ['slot-2', false, null, true, true],
+    ]);
+  });
+
+  it('not booked: no guest asked for', async () => {
+    const { db } = makeDb([[], [{ trainerId: 'trainer-1' }], [trainingDay], HAS_GROUP, slots, [], [], [], []]);
+    const result = await makeService(db, kyivAt(15)).getNext('member-1');
+    expect(result.slots.map((s) => [s.isMyBooking, s.myGuest])).toEqual([
+      [false, null],
+      [false, null],
+    ]);
+  });
+});
+
 describe('ScheduleService — announcement visibility', () => {
   it('shows announcement when window is open and ann is published', async () => {
     const { db } = makeDb([TRAINER, [trainingDay], HAS_GROUP, slots, [publishedAnnouncement]]);
@@ -264,14 +295,46 @@ describe('ScheduleService — assigned trainings', () => {
       [],
       [],
     ]);
+    const waiting = { purchasedOn: '2026-10-10', activateBy: '2026-11-10', activatedOn: null, validUntil: null };
+    const active = {
+      purchasedOn: '2026-09-01',
+      activateBy: '2026-10-01',
+      activatedOn: '2026-09-05',
+      validUntil: '2026-10-25',
+    };
     const packages = [
-      { trainingType: 'спліт', left: 3 },
-      { trainingType: 'спліт', left: 2 },
-      { trainingType: 'персональні', left: 4 },
+      { trainingType: 'спліт', left: 3, ...waiting },
+      { trainingType: 'спліт', left: 2, ...active },
+      { trainingType: 'персональні', left: 4, ...waiting },
+      // Can't pay for a training today: burned (not activated in time), expired, bought after it
+      {
+        trainingType: 'спліт',
+        left: 8,
+        purchasedOn: '2026-09-01',
+        activateBy: '2026-10-01',
+        activatedOn: null,
+        validUntil: null,
+      },
+      {
+        trainingType: 'спліт',
+        left: 6,
+        purchasedOn: '2026-08-01',
+        activateBy: '2026-09-01',
+        activatedOn: '2026-08-02',
+        validUntil: '2026-09-02',
+      },
+      {
+        trainingType: 'спліт',
+        left: 10,
+        purchasedOn: '2026-10-21',
+        activateBy: '2026-11-21',
+        activatedOn: null,
+        validUntil: null,
+      },
     ];
     const result = await makeService(db, kyivAt(15), packages).getNext('member-1');
 
-    // 12:00 ended at 13:00, so only the evening split is shown; its trainings left = all split packages
+    // 12:00 ended at 13:00, so only the evening split is shown; its trainings left = the split packages usable today
     expect(result?.assignedSlots).toEqual([
       expect.objectContaining({ id: 'p-evening', isMyBooking: true, spent: true, packageLeft: 5, started: false }),
     ]);
