@@ -1,10 +1,13 @@
 const BASE = "/api";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+type Ok = { ok: boolean };
+
+// A JSON body goes with its Content-Type; a request without one sends neither
+async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
+    method,
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    ...init,
+    ...(body !== undefined && { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -17,6 +20,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const text = await res.text();
   return (text ? JSON.parse(text) : null) as T;
 }
+
+const get = <T>(path: string) => request<T>(path);
+const post = <T = Ok>(path: string, body?: unknown) => request<T>(path, "POST", body);
+const put = <T = Ok>(path: string, body?: unknown) => request<T>(path, "PUT", body);
+const patch = <T = Ok>(path: string, body?: unknown) => request<T>(path, "PATCH", body);
+const del = <T = Ok>(path: string, body?: unknown) => request<T>(path, "DELETE", body);
 
 // This browser's push subscription, if any. getRegistration(), not serviceWorker.ready: ready never
 // resolves when no service worker is registered
@@ -55,7 +64,7 @@ export interface MemberVisit {
   localDate: string;
   slotTime: string;
   trainingType: TrainingType;
-  attendance: "PRESENT" | "ABSENT" | "UNMARKED";
+  attendance: AttendanceStatus;
 }
 
 export interface Trainer {
@@ -75,7 +84,7 @@ export interface TrainerInvite {
   expiresAt: string;
 }
 
-// Price list shared by all trainers (admin only for now; payments don't use it yet)
+// Price list shared by all trainers (members see it without trainer names: PriceListItem); purchases copy its amounts
 export type PriceSection = "club_card" | "assigned" | "group";
 
 export interface PriceItem {
@@ -88,7 +97,7 @@ export interface PriceItem {
   updatedAt: string | null;
 }
 
-// A trainer's regular group trainings («Мій розклад»): times per weekday (1 = Пн … 7 = Нд), one opening time for
+// A trainer's regular group trainings («Розклад групових»): times per weekday (1 = Пн … 7 = Нд), one opening time for
 // booking on the training day, and whether they are created 3 weeks ahead by themselves
 export interface TrainerSchedule {
   bookingOpensAt: string; // "HH:MM"
@@ -333,7 +342,7 @@ export interface AssignedSlotView {
   id: string;
   localDate: string;
   slotTime: string;
-  trainingType: Exclude<TrainingType, "групові">;
+  trainingType: AssignedType;
   capacity: number;
   bookedCount: number;
   isMyBooking: boolean;
@@ -434,19 +443,11 @@ export interface CalendarSlot {
 }
 
 export const api = {
-  me: () => request<MeResponse>("/auth/me"),
+  me: () => get<MeResponse>("/auth/me"),
 
-  register: (displayName: string, pin: string) =>
-    request<RegisterResponse>("/auth/member/register", {
-      method: "POST",
-      body: JSON.stringify({ displayName, pin }),
-    }),
+  register: (displayName: string, pin: string) => post<RegisterResponse>("/auth/member/register", { displayName, pin }),
 
-  login: (memberCode: string, pin: string) =>
-    request<LoginResponse>("/auth/member/login", {
-      method: "POST",
-      body: JSON.stringify({ memberCode, pin }),
-    }),
+  login: (memberCode: string, pin: string) => post<LoginResponse>("/auth/member/login", { memberCode, pin }),
 
   // Clears the mg_authed flag for every logout (member and trainer), even if the request fails,
   // so `/` doesn't call the API with a dead session (401 in the console).
@@ -458,303 +459,195 @@ export const api = {
     } catch {}
     const endpoint = await currentPushEndpoint();
     if (endpoint) await api.unsubscribePush(endpoint).catch(() => {});
-    return request<{ ok: boolean }>("/auth/logout", { method: "POST" });
+    return post("/auth/logout");
   },
 
   forgotPin: (memberCode: string, recoveryCode: string, newPin: string) =>
-    request<RegisterResponse>("/auth/member/forgot", {
-      method: "POST",
-      body: JSON.stringify({ memberCode, recoveryCode, newPin }),
-    }),
+    post<RegisterResponse>("/auth/member/forgot", { memberCode, recoveryCode, newPin }),
 
-  getScheduleNext: () => request<ScheduleNext>("/schedule/next"),
+  getScheduleNext: () => get<ScheduleNext>("/schedule/next"),
 
-  book: (slotId: string) =>
-    request<{ ok: boolean }>("/bookings", {
-      method: "POST",
-      body: JSON.stringify({ slotId }),
-    }),
+  book: (slotId: string) => post("/bookings", { slotId }),
 
   // A free guest on the member's group booking (one per booking; takes a seat)
-  addGuest: (slotId: string, name: string) =>
-    request<{ ok: boolean }>("/bookings/guest", {
-      method: "POST",
-      body: JSON.stringify({ slotId, name }),
-    }),
+  addGuest: (slotId: string, name: string) => post("/bookings/guest", { slotId, name }),
 
-  removeGuest: (slotId: string) =>
-    request<{ ok: boolean }>("/bookings/guest", {
-      method: "DELETE",
-      body: JSON.stringify({ slotId }),
-    }),
+  removeGuest: (slotId: string) => del("/bookings/guest", { slotId }),
 
-  getCancelFee: (slotId: string) =>
-    request<CancelFeePreview>(`/bookings/cancel-fee?slotId=${encodeURIComponent(slotId)}`),
+  getCancelFee: (slotId: string) => get<CancelFeePreview>(`/bookings/cancel-fee?slotId=${encodeURIComponent(slotId)}`),
 
-  cancelBooking: (slotId: string, reason: string) =>
-    request<{ ok: boolean }>("/bookings/current", {
-      method: "DELETE",
-      body: JSON.stringify({ slotId, reason }),
-    }),
+  cancelBooking: (slotId: string, reason: string) => del("/bookings/current", { slotId, reason }),
 
-  switchSlot: (newSlotId: string, reason: string) =>
-    request<{ ok: boolean }>("/bookings/current", {
-      method: "PATCH",
-      body: JSON.stringify({ newSlotId, reason }),
-    }),
+  switchSlot: (newSlotId: string, reason: string) => patch("/bookings/current", { newSlotId, reason }),
 
   adminLogin: (username: string, password: string) =>
-    request<{ username: string }>("/auth/admin/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    }),
+    post<{ username: string }>("/auth/admin/login", { username, password }),
 
-  checkTrainerInvite: (token: string) => request<{ valid: boolean }>(`/auth/admin/invite/${encodeURIComponent(token)}`),
+  checkTrainerInvite: (token: string) => get<{ valid: boolean }>(`/auth/admin/invite/${encodeURIComponent(token)}`),
 
   registerTrainer: (token: string, username: string, password: string) =>
-    request<{ username: string }>("/auth/admin/register", {
-      method: "POST",
-      body: JSON.stringify({ token, username, password }),
-    }),
+    post<{ username: string }>("/auth/admin/register", { token, username, password }),
 
   changePassword: (currentPassword: string, newPassword: string) =>
-    request<{ ok: boolean }>("/auth/admin/password", {
-      method: "POST",
-      body: JSON.stringify({ currentPassword, newPassword }),
-    }),
+    post("/auth/admin/password", { currentPassword, newPassword }),
 
-  createTrainerInvite: () =>
-    request<{ id: string; token: string; expiresAt: string }>("/admin/trainer-invites", { method: "POST" }),
+  createTrainerInvite: () => post<{ id: string; token: string; expiresAt: string }>("/admin/trainer-invites"),
 
-  getTrainerInvites: () => request<TrainerInvite[]>("/admin/trainer-invites"),
+  getTrainerInvites: () => get<TrainerInvite[]>("/admin/trainer-invites"),
 
-  revokeTrainerInvite: (id: string) => request<{ ok: boolean }>(`/admin/trainer-invites/${id}`, { method: "DELETE" }),
+  revokeTrainerInvite: (id: string) => del(`/admin/trainer-invites/${id}`),
 
   // Clients (and cash requests waiting) go to `transferToId`; trainings not over yet are cancelled
   disableTrainer: (id: string, transferToId: string) =>
-    request<{ movedClients: number; cancelledTrainings: number }>(`/admin/trainers/${id}/disable`, {
-      method: "POST",
-      body: JSON.stringify({ transferToId }),
-    }),
+    post<{ movedClients: number; cancelledTrainings: number }>(`/admin/trainers/${id}/disable`, { transferToId }),
 
-  getAdminSchedule: () => request<AdminSchedule | null>("/admin/schedule"),
+  getAdminSchedule: () => get<AdminSchedule | null>("/admin/schedule"),
 
   // Newest first; pass the returned nextBefore to load older days
   getHistory: (before?: string) =>
-    request<{ days: HistoryDay[]; nextBefore: string | null }>(`/admin/history${before ? `?before=${before}` : ""}`),
+    get<{ days: HistoryDay[]; nextBefore: string | null }>(`/admin/history${before ? `?before=${before}` : ""}`),
 
-  cancelSlot: (slotId: string) =>
-    request<{ ok: boolean }>(`/admin/slots/${slotId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "CANCELLED" }),
-    }),
+  cancelSlot: (slotId: string) => patch(`/admin/slots/${slotId}`, { status: "CANCELLED" }),
 
-  cancelTrainingDay: (date: string) =>
-    request<{ ok: boolean }>(`/admin/training-days/${date}`, {
-      method: "PUT",
-      body: JSON.stringify({ status: "CANCELLED" }),
-    }),
+  cancelTrainingDay: (date: string) => put(`/admin/training-days/${date}`, { status: "CANCELLED" }),
 
   // Continue paying a pending LiqPay purchase. { status: "PAID" } — a previous attempt already succeeded
   checkoutPurchase: (purchaseId: string) =>
-    request<LiqPayCheckout | { status: "PAID" }>("/payments/checkout", {
-      method: "POST",
-      body: JSON.stringify({ purchaseId }),
-    }),
+    post<LiqPayCheckout | { status: "PAID" }>("/payments/checkout", { purchaseId }),
 
-  getPurchases: () => request<MyPurchases>("/purchases"),
+  getPurchases: () => get<MyPurchases>("/purchases"),
 
   // «Заморозити абонемент»: the member asks, the trainer approves (the same for «Розморозити»)
-  getMyFreeze: () => request<MyFreeze>("/freezes"),
-  requestFreeze: () => request<{ ok: boolean }>("/freezes", { method: "POST" }),
-  cancelFreezeRequest: () => request<{ ok: boolean }>("/freezes/cancel", { method: "POST" }),
-  requestUnfreeze: () => request<{ ok: boolean }>("/freezes/unfreeze", { method: "POST" }),
+  getMyFreeze: () => get<MyFreeze>("/freezes"),
+  requestFreeze: () => post("/freezes"),
+  cancelFreezeRequest: () => post("/freezes/cancel"),
+  requestUnfreeze: () => post("/freezes/unfreeze"),
 
-  getStats: () => request<TrainerStats>("/admin/stats"),
+  getStats: () => get<TrainerStats>("/admin/stats"),
 
   // Late cancellations: «Не списувати», and the half refunds the trainer returns
-  waiveCancelFee: (bookingId: string) =>
-    request<{ ok: boolean }>(`/admin/bookings/${bookingId}/waive-fee`, { method: "POST" }),
-  getPendingCancelRefunds: () => request<CancelRefund[]>("/admin/cancel-refunds/pending"),
-  markCancelRefundDone: (id: string) =>
-    request<{ ok: boolean }>(`/admin/cancel-refunds/${id}/done`, { method: "POST" }),
+  waiveCancelFee: (bookingId: string) => post(`/admin/bookings/${bookingId}/waive-fee`),
+  getPendingCancelRefunds: () => get<CancelRefund[]>("/admin/cancel-refunds/pending"),
+  markCancelRefundDone: (id: string) => post(`/admin/cancel-refunds/${id}/done`),
 
-  getPendingFreezes: () => request<FreezeRequest[]>("/admin/freezes/pending"),
+  getPendingFreezes: () => get<FreezeRequest[]>("/admin/freezes/pending"),
   decideFreeze: (freeze: FreezeRequest, approve: boolean) =>
-    request<{ ok: boolean }>(
+    post(
       `/admin/freezes/${freeze.id}/${freeze.kind === "unfreeze" ? "unfreeze/" : ""}${approve ? "approve" : "reject"}`,
-      { method: "POST" },
     ),
-  getMemberFreezes: (memberId: string) => request<MemberFreeze[]>(`/admin/members/${memberId}/freezes`),
+  getMemberFreezes: (memberId: string) => get<MemberFreeze[]>(`/admin/members/${memberId}/freezes`),
 
   // Trainer: cash requests of own clients, a client's cards / packages / purchases
-  getPendingCash: () => request<CashRequest[]>("/admin/purchases/pending"),
+  getPendingCash: () => get<CashRequest[]>("/admin/purchases/pending"),
 
-  confirmCash: (purchaseId: string) =>
-    request<{ ok: boolean }>(`/admin/purchases/${purchaseId}/confirm`, { method: "POST" }),
+  confirmCash: (purchaseId: string) => post(`/admin/purchases/${purchaseId}/confirm`),
 
-  rejectCash: (purchaseId: string) =>
-    request<{ ok: boolean }>(`/admin/purchases/${purchaseId}/reject`, { method: "POST" }),
+  rejectCash: (purchaseId: string) => post(`/admin/purchases/${purchaseId}/reject`),
 
-  getStrayPayments: () => request<StrayPayment[]>("/admin/payments/stray"),
+  getStrayPayments: () => get<StrayPayment[]>("/admin/payments/stray"),
 
-  markPaymentHandled: (paymentId: string) =>
-    request<{ ok: boolean }>(`/admin/payments/${paymentId}/handled`, { method: "POST" }),
+  markPaymentHandled: (paymentId: string) => post(`/admin/payments/${paymentId}/handled`),
 
-  getMemberPurchases: (memberId: string) => request<MemberPurchases>(`/admin/members/${memberId}/purchases`),
+  getMemberPurchases: (memberId: string) => get<MemberPurchases>(`/admin/members/${memberId}/purchases`),
 
   addClubCard: (memberId: string, priceItemId: string, activate: boolean) =>
-    request<{ ok: boolean }>(`/admin/members/${memberId}/club-card`, {
-      method: "POST",
-      body: JSON.stringify({ priceItemId, activate }),
-    }),
+    post(`/admin/members/${memberId}/club-card`, { priceItemId, activate }),
 
   activateClubCard: (memberId: string, cardId: string) =>
-    request<{ ok: boolean }>(`/admin/members/${memberId}/club-cards/${cardId}/activate`, { method: "POST" }),
+    post(`/admin/members/${memberId}/club-cards/${cardId}/activate`),
 
   // slotId: a group pass bought from «Записатися» (cash: booked at once; LiqPay: booked once paid)
   createPurchase: (priceItemIds: string[], method: PurchaseMethod, slotId?: string) =>
-    request<{ purchaseId: string; checkout?: LiqPayCheckout | { status: "PAID" } }>("/purchases", {
-      method: "POST",
-      body: JSON.stringify({ priceItemIds, method, slotId }),
+    post<{ purchaseId: string; checkout?: LiqPayCheckout | { status: "PAID" } }>("/purchases", {
+      priceItemIds,
+      method,
+      slotId,
     }),
 
-  cancelPurchase: (purchaseId: string) =>
-    request<{ ok: boolean }>(`/purchases/${purchaseId}/cancel`, { method: "POST" }),
+  cancelPurchase: (purchaseId: string) => post(`/purchases/${purchaseId}/cancel`),
 
   getPaymentStatus: (orderId: string) =>
-    request<{ status: PaymentStatus; errCode?: string; expiresAt?: string; booked?: boolean }>(
+    get<{ status: PaymentStatus; errCode?: string; expiresAt?: string; booked?: boolean }>(
       `/payments/status?order=${encodeURIComponent(orderId)}`,
     ),
 
   getMembers: () =>
-    request<AdminMember[]>("/admin/members").then((list) =>
+    get<AdminMember[]>("/admin/members").then((list) =>
       list.sort((a, b) => nameCollator.compare(a.displayName, b.displayName)),
     ),
 
-  getTrainers: () => request<Trainer[]>("/admin/trainers"),
+  getTrainers: () => get<Trainer[]>("/admin/trainers"),
 
   assignTrainer: (memberId: string, trainerId: string) =>
-    request<{ id: string; trainerId: string }>(`/admin/members/${memberId}/trainer`, {
-      method: "PATCH",
-      body: JSON.stringify({ trainerId }),
-    }),
+    patch<{ id: string; trainerId: string }>(`/admin/members/${memberId}/trainer`, { trainerId }),
 
-  getMember: (memberId: string) => request<AdminMember>(`/admin/members/${memberId}`),
+  getMember: (memberId: string) => get<AdminMember>(`/admin/members/${memberId}`),
 
-  getMemberVisits: (memberId: string) => request<MemberVisit[]>(`/admin/members/${memberId}/visits`),
+  getMemberVisits: (memberId: string) => get<MemberVisit[]>(`/admin/members/${memberId}/visits`),
 
-  getMemberCancellations: (memberId: string) =>
-    request<MemberCancellation[]>(`/admin/members/${memberId}/cancellations`),
+  getMemberCancellations: (memberId: string) => get<MemberCancellation[]>(`/admin/members/${memberId}/cancellations`),
 
-  getSlotCancellations: (slotId: string) => request<Cancellation[]>(`/admin/slots/${slotId}/cancellations`),
+  getSlotCancellations: (slotId: string) => get<Cancellation[]>(`/admin/slots/${slotId}/cancellations`),
 
   updateMemberNote: (memberId: string, note: string) =>
-    request<{ id: string; trainerNote: string | null }>(`/admin/members/${memberId}/note`, {
-      method: "PATCH",
-      body: JSON.stringify({ note }),
-    }),
+    patch<{ id: string; trainerNote: string | null }>(`/admin/members/${memberId}/note`, { note }),
 
-  getPrices: () => request<{ items: PriceItem[]; changes: PriceChange[] }>("/admin/prices"),
+  getPrices: () => get<{ items: PriceItem[]; changes: PriceChange[] }>("/admin/prices"),
 
   // 409 when another trainer changed it meanwhile: error.body has the current amountUah and updatedBy
   updatePrice: (id: string, amountUah: number, expectedAmountUah: number) =>
-    request<{ id: string; amountUah: number }>(`/admin/prices/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ amountUah, expectedAmountUah }),
-    }),
+    patch<{ id: string; amountUah: number }>(`/admin/prices/${id}`, { amountUah, expectedAmountUah }),
 
-  getCalendar: (month: string) => request<CalendarSlot[]>(`/admin/calendar?month=${month}`),
+  getCalendar: (month: string) => get<CalendarSlot[]>(`/admin/calendar?month=${month}`),
 
-  // «Мій розклад»: the signed-in trainer's regular group trainings
-  getMySchedule: () => request<TrainerSchedule>("/admin/my-schedule"),
+  // «Розклад групових»: the signed-in trainer's regular group trainings
+  getMySchedule: () => get<TrainerSchedule>("/admin/my-schedule"),
 
   // Saved, plus what was put in the calendar: trainings added, and the ones left out with a reason
   saveMySchedule: (schedule: TrainerSchedule) =>
-    request<TrainerSchedule & { added?: number; skipped?: SkippedTraining[] }>("/admin/my-schedule", {
-      method: "PUT",
-      body: JSON.stringify(schedule),
-    }),
+    put<TrainerSchedule & { added?: number; skipped?: SkippedTraining[] }>("/admin/my-schedule", schedule),
 
   upsertGroupSlot: (date: string, slotTime: string) =>
-    request<{ ok: boolean }>(`/admin/training-days/${date}/slots/${encodeURIComponent(slotTime)}`, {
-      method: "PUT",
-    }),
+    put(`/admin/training-days/${date}/slots/${encodeURIComponent(slotTime)}`),
 
   createAssignedSlot: (date: string, body: { slotTime: string; trainingType: TrainingType; memberIds: string[] }) =>
-    request<{ ok: boolean; slotId: string }>(`/admin/training-days/${date}/assigned-slots`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
+    post<Ok & { slotId: string }>(`/admin/training-days/${date}/assigned-slots`, body),
 
-  updateSlotMembers: (slotId: string, memberIds: string[]) =>
-    request<{ ok: boolean }>(`/admin/slots/${slotId}/members`, {
-      method: "PUT",
-      body: JSON.stringify({ memberIds }),
-    }),
+  updateSlotMembers: (slotId: string, memberIds: string[]) => put(`/admin/slots/${slotId}/members`, { memberIds }),
 
-  markAllAttendance: (slotId: string) =>
-    request<{ marked: number }>(`/admin/slots/${slotId}/attendance/all`, {
-      method: "PUT",
-    }),
+  markAllAttendance: (slotId: string) => put<{ marked: number }>(`/admin/slots/${slotId}/attendance/all`),
 
   updateAttendance: (bookingId: string, status: AttendanceStatus) =>
-    request<{ ok: boolean }>(`/admin/bookings/${bookingId}/attendance`, {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-    }),
+    patch(`/admin/bookings/${bookingId}/attendance`, { status }),
 
   // A participant's mark: a member's booking, or a guest (nothing is spent for a guest)
   updateParticipantAttendance: (p: { bookingId: string; guestOf: string | null }, status: AttendanceStatus) =>
-    request<{ ok: boolean }>(`/admin/${p.guestOf ? "guests" : "bookings"}/${p.bookingId}/attendance`, {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-    }),
+    patch(`/admin/${p.guestOf ? "guests" : "bookings"}/${p.bookingId}/attendance`, { status }),
 
-  getVapidPublicKey: () => request<{ publicKey: string }>("/push/vapid-public-key"),
+  getVapidPublicKey: () => get<{ publicKey: string }>("/push/vapid-public-key"),
 
-  subscribePush: (sub: { endpoint: string; p256dh: string; auth: string }) =>
-    request<{ ok: boolean }>("/push/subscriptions", {
-      method: "POST",
-      body: JSON.stringify(sub),
-    }),
+  subscribePush: (sub: { endpoint: string; p256dh: string; auth: string }) => post("/push/subscriptions", sub),
 
-  unsubscribePush: (endpoint: string) =>
-    request<{ ok: boolean }>("/push/subscriptions", {
-      method: "DELETE",
-      body: JSON.stringify({ endpoint }),
-    }),
+  unsubscribePush: (endpoint: string) => del("/push/subscriptions", { endpoint }),
 
-  subscribeVacancy: (slotId: string) => request<{ ok: boolean }>(`/slots/${slotId}/vacancy-alert`, { method: "PUT" }),
+  subscribeVacancy: (slotId: string) => put(`/slots/${slotId}/vacancy-alert`),
 
-  unsubscribeVacancy: (slotId: string) =>
-    request<{ ok: boolean }>(`/slots/${slotId}/vacancy-alert`, { method: "DELETE" }),
+  unsubscribeVacancy: (slotId: string) => del(`/slots/${slotId}/vacancy-alert`),
 
-  listAnnouncementExamples: () => request<AnnouncementExample[]>("/admin/announcement-examples"),
+  listAnnouncementExamples: () => get<AnnouncementExample[]>("/admin/announcement-examples"),
 
-  addAnnouncementExample: (text: string) =>
-    request<AnnouncementExample>("/admin/announcement-examples", {
-      method: "POST",
-      body: JSON.stringify({ text }),
-    }),
+  addAnnouncementExample: (text: string) => post<AnnouncementExample>("/admin/announcement-examples", { text }),
 
-  deleteAnnouncementExample: (id: string) =>
-    request<{ ok: boolean }>(`/admin/announcement-examples/${id}`, { method: "DELETE" }),
+  deleteAnnouncementExample: (id: string) => del(`/admin/announcement-examples/${id}`),
 
-  getAnnouncement: (date: string) => request<Announcement>(`/admin/announcements/${date}`),
+  getAnnouncement: (date: string) => get<Announcement>(`/admin/announcements/${date}`),
 
-  generateAnnouncement: (date: string) =>
-    request<Announcement>(`/admin/announcements/${date}/generate`, { method: "POST" }),
+  generateAnnouncement: (date: string) => post<Announcement>(`/admin/announcements/${date}/generate`),
 
   updateAnnouncementText: (date: string, text: string) =>
-    request<Announcement>(`/admin/announcements/${date}/text`, {
-      method: "PUT",
-      body: JSON.stringify({ text }),
-    }),
+    put<Announcement>(`/admin/announcements/${date}/text`, { text }),
 
-  publishAnnouncement: (date: string) =>
-    request<Announcement>(`/admin/announcements/${date}/publish`, { method: "POST" }),
+  publishAnnouncement: (date: string) => post<Announcement>(`/admin/announcements/${date}/publish`),
 
-  unpublishAnnouncement: (date: string) =>
-    request<Announcement>(`/admin/announcements/${date}/unpublish`, { method: "POST" }),
+  unpublishAnnouncement: (date: string) => post<Announcement>(`/admin/announcements/${date}/unpublish`),
 };
