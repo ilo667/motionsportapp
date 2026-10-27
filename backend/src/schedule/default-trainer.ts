@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, isNull, or } from 'drizzle-orm';
 import { admins, members } from '../database/schema';
 import type { DatabaseService } from '../database/database.service';
 
@@ -23,4 +23,10 @@ export async function getMemberTrainerId(db: Q, memberId?: string): Promise<stri
     if (member?.trainerId) return member.trainerId;
   }
   return getDefaultTrainerId(db);
+}
+
+// The clients a trainer sees and manages in the admin: their own plus those with no trainer yet («Без тренера»).
+// Anyone else's client answers 404 like a missing one. A condition on `members`
+export function visibleTo(trainerId: string) {
+  return or(eq(members.trainerId, trainerId), isNull(members.trainerId))!;
 }

@@ -28,7 +28,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { ClockService } from '../clock/clock.service';
 import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
-import { getDefaultTrainerId } from '../schedule/default-trainer';
+import { getDefaultTrainerId, visibleTo } from '../schedule/default-trainer';
 import { bookingOpensAt, groupTimeError } from '../trainer-schedule/rules';
 import {
   GROUP_TYPE,
@@ -593,10 +593,7 @@ export class AdminScheduleService {
       .select({ id: members.id })
       .from(members)
       .where(
-        and(
-          inArray(members.id, memberIds),
-          alreadyOnSlot ? or(this.visibleTo(adminId), alreadyOnSlot) : this.visibleTo(adminId),
-        ),
+        and(inArray(members.id, memberIds), alreadyOnSlot ? or(visibleTo(adminId), alreadyOnSlot) : visibleTo(adminId)),
       );
     if (found.length !== new Set(memberIds).size) throw new NotFoundException('Member not found');
   }
@@ -861,11 +858,6 @@ export class AdminScheduleService {
     return { ok: true };
   }
 
-  // A trainer works with their own clients plus unassigned ones (to claim them); other trainers' clients are hidden
-  private visibleTo(adminId: string) {
-    return or(eq(members.trainerId, adminId), isNull(members.trainerId))!;
-  }
-
   // Trainer's client list. trainerNote is admin-only — keep it out of member-facing queries
   async getMembers(adminId: string, onlyId?: string) {
     const since = new Date(Date.now() - CANCELLATION_STATS_DAYS * 24 * 60 * 60 * 1000);
@@ -891,7 +883,7 @@ export class AdminScheduleService {
         recentCancellations: cancelledCount,
       })
       .from(members)
-      .where(onlyId ? and(this.visibleTo(adminId), eq(members.id, onlyId)) : this.visibleTo(adminId))
+      .where(onlyId ? and(visibleTo(adminId), eq(members.id, onlyId)) : visibleTo(adminId))
       .orderBy(asc(members.displayName));
 
     // «карта до DD.MM», «Перс. 5 · Спліт 2» under each client
@@ -952,7 +944,7 @@ export class AdminScheduleService {
       .where(
         and(
           eq(members.id, memberId),
-          this.visibleTo(adminId),
+          visibleTo(adminId),
           sql`exists (select 1 from admins a where a.id = ${trainerId} and a.disabled_at is null)`,
         ),
       )
@@ -1087,7 +1079,7 @@ export class AdminScheduleService {
     const [member] = await this.database.db
       .select({ id: members.id })
       .from(members)
-      .where(and(eq(members.id, memberId), this.visibleTo(adminId)))
+      .where(and(eq(members.id, memberId), visibleTo(adminId)))
       .limit(1);
     if (!member) throw new NotFoundException('Member not found');
 
@@ -1124,7 +1116,7 @@ export class AdminScheduleService {
     const [member] = await this.database.db
       .select({ id: members.id })
       .from(members)
-      .where(and(eq(members.id, memberId), this.visibleTo(adminId)))
+      .where(and(eq(members.id, memberId), visibleTo(adminId)))
       .limit(1);
     if (!member) throw new NotFoundException('Member not found');
 
@@ -1169,7 +1161,7 @@ export class AdminScheduleService {
     const [updated] = await this.database.db
       .update(members)
       .set({ trainerNote: note || null })
-      .where(and(eq(members.id, memberId), this.visibleTo(adminId)))
+      .where(and(eq(members.id, memberId), visibleTo(adminId)))
       .returning({ id: members.id, trainerNote: members.trainerNote });
 
     if (!updated) throw new NotFoundException('Member not found');

@@ -22,6 +22,7 @@ import { slotStartsAt } from '../schedule/training-types';
 import { openFreeze } from './freeze.store';
 import { cancelGuests, freeSeats } from '../booking/group-booking';
 import { FREEZE_DAYS, daysBetween, plusDays } from './rules';
+import { visibleTo } from '../schedule/default-trainer';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -158,7 +159,7 @@ export class FreezesService {
       .innerJoin(members, eq(members.id, freezes.memberId))
       .where(
         and(
-          memberOf(trainerId),
+          visibleTo(trainerId),
           or(
             eq(freezes.status, 'REQUESTED'),
             and(
@@ -357,7 +358,7 @@ export class FreezesService {
     const [member] = await this.database.db
       .select({ id: members.id })
       .from(members)
-      .where(and(eq(members.id, memberId), memberOf(trainerId)))
+      .where(and(eq(members.id, memberId), visibleTo(trainerId)))
       .limit(1);
     if (!member) throw new NotFoundException('Member not found');
     const today = this.today();
@@ -468,7 +469,7 @@ export class FreezesService {
       .select({ memberId: freezes.memberId })
       .from(freezes)
       .innerJoin(members, eq(members.id, freezes.memberId))
-      .where(and(eq(freezes.id, freezeId), memberOf(trainerId)))
+      .where(and(eq(freezes.id, freezeId), visibleTo(trainerId)))
       .limit(1);
     if (!row) throw new NotFoundException('Freeze not found');
     return row;
@@ -490,9 +491,4 @@ export class FreezesService {
 export function freezeState(f: { status: string; unfreezeRequestedAt: Date | null }): FreezeState {
   if (f.status === 'REQUESTED') return 'requested';
   return f.unfreezeRequestedAt ? 'unfreeze_requested' : 'active';
-}
-
-// The member is this trainer's client, or has no trainer yet (every trainer sees those)
-function memberOf(trainerId: string) {
-  return or(eq(members.trainerId, trainerId), isNull(members.trainerId));
 }

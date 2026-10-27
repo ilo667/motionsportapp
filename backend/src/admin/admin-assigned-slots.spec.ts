@@ -8,6 +8,7 @@ import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { attendance, packageSpends } from '../database/schema';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
+import { visibleTo } from '../schedule/default-trainer';
 
 // No guests unless a test says so (the drizzle mocks here don't answer UPDATE … RETURNING)
 jest.mock('../booking/group-booking', () => ({
@@ -502,8 +503,7 @@ describe('Clients per trainer', () => {
   });
 
   it('a trainer sees own and unassigned clients only', () => {
-    const { db } = makeDb();
-    const where = (makeService(db) as any).visibleTo('trainer-1');
+    const where = visibleTo('trainer-1');
     const { sql, params } = new PgDialect().sqlToQuery(where);
     expect(sql).toBe('("members"."trainer_id" = $1 or "members"."trainer_id" is null)');
     expect(params).toEqual(['trainer-1']);

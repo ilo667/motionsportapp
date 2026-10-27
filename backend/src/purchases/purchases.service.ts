@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException, Logger } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { ClockService } from '../clock/clock.service';
 import {
@@ -25,6 +25,7 @@ import { cancelGuests, freeSeats, tryBookGroup, type GroupBookingResult } from '
 import { cardState } from './validity';
 import { GROUP_TYPE } from '../schedule/training-types';
 import { memberFrozenOn, openFreeze } from '../freezes/freeze.store';
+import { visibleTo } from '../schedule/default-trainer';
 
 // Same answers as BookingService.book gives for the same reasons
 function bookingError(reason: Extract<GroupBookingResult, { ok: false }>['reason']) {
@@ -317,7 +318,7 @@ export class PurchasesService {
       .from(payments)
       .innerJoin(purchases, eq(purchases.id, payments.purchaseId))
       .innerJoin(members, eq(members.id, purchases.memberId))
-      .where(and(strayPayment(), isNull(payments.handledAt), memberOf(trainerId)))
+      .where(and(strayPayment(), isNull(payments.handledAt), visibleTo(trainerId)))
       .orderBy(asc(payments.updatedAt));
     const views = await this.views(rows.map((r) => r.purchaseId!));
     return rows.map(({ purchaseId, paidAt, ...r }) => ({
@@ -334,7 +335,7 @@ export class PurchasesService {
       .from(payments)
       .innerJoin(purchases, eq(purchases.id, payments.purchaseId))
       .innerJoin(members, eq(members.id, purchases.memberId))
-      .where(and(eq(payments.id, paymentId), strayPayment(), memberOf(trainerId)))
+      .where(and(eq(payments.id, paymentId), strayPayment(), visibleTo(trainerId)))
       .limit(1);
     if (!payment) throw new NotFoundException('Payment not found');
     if (payment.handledAt) throw new ConflictException('Payment already handled');
@@ -417,7 +418,7 @@ export class PurchasesService {
       .innerJoin(bookings, eq(bookings.id, cancelRefunds.bookingId))
       .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
       .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
-      .where(and(eq(cancelRefunds.status, 'DUE'), memberOf(trainerId)))
+      .where(and(eq(cancelRefunds.status, 'DUE'), visibleTo(trainerId)))
       .orderBy(asc(cancelRefunds.createdAt));
     return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
   }
@@ -521,7 +522,7 @@ export class PurchasesService {
     const [member] = await this.database.db
       .select({ id: members.id })
       .from(members)
-      .where(and(eq(members.id, memberId), or(eq(members.trainerId, trainerId), isNull(members.trainerId))))
+      .where(and(eq(members.id, memberId), visibleTo(trainerId)))
       .limit(1);
     if (!member) throw new NotFoundException('Member not found');
   }
@@ -570,9 +571,4 @@ function strayPayment() {
     ne(payments.status, 'PAID'),
     sql`${payments.rawCallback}->>'status' in ('success', 'sandbox')`,
   );
-}
-
-// The member is this trainer's client, or has no trainer yet (every trainer sees those)
-function memberOf(trainerId: string) {
-  return or(eq(members.trainerId, trainerId), isNull(members.trainerId));
 }
