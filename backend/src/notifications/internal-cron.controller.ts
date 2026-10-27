@@ -7,11 +7,12 @@ import { AnnouncementsService } from '../ai/announcements.service';
 import { ClockService } from '../clock/clock.service';
 import { PaymentService } from '../payment/payment.service';
 import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
-import { trainingDays, trainingSlots, bookings, attendance, bookingGuests } from '../database/schema';
+import { trainingSlots, bookings, attendance, bookingGuests } from '../database/schema';
 import { GROUP_TYPE, slotOverAt, slotStartsAt } from '../schedule/training-types';
 import { bookingOpensAt } from '../trainer-schedule/rules';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { getDefaultTrainerId } from '../schedule/default-trainer';
+import { trainingDayOn } from '../schedule/training-day.store';
 
 // Vercel Cron invokes paths with GET and sends `Authorization: Bearer $CRON_SECRET`.
 // Manual run: curl -H "Authorization: Bearer $CRON_SECRET" https://<backend>/internal/cron/<job>
@@ -34,7 +35,7 @@ export class InternalCronController {
     const today = now.toISODate()!;
 
     // Find today's scheduled training day
-    const [day] = await this.database.db.select().from(trainingDays).where(eq(trainingDays.localDate, today)).limit(1);
+    const day = await trainingDayOn(this.database.db, today);
 
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
@@ -75,11 +76,7 @@ export class InternalCronController {
     const nowAnn = this.clock.now();
     const todayAnn = nowAnn.toISODate()!;
 
-    const [day] = await this.database.db
-      .select()
-      .from(trainingDays)
-      .where(eq(trainingDays.localDate, todayAnn))
-      .limit(1);
+    const day = await trainingDayOn(this.database.db, todayAnn);
 
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
@@ -100,7 +97,7 @@ export class InternalCronController {
     const now = this.clock.now();
     const today = now.toISODate()!;
 
-    const [day] = await this.database.db.select().from(trainingDays).where(eq(trainingDays.localDate, today)).limit(1);
+    const day = await trainingDayOn(this.database.db, today);
 
     if (!day || day.status === 'CANCELLED') {
       return { ok: true, skipped: 'no active day today' };

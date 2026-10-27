@@ -33,6 +33,7 @@ import { loadFreezes } from '../freezes/freeze.store';
 import { frozenOn } from '../freezes/rules';
 import { cancelSlotsTx, notifySlotsCancelled } from './slot-cancellation';
 import { markOf, memberCancellations, toCancellationView } from './admin-views';
+import { trainingDayOn } from '../schedule/training-day.store';
 
 // Training days per history page («Показати ще» loads the next page)
 const HISTORY_PAGE_DAYS = 14;
@@ -550,7 +551,7 @@ export class AdminScheduleService {
       return { ok: true };
     }
 
-    const [day] = await this.database.db.select().from(trainingDays).where(eq(trainingDays.localDate, date)).limit(1);
+    const day = await trainingDayOn(this.database.db, date);
     if (!day) throw new NotFoundException('Training day not found');
 
     const mySlots = await this.database.db

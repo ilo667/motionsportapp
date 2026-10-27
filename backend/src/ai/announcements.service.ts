@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
-import { announcementExamples, announcements, aiGenerations, trainingDays } from '../database/schema';
+import { announcementExamples, announcements, aiGenerations } from '../database/schema';
 import { AnnouncementGeneratorService, PROMPT_VERSION } from './announcement-generator.service';
+import { trainingDayOn } from '../schedule/training-day.store';
 
 @Injectable()
 export class AnnouncementsService {
@@ -26,11 +27,7 @@ export class AnnouncementsService {
   }
 
   async getOrCreateForDate(localDate: string) {
-    const [day] = await this.database.db
-      .select()
-      .from(trainingDays)
-      .where(eq(trainingDays.localDate, localDate))
-      .limit(1);
+    const day = await trainingDayOn(this.database.db, localDate);
     if (!day) return null;
 
     const [existing] = await this.database.db
