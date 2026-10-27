@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -12,6 +13,7 @@ import { DatabaseService } from '../database/database.service';
 import { ClockService } from '../clock/clock.service';
 import { members, admins, sessions, trainerInvites } from '../database/schema';
 import { newToken, hashToken } from './token';
+import { deleteDeadSessions } from './dead-sessions';
 import type { RegisterMemberDto } from './dto/register-member.dto';
 import type { LoginMemberDto } from './dto/login-member.dto';
 import type { RecoverMemberDto } from './dto/recover-member.dto';
@@ -24,6 +26,8 @@ const BCRYPT_ROUNDS = 12;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly clock: ClockService,
@@ -206,6 +210,10 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 
     await this.database.db.insert(sessions).values({ principalType, principalId, tokenHash, expiresAt });
+    // Housekeeping: a failure here must not fail the sign-in; the next one tries again
+    await deleteDeadSessions(this.database.db, new Date()).catch((err: unknown) =>
+      this.logger.warn(`Deleting dead sessions failed: ${String(err)}`),
+    );
     return rawToken;
   }
 
