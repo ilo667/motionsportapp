@@ -70,9 +70,9 @@ export class FreezesService {
   }
 
   // A card or a package with trainings left, waiting or active
-  private async hasSomethingToFreeze(memberId: string) {
-    if (await this.entitlements.usableCard(memberId)) return true;
-    const packs = await this.entitlements.packagesOf(memberId);
+  private async hasSomethingToFreeze(memberId: string, db: Db | Tx = this.database.db) {
+    if (await this.entitlements.usableCard(memberId, db)) return true;
+    const packs = await this.entitlements.packagesOf(memberId, db);
     return packs.some((p) => p.state === 'waiting' || p.state === 'active');
   }
 
@@ -87,7 +87,7 @@ export class FreezesService {
         .where(and(eq(purchases.memberId, memberId), eq(purchases.status, 'PENDING')))
         .limit(1);
       if (pending) throw new ConflictException('Purchase pending');
-      if (!(await this.hasSomethingToFreeze(memberId))) throw new ConflictException('Nothing to freeze');
+      if (!(await this.hasSomethingToFreeze(memberId, tx))) throw new ConflictException('Nothing to freeze');
       const [row] = await tx
         .insert(freezes)
         .values({ memberId, status: 'REQUESTED', requestedAt: this.clock.now().toJSDate() })

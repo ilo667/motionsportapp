@@ -72,8 +72,10 @@ function makeDb(reads: unknown[][], returns: unknown[][] = []) {
       writes.push(write);
       return writeLink(write);
     }),
-    transaction: jest.fn().mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(db)),
   };
+  // The transaction: the same reads and writes, but its own object, so a test can tell a read inside it from one outside
+  db.tx = { ...db };
+  db.transaction = jest.fn().mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(db.tx));
   return { db, writes, wheres };
 }
 
@@ -92,7 +94,7 @@ function makeService(db: any, { card = null, packs = [] }: { card?: unknown; pac
   };
   const notifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
   const svc = new FreezesService({ db } as any, { now: () => NOW }, entitlements as any, notifications as any);
-  return { svc, notifications };
+  return { svc, notifications, entitlements };
 }
 
 const MEMBER = [{ trainerId: 'trainer-1', displayName: 'Катя' }];
@@ -101,8 +103,10 @@ const VISIBLE = [{ memberId: 'm1' }];
 describe('FreezesService — request', () => {
   it('asks the trainer', async () => {
     const { db, writes } = makeDb([MEMBER, []], [[{ id: 'f1' }]]);
-    const { svc, notifications } = makeService(db, { card: { id: 'c1' } });
+    const { svc, notifications, entitlements } = makeService(db, { card: { id: 'c1' } });
     await svc.request('m1');
+    // Read inside the transaction, under the member lock
+    expect(entitlements.usableCard).toHaveBeenCalledWith('m1', db.tx);
     expect(writes[0]).toMatchObject({ op: 'insert', table: freezes, values: { memberId: 'm1', status: 'REQUESTED' } });
     expect(notifications.enqueueAndProcess).toHaveBeenCalledWith('FREEZE_REQUESTED', 'freeze-requested:f1', {
       trainerId: 'trainer-1',
@@ -125,7 +129,9 @@ describe('FreezesService — request', () => {
   it('needs a card or trainings to freeze', async () => {
     const { db } = makeDb([MEMBER, []]);
     const used = [{ state: 'used' }, { state: 'burned' }];
-    await expect(makeService(db, { packs: used }).svc.request('m1')).rejects.toThrow('Nothing to freeze');
+    const { svc, entitlements } = makeService(db, { packs: used });
+    await expect(svc.request('m1')).rejects.toThrow('Nothing to freeze');
+    expect(entitlements.packagesOf).toHaveBeenCalledWith('m1', db.tx);
   });
 });
 
