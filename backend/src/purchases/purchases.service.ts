@@ -7,7 +7,7 @@ import { EntitlementsService } from './entitlements.service';
 import { PaymentService } from '../payment/payment.service';
 import { NotificationService } from '../notifications/notification.service';
 import type { CreatePurchaseDto } from './dto/create-purchase.dto';
-import { tryBookGroup, type GroupBookingResult } from '../booking/group-booking';
+import { lockMember, tryBookGroup, type GroupBookingResult } from '../booking/group-booking';
 import { cardState } from './validity';
 import { GROUP_TYPE } from '../schedule/training-types';
 import { openFreeze } from '../freezes/freeze.store';
@@ -165,12 +165,7 @@ export class PurchasesService {
 
     const { purchaseId, trainerId, displayName } = await this.database.db.transaction(async (tx) => {
       // Locked, so two requests at once can't both start a purchase
-      const [member] = await tx
-        .select({ trainerId: members.trainerId, displayName: members.displayName })
-        .from(members)
-        .where(eq(members.id, memberId))
-        .for('update')
-        .limit(1);
+      const member = await lockMember(tx, memberId);
       if (!member) throw new NotFoundException('Member not found');
 
       const [open] = await tx

@@ -76,6 +76,19 @@ export type GroupBookingResult =
         | 'LATE_CANCELLED';
     };
 
+// Locks the member's row (FOR UPDATE) until the transaction ends: one member's bookings, purchases and freezes run
+// one at a time, so two requests at once can't both pass a «one per day» / «one open purchase» / freeze check.
+// Returns what callers need from the row, null for an unknown member
+export async function lockMember(tx: Tx, memberId: string) {
+  const [member] = await tx
+    .select({ trainerId: members.trainerId, displayName: members.displayName })
+    .from(members)
+    .where(eq(members.id, memberId))
+    .for('update')
+    .limit(1);
+  return member ?? null;
+}
+
 // Books a group training inside a transaction that must not fail because of it (a payment being confirmed, a cash
 // purchase): every rule is checked before the insert, so no unique violation can abort the caller's transaction.
 // Same rules as BookingService.book (the freeze too), except the group pass (the caller is the one paying for it)
@@ -86,7 +99,7 @@ export async function tryBookGroup(
   slotId: string,
 ): Promise<GroupBookingResult> {
   // Member row first, like BookingService: one group booking per member per day
-  await tx.select({ id: members.id }).from(members).where(eq(members.id, memberId)).for('update').limit(1);
+  await lockMember(tx, memberId);
   const [slot] = await tx
     .select({
       id: trainingSlots.id,

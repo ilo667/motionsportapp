@@ -25,7 +25,11 @@ beforeEach(() => {
   (openFreeze as jest.Mock).mockResolvedValue(null);
 });
 
-jest.mock('../booking/group-booking', () => ({ tryBookGroup: jest.fn() }));
+// Booking is tested in group-booking.spec; the member lock (lockMember) stays real and reads the next result
+jest.mock('../booking/group-booking', () => ({
+  ...jest.requireActual('../booking/group-booking'),
+  tryBookGroup: jest.fn(),
+}));
 const mockTryBook = tryBookGroup as jest.Mock;
 beforeEach(() => mockTryBook.mockReset());
 

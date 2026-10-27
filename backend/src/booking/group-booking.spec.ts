@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon';
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
-import { freeSeats, tryBookGroup } from './group-booking';
+import { freeSeats, lockMember, tryBookGroup } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 
 jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
@@ -165,5 +165,27 @@ describe('freeSeats — a booking (and its guest) gave its seats back', () => {
   it('a full assigned training: nobody waits for it (no vacancy alerts there)', async () => {
     const { tx } = makeTx([[{ bookedCount: 1, capacity: 1, trainingType: 'персональні' }]]);
     expect(await freeSeats(tx, 'slot-p', 1)).toBe(false);
+  });
+});
+
+// One member's bookings, purchases and freezes run one at a time only while this really locks the row
+describe('lockMember — the member row under FOR UPDATE', () => {
+  it('locks the row and returns the trainer and name', async () => {
+    const forCalls: unknown[][] = [];
+    const chain: any = {
+      then: (resolve: (v: unknown) => void) => resolve([{ trainerId: 't1', displayName: 'Оля' }]),
+    };
+    for (const m of ['from', 'where', 'limit']) chain[m] = jest.fn(() => chain);
+    chain.for = jest.fn((...args: unknown[]) => (forCalls.push(args), chain));
+    const tx: any = { select: jest.fn(() => chain) };
+
+    await expect(lockMember(tx, 'm1')).resolves.toEqual({ trainerId: 't1', displayName: 'Оля' });
+    expect(forCalls).toEqual([['update']]);
+  });
+
+  it('null for an unknown member', async () => {
+    const chain: any = { then: (resolve: (v: unknown) => void) => resolve([]) };
+    for (const m of ['from', 'where', 'for', 'limit']) chain[m] = jest.fn(() => chain);
+    await expect(lockMember({ select: () => chain } as any, 'nobody')).resolves.toBeNull();
   });
 });

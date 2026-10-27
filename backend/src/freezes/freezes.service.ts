@@ -20,7 +20,7 @@ import { cardState, passState } from '../purchases/validity';
 import { NotificationService } from '../notifications/notification.service';
 import { slotStartsAt } from '../schedule/training-types';
 import { openFreeze } from './freeze.store';
-import { cancelGuests, freeSeats } from '../booking/group-booking';
+import { cancelGuests, freeSeats, lockMember } from '../booking/group-booking';
 import { FREEZE_DAYS, daysBetween, plusDays } from './rules';
 import { requireVisibleMember, visibleTo } from '../schedule/default-trainer';
 
@@ -470,14 +470,9 @@ export class FreezesService {
     return row;
   }
 
-  // Same lock as BookingService.lockMember: a freeze and a booking of one member never interleave
+  // The member lock shared with bookings and purchases (lockMember): a freeze and a booking never interleave
   private async lockMember(tx: Tx, memberId: string) {
-    const [member] = await tx
-      .select({ trainerId: members.trainerId, displayName: members.displayName })
-      .from(members)
-      .where(eq(members.id, memberId))
-      .for('update')
-      .limit(1);
+    const member = await lockMember(tx, memberId);
     if (!member) throw new NotFoundException('Member not found');
     return member;
   }

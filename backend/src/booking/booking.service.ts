@@ -24,6 +24,7 @@ import {
   findGroupBooking,
   groupBookingWindow,
   lateCancelledSlotIds,
+  lockMember,
   takeSeats,
 } from './group-booking';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
@@ -87,7 +88,7 @@ export class BookingService {
 
     await oneBookingPerDay(() =>
       this.database.db.transaction(async (tx) => {
-        await this.lockMember(tx, memberId);
+        await lockMember(tx, memberId);
         // Again under the member lock: a freeze approved at this moment cancels bookings under the same lock
         if (await memberFrozenOn(tx, memberId, day.localDate)) throw new ConflictException('Membership frozen');
         // Cancelled this training late (and paid for it): not booked again
@@ -191,7 +192,7 @@ export class BookingService {
 
     const wasFull = await oneBookingPerDay(() =>
       this.database.db.transaction(async (tx) => {
-        await this.lockMember(tx, memberId);
+        await lockMember(tx, memberId);
         const slot1 = await this.lockSlot(tx, firstId);
         const slot2 = await this.lockSlot(tx, secondId);
 
@@ -317,7 +318,7 @@ export class BookingService {
     await this.validateBookingWindow(slot.localDate, slot.slotTime, slot.trainerId);
 
     await this.database.db.transaction(async (tx) => {
-      await this.lockMember(tx, memberId);
+      await lockMember(tx, memberId);
       const locked = await this.lockSlot(tx, slotId);
       if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
       const booking = await this.activeBooking(tx, memberId, slotId);
@@ -450,11 +451,6 @@ export class BookingService {
     } catch (err) {
       this.logger.error(`Trainer push for booking ${bookingId} failed`, err);
     }
-  }
-
-  // Serializes one member's group bookings (book / switch), so two parallel requests can't both pass the per-day check
-  private async lockMember(tx: Tx, memberId: string) {
-    await tx.select({ id: members.id }).from(members).where(eq(members.id, memberId)).for('update').limit(1);
   }
 
   // Cancelling, switching away and removing a guest: only until the training starts
