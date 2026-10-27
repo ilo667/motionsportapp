@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { and, asc, eq, isNull, or } from 'drizzle-orm';
 import { admins, members } from '../database/schema';
 import type { DatabaseService } from '../database/database.service';
@@ -39,4 +40,14 @@ export async function enabledTrainer(db: Q, trainerId: string) {
     .where(and(eq(admins.id, trainerId), isNull(admins.disabledAt)))
     .limit(1);
   return trainer ?? null;
+}
+
+// The trainer's own or unassigned client (visibleTo); anyone else's answers 404 like a missing one
+export async function requireVisibleMember(db: Q, trainerId: string, memberId: string) {
+  const [member] = await db
+    .select({ id: members.id })
+    .from(members)
+    .where(and(eq(members.id, memberId), visibleTo(trainerId)))
+    .limit(1);
+  if (!member) throw new NotFoundException('Member not found');
 }

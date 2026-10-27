@@ -5,7 +5,7 @@ import { trainingDays, trainingSlots, bookings, members, attendance } from '../d
 import type { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 import { ClockService } from '../clock/clock.service';
 import { EntitlementsService } from '../purchases/entitlements.service';
-import { enabledTrainer, visibleTo } from '../schedule/default-trainer';
+import { enabledTrainer, requireVisibleMember, visibleTo } from '../schedule/default-trainer';
 import { loadFreezes } from '../freezes/freeze.store';
 import { frozenOn, plusDays } from '../freezes/rules';
 import { markOf, memberCancellations, toCancellationView } from './admin-views';
@@ -80,7 +80,7 @@ export class AdminMembersService {
 
   // Client page: trainings the member was booked on up to today, with the trainer's mark (newest first)
   async getMemberVisits(adminId: string, memberId: string) {
-    await this.ownMember(adminId, memberId);
+    await requireVisibleMember(this.database.db, adminId, memberId);
 
     const rows = await this.database.db
       .select({
@@ -110,19 +110,9 @@ export class AdminMembersService {
     }));
   }
 
-  // The trainer's own or unassigned client; anyone else answers 404 like a missing one
-  private async ownMember(adminId: string, memberId: string) {
-    const [member] = await this.database.db
-      .select({ id: members.id })
-      .from(members)
-      .where(and(eq(members.id, memberId), visibleTo(adminId)))
-      .limit(1);
-    if (!member) throw new NotFoundException('Member not found');
-  }
-
   // Clients page: one member's latest cancellations and moves
   async getMemberCancellations(adminId: string, memberId: string) {
-    await this.ownMember(adminId, memberId);
+    await requireVisibleMember(this.database.db, adminId, memberId);
 
     const rows = await memberCancellations(this.database.db, eq(bookings.memberId, memberId), MEMBER_HISTORY_LIMIT);
     return rows.map((r) => ({ ...toCancellationView(r), localDate: r.localDate, slotTime: r.slotTime }));

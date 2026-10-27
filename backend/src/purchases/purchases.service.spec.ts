@@ -369,8 +369,9 @@ describe('Purchases — cancel', () => {
   it('cancels own pending purchase and its open LiqPay attempts', async () => {
     const { db, sets } = makeDb([[], [{ id: 'purchase-1' }]]);
     await makeService(db).svc.cancel('m1', 'purchase-1');
-    expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED' }));
-    expect(sets).toContainEqual(expect.objectContaining({ status: 'REPLACED' }));
+    // Both stamped with the service clock (ClockService), not the machine's time
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED', decidedAt: NOW.toJSDate() }));
+    expect(sets).toContainEqual(expect.objectContaining({ status: 'REPLACED', updatedAt: NOW.toJSDate() }));
   });
 
   // Same lock order as the LiqPay paths (payment row, then purchase row), so a cancel and a callback at once

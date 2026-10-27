@@ -25,7 +25,7 @@ import { cancelGuests, freeSeats, tryBookGroup, type GroupBookingResult } from '
 import { cardState } from './validity';
 import { GROUP_TYPE } from '../schedule/training-types';
 import { memberFrozenOn, openFreeze } from '../freezes/freeze.store';
-import { visibleTo } from '../schedule/default-trainer';
+import { requireVisibleMember, visibleTo } from '../schedule/default-trainer';
 
 // Same answers as BookingService.book gives for the same reasons
 function bookingError(reason: Extract<GroupBookingResult, { ok: false }>['reason']) {
@@ -77,7 +77,7 @@ export class PurchasesService {
     private readonly notifications: NotificationService,
   ) {}
 
-  // «Мої покупки»: what can be bought, what the member has, and the purchase that still awaits payment
+  // «Мій абонемент»: what can be bought, what the member has, and the purchase that still awaits payment
   async getForMember(memberId: string) {
     const catalog = await this.database.db
       .select({
@@ -259,17 +259,18 @@ export class PurchasesService {
   // The member changed their mind before paying. Open LiqPay attempts stop counting: money that still
   // arrives for one of them is handled by hand (PaymentService)
   async cancel(memberId: string, purchaseId: string) {
+    const now = this.clock.now().toJSDate();
     await this.database.db.transaction(async (tx) => {
       // Payments first, then the purchase: the same lock order as the LiqPay paths, so a cancel and a callback
       // at once wait for each other instead of deadlocking. If the purchase turns out not to be cancellable,
       // the throw below rolls this back
       await tx
         .update(payments)
-        .set({ status: 'REPLACED', updatedAt: new Date() })
+        .set({ status: 'REPLACED', updatedAt: now })
         .where(and(eq(payments.purchaseId, purchaseId), eq(payments.status, 'PENDING')));
       const [cancelled] = await tx
         .update(purchases)
-        .set({ status: 'CANCELLED', decidedAt: this.clock.now().toJSDate() })
+        .set({ status: 'CANCELLED', decidedAt: now })
         .where(and(eq(purchases.id, purchaseId), eq(purchases.memberId, memberId), eq(purchases.status, 'PENDING')))
         .returning({ id: purchases.id });
       if (!cancelled) {
@@ -431,7 +432,7 @@ export class PurchasesService {
       .where(eq(cancelRefunds.id, refundId))
       .limit(1);
     if (!refund) throw new NotFoundException('Refund not found');
-    await this.visibleMember(trainerId, refund.memberId);
+    await requireVisibleMember(this.database.db, trainerId, refund.memberId);
     const [done] = await this.database.db
       .update(cancelRefunds)
       .set({ status: 'DONE', doneAt: this.clock.now().toJSDate(), doneBy: trainerId })
@@ -458,7 +459,7 @@ export class PurchasesService {
 
   // A client's page: cards, packages and purchase history
   async memberPurchases(trainerId: string, memberId: string) {
-    await this.visibleMember(trainerId, memberId);
+    await requireVisibleMember(this.database.db, trainerId, memberId);
     const cards = await this.database.db
       .select({
         id: clubCards.id,
@@ -492,9 +493,9 @@ export class PurchasesService {
     };
   }
 
-  // «Додати карту вручну»: a card bought at the reception, waiting or (activate) active from today
+  // «+ Додати клубну карту з рецепції»: a card bought at the reception, waiting or (activate) active from today
   async addCard(trainerId: string, memberId: string, priceItemId: string, activate: boolean) {
-    await this.visibleMember(trainerId, memberId);
+    await requireVisibleMember(this.database.db, trainerId, memberId);
     await this.rejectFrozen(memberId);
     // One club card at a time: a new one only once the current card has ended or burned
     if (await this.entitlements.usableCard(memberId)) throw new ConflictException('Member already has a club card');
@@ -504,7 +505,7 @@ export class PurchasesService {
 
   // «Активувати з сьогодні»
   async activateCard(trainerId: string, memberId: string, cardId: string) {
-    await this.visibleMember(trainerId, memberId);
+    await requireVisibleMember(this.database.db, trainerId, memberId);
     await this.rejectFrozen(memberId);
     await this.entitlements.activateCard(this.database.db, memberId, cardId);
     return { ok: true };
@@ -515,16 +516,6 @@ export class PurchasesService {
     if (await memberFrozenOn(this.database.db, memberId, this.clock.now().toISODate()!)) {
       throw new ConflictException('Member is frozen');
     }
-  }
-
-  // Same rule as the rest of the admin: own clients plus unassigned ones; anyone else's answers 404
-  private async visibleMember(trainerId: string, memberId: string) {
-    const [member] = await this.database.db
-      .select({ id: members.id })
-      .from(members)
-      .where(and(eq(members.id, memberId), visibleTo(trainerId)))
-      .limit(1);
-    if (!member) throw new NotFoundException('Member not found');
   }
 
   // Purchases with their lines, in the order of `ids`

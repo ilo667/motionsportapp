@@ -22,7 +22,7 @@ import { slotStartsAt } from '../schedule/training-types';
 import { openFreeze } from './freeze.store';
 import { cancelGuests, freeSeats } from '../booking/group-booking';
 import { FREEZE_DAYS, daysBetween, plusDays } from './rules';
-import { visibleTo } from '../schedule/default-trainer';
+import { requireVisibleMember, visibleTo } from '../schedule/default-trainer';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -355,12 +355,7 @@ export class FreezesService {
 
   // A client's page: latest freezes with who decided
   async memberHistory(trainerId: string, memberId: string) {
-    const [member] = await this.database.db
-      .select({ id: members.id })
-      .from(members)
-      .where(and(eq(members.id, memberId), visibleTo(trainerId)))
-      .limit(1);
-    if (!member) throw new NotFoundException('Member not found');
+    await requireVisibleMember(this.database.db, trainerId, memberId);
     const today = this.today();
     const rows = await this.database.db
       .select({
