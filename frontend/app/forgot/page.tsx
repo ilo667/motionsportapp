@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
+import { errorText } from "@/lib/apiErrors";
 
 export default function ForgotPage() {
   const router = useRouter();
@@ -44,8 +45,7 @@ export default function ForgotPage() {
       if (status === 401) {
         setError("Невірний код учасника або код відновлення.");
       } else {
-        const msg = err instanceof Error ? err.message : "Помилка. Спробуйте ще раз.";
-        setError(msg);
+        setError(errorText(err));
       }
     } finally {
       setLoading(false);

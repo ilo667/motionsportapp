@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, MemberPurchases as MemberPurchasesData, PriceItem, Purchase } from "@/lib/api";
 import { formatUah, lineName } from "@/components/PurchaseFlow";
+import { errorText } from "@/lib/apiErrors";
 
 const formatDate = (isoDate: string) => {
   const [, m, d] = isoDate.split("-");
@@ -97,9 +98,9 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
       onChanged();
     } catch (err) {
       setError(
-        (err as Error).message === "Member is frozen"
-          ? "Клієнт заморожений: активуйте після розморозки"
-          : "Не вдалося активувати клубну карту",
+        errorText(err, "Не вдалося активувати клубну карту", [
+          ["Member is frozen", "Клієнт заморожений: активуйте після розморозки"],
+        ]),
       );
     } finally {
       setSaving(false);
@@ -118,9 +119,9 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
       onChanged();
     } catch (err) {
       setError(
-        (err as Error).message === "Member is frozen"
-          ? "Клієнт заморожений: додайте клубну карту після розморозки"
-          : "Не вдалося додати клубну карту",
+        errorText(err, "Не вдалося додати клубну карту", [
+          ["Member is frozen", "Клієнт заморожений: додайте клубну карту після розморозки"],
+        ]),
       );
     } finally {
       setSaving(false);

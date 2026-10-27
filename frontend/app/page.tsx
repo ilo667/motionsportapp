@@ -10,6 +10,7 @@ import { AssignedSlotCard } from "@/components/AssignedSlotCard";
 import { noopSubscribe } from "@/lib/clientStore";
 import { resyncExistingSubscription } from "@/lib/pushUtils";
 import { nextPollDelay } from "@/lib/schedulePoll";
+import { errorText } from "@/lib/apiErrors";
 
 function formatLocalDate(localDate: string): string {
   const date = new Date(localDate + "T12:00:00");
@@ -129,31 +130,7 @@ export default function SchedulePage() {
       await fn();
       await fetchSchedule();
     } catch (err: unknown) {
-      const raw = err instanceof Error ? err.message : "";
-      const msg = raw.includes("Slot is full")
-        ? "Місць вже немає, хтось встиг раніше"
-        : raw.includes("Booking is not open yet")
-          ? "Запис ще не відкрився"
-          : raw.includes("Booking window has closed")
-            ? "Час запису вже минув"
-            : raw.includes("already have an active booking")
-              ? "Ви вже записані на цей день"
-              : raw.includes("already booked this training")
-                ? "Ви вже записані на це тренування"
-                : raw.includes("already started")
-                  ? "Тренування вже почалося"
-                  : raw.includes("Slot is cancelled")
-                    ? "Цей час скасовано тренером"
-                    : raw.includes("Group pass required")
-                      ? "Потрібен абонемент на групові: натисніть «Записатись» ще раз"
-                      : raw.includes("Guest already added")
-                        ? "Гостя вже додано"
-                        : raw.includes("Membership frozen")
-                          ? "Абонемент заморожено"
-                          : raw.includes("Cancelled late")
-                            ? "Ви скасували це тренування пізно, записатися знову не можна"
-                            : raw || "Помилка. Спробуйте ще раз.";
-      setMutateError(msg);
+      setMutateError(errorText(err));
     }
   };
 

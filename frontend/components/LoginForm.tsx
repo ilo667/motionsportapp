@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { PageLayout } from "./PageLayout";
+import { errorText } from "@/lib/apiErrors";
 
 interface FieldConfig {
   label: string;
@@ -124,8 +125,7 @@ export function LoginForm({ variant }: { variant: "member" | "admin" }) {
       if (status === 401) {
         setError(config.invalidCredentials);
       } else {
-        const msg = err instanceof Error ? err.message : "Помилка входу.";
-        setError(msg);
+        setError(errorText(err, "Помилка входу."));
       }
     } finally {
       setLoading(false);

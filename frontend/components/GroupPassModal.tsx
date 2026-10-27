@@ -4,6 +4,7 @@ import Link from "next/link";
 import { api, CatalogItem, MyPurchases } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
 import { formatUah } from "./PurchaseFlow";
+import { errorText } from "@/lib/apiErrors";
 
 // «Записатись» without a group pass: buy a single visit or a pass by LiqPay (booked once paid), or pay cash to the
 // trainer in the hall (booked right away, the trainer confirms the money)
@@ -47,18 +48,7 @@ export function GroupPassModal({
         submitLiqPay(checkout);
       }
     } catch (err) {
-      const raw = err instanceof Error ? err.message : "";
-      setError(
-        raw.includes("unpaid purchase")
-          ? "У вас уже є покупка, що очікує оплати. Оплатіть або скасуйте її на сторінці «Мій абонемент»."
-          : raw.includes("Slot is full")
-            ? "Місць вже немає, хтось встиг раніше"
-            : raw.includes("Booking window has closed")
-              ? "Час запису вже минув"
-              : raw.includes("Slot not found")
-                ? "Цього тренування вже немає в розкладі"
-                : "Не вдалося оформити покупку. Спробуйте ще раз.",
-      );
+      setError(errorText(err, "Не вдалося оформити покупку. Спробуйте ще раз."));
       setBusy(false);
     }
   };

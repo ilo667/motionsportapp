@@ -202,6 +202,7 @@ Deliberate copies (kept in sync by code, checked consistent on 2026-10-23): a pa
 ### Frontend conventions
 
 - All backend calls go through `frontend/lib/api.ts` (typed fetch wrapper, `credentials: 'include'`)
+- Errors shown to a person go through **`errorText(err, fallback, own?)`** (`frontend/lib/apiErrors.ts`): one table backend message → Ukrainian text; an unknown message or a network failure shows the fallback, **never the backend's English**. A new backend error a person can hit gets a row there (the needle must be part of the backend message); `own` words the same error for one place
 - Tailwind CSS v4 — design tokens defined inline in `globals.css` under `@theme`. Use named tokens (`text-accent`, `bg-teal`, `text-muted`, etc.), not arbitrary hex values
 - **No `gap-*`** — use `space-y-*` (flex-col), `space-x-*` (inline), or `-m-1`/`m-1` trick for flex-wrap. Pre-commit hook enforces this.
 - Fonts: Inter (body, `--font-inter`), Rubik 700 (headings, `--font-geologica`). Use `font-geologica` utility class for headings.

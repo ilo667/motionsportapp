@@ -8,6 +8,7 @@ import { SlotCard as AdminSlotCard } from "@/components/admin/SlotCard";
 import { PageLayout } from "@/components/PageLayout";
 import { PushSubscribeButton } from "@/components/PushSubscribeButton";
 import { AdminMenu } from "@/components/admin/AdminMenu";
+import { errorText } from "@/lib/apiErrors";
 
 function formatLocalDate(localDate: string): string {
   const date = new Date(localDate + "T12:00:00");
@@ -93,8 +94,7 @@ export default function AdminPage() {
       await fn();
       await fetchSchedule();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Помилка. Спробуйте ще раз.";
-      setMutateError(msg);
+      setMutateError(errorText(err));
     }
   };
 

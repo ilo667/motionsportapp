@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { api, AssignedType, CatalogItem, MyPurchases, PurchaseLine, PurchaseMethod } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
+import { errorText } from "@/lib/apiErrors";
 
 export const formatUah = (v: number) => `${v.toLocaleString("uk-UA")} ₴`;
 export const lineName = (l: Pick<PurchaseLine, "title" | "optionLabel">) =>
@@ -91,12 +92,7 @@ export function PurchaseFlow({
         submitLiqPay(checkout);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      setError(
-        message.includes("unpaid purchase")
-          ? "У вас уже є покупка, що очікує оплати. Оплатіть або скасуйте її на сторінці «Мій абонемент»."
-          : "Не вдалося оформити покупку. Спробуйте ще раз.",
-      );
+      setError(errorText(err, "Не вдалося оформити покупку. Спробуйте ще раз."));
       setBusy(false);
     }
   };

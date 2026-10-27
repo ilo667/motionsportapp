@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { api, type Cancellation } from "@/lib/api";
 import { feeLabel } from "@/lib/cancelFee";
+import { errorText } from "@/lib/apiErrors";
 
 const KYIV = "Europe/Kyiv";
 
@@ -43,11 +44,7 @@ export function CancellationList({ title, items, withDate = false }: Cancellatio
       await api.waiveCancelFee(bookingId);
       setWaived((prev) => new Set(prev).add(bookingId));
     } catch (err) {
-      setError(
-        (err as Error).message === "Money already returned"
-          ? "Гроші вже повернено, списання не скасувати."
-          : "Не вдалося скасувати списання. Оновіть сторінку.",
-      );
+      setError(errorText(err, "Не вдалося скасувати списання. Оновіть сторінку."));
     } finally {
       setBusyId(null);
     }

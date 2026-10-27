@@ -1,16 +1,11 @@
 "use client";
 import { useState } from "react";
 import { api, MyFreeze } from "@/lib/api";
+import { errorText } from "@/lib/apiErrors";
 
 const formatDate = (isoDate: string) => {
   const [, m, d] = isoDate.split("-");
   return `${d}.${m}`;
-};
-
-const ERRORS: Record<string, string> = {
-  "Purchase pending": "Спершу завершіть або скасуйте покупку, що очікує оплати.",
-  "Nothing to freeze": "Немає чого заморожувати: клубної карти чи тренувань.",
-  "Freeze already requested": "Запит уже надіслано.",
 };
 
 // «Мій абонемент»: ask the trainer to freeze everything (club card and trainings) for up to 30 days, take the
@@ -30,7 +25,7 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
       await call();
       setConfirming(false);
     } catch (err) {
-      setError(ERRORS[(err as Error).message] ?? "Не вдалося надіслати. Оновіть сторінку й спробуйте ще раз.");
+      setError(errorText(err, "Не вдалося надіслати. Оновіть сторінку й спробуйте ще раз."));
     } finally {
       await onChanged();
       setBusy(false);

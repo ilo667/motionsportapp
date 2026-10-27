@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { api, SkippedTraining, TrainerSchedule } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
+import { errorText } from "@/lib/apiErrors";
 
 // Weekdays as the backend counts them (1 = Пн … 7 = Нд)
 const WEEKDAYS = [
@@ -19,13 +20,6 @@ const WEEKDAYS = [
 const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
 const TIME_FIELD =
   "input-field border rounded-lg px-3 py-2 text-sm focus:outline-none block min-w-0 appearance-none [color-scheme:dark] [&::-webkit-date-and-time-value]:text-left";
-
-const ERROR_TEXTS: [string, string][] = [
-  ["Booking must open before the first training", "Запис має відкриватися раніше за перше тренування"],
-  ["Group trainings are from 06:00 to 21:00", "Групові можна ставити з 06:00 до 21:00"],
-  ["at least an hour apart", "Між груповими має бути щонайменше година"],
-  ["15-minute steps", "Час кроком 15 хвилин"],
-];
 
 const SKIP_REASONS: Record<SkippedTraining["reason"], string> = {
   cancelled: "скасовано в календарі",
@@ -138,8 +132,7 @@ export default function GroupSchedulePage() {
       setSchedule(next);
       setSaved(savedText(next.autoCreate, added, skipped));
     } catch (err) {
-      const raw = err instanceof Error ? err.message : "";
-      setError(ERROR_TEXTS.find(([needle]) => raw.includes(needle))?.[1] ?? "Не вдалося зберегти. Спробуйте ще раз.");
+      setError(errorText(err, "Не вдалося зберегти. Спробуйте ще раз."));
     } finally {
       setSaving(false);
     }

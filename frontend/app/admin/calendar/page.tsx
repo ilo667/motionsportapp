@@ -19,6 +19,7 @@ import { TYPE_COLORS } from "@/lib/trainingTypes";
 import { memberLabel } from "./memberLabel";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { AdminMenu } from "@/components/admin/AdminMenu";
+import { errorText } from "@/lib/apiErrors";
 
 const TYPE_LABELS: Record<TrainingType, string> = {
   групові: "Групові",
@@ -38,23 +39,6 @@ const TYPES: TrainingType[] = ["групові", "персональні", "сп
 const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, персональні: 1, спліт: 3 };
 const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
 const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
-
-const ERROR_TEXTS: [string, string][] = [
-  ["Time is already taken", "На цей час уже є тренування"],
-  ["taken by an assigned training", "На цей час уже стоїть персональне тренування"],
-  ["Group trainings are from 06:00 to 21:00", "Групові можна ставити з 06:00 до 21:00"],
-  ["at least an hour apart", "Між груповими має бути щонайменше година"],
-  ["15-minute steps", "Вкажіть час з кроком 15 хвилин"],
-  ["in the past", "Цей час уже минув"],
-  ["Attendance already marked", "Цій людині вже поставили відмітку, її не можна прибрати"],
-  ["Member is frozen", "Абонемент клієнта заморожено на цей день"],
-  ["Booking must open before the first training", "Запис має відкриватися раніше за тренування"],
-];
-
-function errorText(err: unknown, fallback: string) {
-  const raw = err instanceof Error ? err.message : "";
-  return ERROR_TEXTS.find(([needle]) => raw.includes(needle))?.[1] ?? fallback;
-}
 
 function hourOf(slotTime: string) {
   return parseInt(slotTime.slice(0, 2), 10);

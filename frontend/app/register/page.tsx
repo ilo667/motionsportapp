@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
+import { errorText } from "@/lib/apiErrors";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -40,8 +41,7 @@ export default function RegisterPage() {
       const data = await api.register(displayName.trim(), pin);
       setResult(data);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Помилка реєстрації.";
-      setError(msg);
+      setError(errorText(err, "Помилка реєстрації."));
     } finally {
       setLoading(false);
     }
