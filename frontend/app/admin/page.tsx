@@ -9,16 +9,7 @@ import { PageLayout } from "@/components/PageLayout";
 import { PushSubscribeButton } from "@/components/PushSubscribeButton";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { errorText } from "@/lib/apiErrors";
-
-function formatLocalDate(localDate: string): string {
-  const date = new Date(localDate + "T12:00:00");
-  return new Intl.DateTimeFormat("uk-UA", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "Europe/Kyiv",
-  }).format(date);
-}
+import { longDay } from "@/lib/dates";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -141,7 +132,7 @@ export default function AdminPage() {
         Панель тренера
       </h1>
 
-      <p className="text-muted text-sm mb-1 capitalize">{formatLocalDate(schedule.localDate)}</p>
+      <p className="text-muted text-sm mb-1 capitalize">{longDay(schedule.localDate)}</p>
 
       {/* Push on this device when a client cancels or moves a booking (with the reason) */}
       <div className="mb-2">
@@ -193,8 +184,8 @@ export default function AdminPage() {
           ) : (
             <div className="rounded-lg border border-danger bg-danger/5 p-4 space-y-3">
               <p className="text-danger text-sm">
-                Скасувати ваші тренування {formatLocalDate(schedule.localDate)}? Усі записи на них буде відмінено.
-                Тренування інших тренерів залишаться.
+                Скасувати ваші тренування {longDay(schedule.localDate)}? Усі записи на них буде відмінено. Тренування
+                інших тренерів залишаться.
               </p>
               <div className="flex space-x-2">
                 <button

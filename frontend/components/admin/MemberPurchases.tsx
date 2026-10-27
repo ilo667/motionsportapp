@@ -3,11 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, MemberPurchases as MemberPurchasesData, PriceItem, Purchase } from "@/lib/api";
 import { formatUah, lineName } from "@/components/PurchaseFlow";
 import { errorText } from "@/lib/apiErrors";
-
-const formatDate = (isoDate: string) => {
-  const [, m, d] = isoDate.split("-");
-  return `${d}.${m}`;
-};
+import { ddmm } from "@/lib/dates";
 
 type Card = MemberPurchasesData["cards"][number];
 type Pack = MemberPurchasesData["packages"][number];
@@ -16,24 +12,24 @@ type Pack = MemberPurchasesData["packages"][number];
 const cardDates = (c: Card): string => {
   switch (c.state) {
     case "waiting":
-      return `Активувати до ${formatDate(c.activateBy)}, інакше згорить`;
+      return `Активувати до ${ddmm(c.activateBy)}, інакше згорить`;
     case "active":
-      return `З ${formatDate(c.validFrom!)} по ${formatDate(c.validUntil!)}`;
+      return `З ${ddmm(c.validFrom!)} по ${ddmm(c.validUntil!)}`;
     case "expired":
-      return `Діяла до ${formatDate(c.validUntil!)}`;
+      return `Діяла до ${ddmm(c.validUntil!)}`;
     case "burned":
-      return `Не активована до ${formatDate(c.activateBy)}`;
+      return `Не активована до ${ddmm(c.activateBy)}`;
   }
 };
 
 const packDates = (p: Pack): string => {
   switch (p.state) {
     case "waiting":
-      return `почнеться з першого тренування, до ${formatDate(p.activateBy)}`;
+      return `почнеться з першого тренування, до ${ddmm(p.activateBy)}`;
     case "active":
-      return `діє до ${formatDate(p.validUntil!)}`;
+      return `діє до ${ddmm(p.validUntil!)}`;
     case "expired":
-      return `закінчився ${formatDate(p.validUntil!)}`;
+      return `закінчився ${ddmm(p.validUntil!)}`;
     case "burned":
       return "не почато вчасно, згорів";
     case "used":

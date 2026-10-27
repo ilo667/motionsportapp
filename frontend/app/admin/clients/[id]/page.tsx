@@ -7,6 +7,7 @@ import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { MemberPurchases } from "@/components/admin/MemberPurchases";
 import { CancellationHistory, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
+import { ddmm, shortDay } from "@/lib/dates";
 
 const TYPE_LABEL: Record<MemberVisit["trainingType"], string> = {
   групові: "Групове",
@@ -21,10 +22,6 @@ const MARK: Record<MemberVisit["attendance"], { text: string; className: string 
 };
 
 const sectionTitle = "text-subtle text-xs font-semibold uppercase tracking-wide mb-2";
-
-function visitDay(localDate: string) {
-  return new Date(localDate + "T12:00:00").toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
-}
 
 // The trainings the client was booked on, up to today, with the mark
 function Visits({ memberId }: { memberId: string }) {
@@ -46,7 +43,7 @@ function Visits({ memberId }: { memberId: string }) {
       {items.map((v) => (
         <div key={v.bookingId} className="flex justify-between space-x-3 py-1.5 border-b border-line last:border-0">
           <span className="text-heading">
-            {visitDay(v.localDate)}, {v.slotTime}
+            {shortDay(v.localDate)}, {v.slotTime}
             <span className="block text-subtle text-xs">{TYPE_LABEL[v.trainingType]}</span>
           </span>
           <span className={`text-xs whitespace-nowrap ${MARK[v.attendance].className}`}>{MARK[v.attendance].text}</span>
@@ -55,8 +52,6 @@ function Visits({ memberId }: { memberId: string }) {
     </div>
   );
 }
-
-const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 
 const FREEZE_STATUS: Record<MemberFreeze["status"], string> = {
   REQUESTED: "чекає підтвердження",
@@ -89,7 +84,7 @@ function Freezes({ memberId, headingClass }: { memberId: string; headingClass: s
                 ? f.until < f.startedOn
                   ? `${ddmm(f.startedOn)}, розморожено того ж дня`
                   : `${ddmm(f.startedOn)} – ${ddmm(f.until)}`
-                : `Запит ${visitDay(f.requestedAt.slice(0, 10))}`}
+                : `Запит ${shortDay(f.requestedAt.slice(0, 10))}`}
               {f.decidedBy && <span className="block text-subtle text-xs">{f.decidedBy}</span>}
             </span>
             <span className="text-xs whitespace-nowrap text-subtle">

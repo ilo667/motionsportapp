@@ -3,16 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, StrayPayment } from "@/lib/api";
 import { formatUah, lineName } from "@/components/PurchaseFlow";
-
-function paidAtLabel(iso: string) {
-  return new Intl.DateTimeFormat("uk-UA", {
-    timeZone: "Europe/Kyiv",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
-}
+import { kyivDateTime } from "@/lib/dates";
 
 // Top of «Клієнти»: money that came after the purchase was cancelled or expired, so the client got nothing.
 // The trainer gives the purchase by hand or has the money refunded, then presses «Розібрано»
@@ -64,7 +55,7 @@ export function StrayPayments() {
               </Link>
               <span className="text-heading font-semibold whitespace-nowrap">{formatUah(p.amountUah)}</span>
             </div>
-            <div className="text-subtle text-xs mt-1">{paidAtLabel(p.paidAt)}</div>
+            <div className="text-subtle text-xs mt-1">{kyivDateTime(p.paidAt)}</div>
             {p.lines.map((l) => (
               <div key={lineName(l)} className="text-body text-xs mt-1">
                 {l.section === "club_card" ? `Клубна карта · ${lineName(l)}` : lineName(l)}

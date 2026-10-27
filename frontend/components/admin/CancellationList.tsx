@@ -2,19 +2,14 @@
 import { useState } from "react";
 import { api, type Cancellation } from "@/lib/api";
 import { feeLabel } from "@/lib/cancelFee";
+import { kyivDateTime } from "@/lib/dates";
+import { kyivTime } from "@/lib/kyivTime";
 import { errorText } from "@/lib/apiErrors";
 
-const KYIV = "Europe/Kyiv";
-
 // "17:42" for today's page, "20 жовт., 15:02" when the date matters
-export function formatCancelledAt(iso: string | null, withDate: boolean): string {
+function formatCancelledAt(iso: string | null, withDate: boolean): string {
   if (!iso) return "";
-  return new Intl.DateTimeFormat("uk-UA", {
-    timeZone: KYIV,
-    hour: "2-digit",
-    minute: "2-digit",
-    ...(withDate ? { day: "numeric", month: "short" } : {}),
-  }).format(new Date(iso));
+  return withDate ? kyivDateTime(iso) : kyivTime(iso);
 }
 
 export interface CancellationItem extends Cancellation {

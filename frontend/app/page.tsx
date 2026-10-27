@@ -11,22 +11,7 @@ import { noopSubscribe } from "@/lib/clientStore";
 import { resyncExistingSubscription } from "@/lib/pushUtils";
 import { nextPollDelay } from "@/lib/schedulePoll";
 import { errorText } from "@/lib/apiErrors";
-
-function formatLocalDate(localDate: string): string {
-  const date = new Date(localDate + "T12:00:00");
-  return new Intl.DateTimeFormat("uk-UA", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "Europe/Kyiv",
-  }).format(date);
-}
-
-// «24.11»: the last frozen day
-function formatShortDate(localDate: string): string {
-  const [, m, d] = localDate.split("-");
-  return `${d}.${m}`;
-}
+import { ddmm, longDay } from "@/lib/dates";
 
 // Set on login, cleared on logout / 401. Without it the page shows the landing and skips the API call
 function readAuthFlag(): boolean {
@@ -203,7 +188,7 @@ export default function SchedulePage() {
               href="/purchases"
               className="block bg-warn-bg border border-warn-line rounded-xl px-4 py-3 mb-4 text-sm text-warn"
             >
-              Абонемент заморожено до {formatShortDate(schedule.frozenUntil)} включно
+              Абонемент заморожено до {ddmm(schedule.frozenUntil)} включно
             </Link>
           )}
 
@@ -211,7 +196,7 @@ export default function SchedulePage() {
             <p className="text-muted text-sm mb-4">Групових тренувань поки не заплановано.</p>
           ) : (
             <>
-              <p className="text-muted text-sm mb-4 capitalize">{formatLocalDate(schedule.localDate)}</p>
+              <p className="text-muted text-sm mb-4 capitalize">{longDay(schedule.localDate)}</p>
 
               {schedule.announcement && (
                 <div className="bg-teal/8 border border-teal/20 rounded-xl px-4 py-3 mb-5 text-sm text-body">

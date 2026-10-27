@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api, AdminMember, Trainer, MemberCancellation } from "@/lib/api";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { plural } from "@/lib/plural";
+import { ddmm, shortDay } from "@/lib/dates";
 
 // Pieces of a client shared by the «Клієнти» list and the client page
 
@@ -16,8 +17,6 @@ const TYPE_FORMS: Record<AdminMember["packagesLeft"][number]["trainingType"], [s
   персональні: ["персональне", "персональні", "персональних"],
   спліт: ["спліт", "спліт", "спліт"],
 };
-
-const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 
 // Under the client's name, one badge per line: frozen («Заморожено до DD.MM»), the club card («Клубна карта
 // чекає активації»), then one per type of trainings left («8 персональних», «9 групових»)
@@ -46,7 +45,7 @@ export function PurchaseSummary({ m, className = "" }: { m: AdminMember; classNa
 }
 
 export function trainingLabel(c: MemberCancellation) {
-  const day = new Date(c.localDate + "T12:00:00").toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+  const day = shortDay(c.localDate);
   // A move reads «23 жовт. · 19:00 → 20:00»
   return c.switchedToTime ? `${day} · ${c.slotTime} → ${c.switchedToTime}` : `${day}, ${c.slotTime}`;
 }

@@ -20,6 +20,7 @@ import { memberLabel } from "./memberLabel";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { errorText } from "@/lib/apiErrors";
+import { longDay } from "@/lib/dates";
 
 const TYPE_LABELS: Record<TrainingType, string> = {
   групові: "Групові",
@@ -399,13 +400,7 @@ export default function CalendarPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div>
-              <p className="text-muted text-xs uppercase tracking-wide mb-1">
-                {new Date(modalDate + "T12:00:00").toLocaleDateString("uk-UA", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                })}
-              </p>
+              <p className="text-muted text-xs uppercase tracking-wide mb-1">{longDay(modalDate)}</p>
               <p className="font-geologica font-semibold text-heading">
                 {editing ? `${TYPE_LABELS[editing.trainingType]} ${editing.slotTime}` : "Додати тренування"}
               </p>

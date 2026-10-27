@@ -2,14 +2,13 @@
 import { useState } from "react";
 import { api, CancelRefund } from "@/lib/api";
 import { formatUah } from "@/components/PurchaseFlow";
+import { ddmm } from "@/lib/dates";
 
 const TYPE_LABEL: Record<CancelRefund["trainingType"], string> = {
   групові: "Групове",
   персональні: "Персональне",
   спліт: "Спліт",
 };
-
-const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 
 // Top of «Клієнти»: half of a single personal / split training to give back, after the client cancelled it
 // 2–24 hours before. The trainer returns the money (LiqPay cabinet or cash) and presses «Повернено»

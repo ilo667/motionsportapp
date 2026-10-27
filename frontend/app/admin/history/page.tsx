@@ -7,20 +7,13 @@ import { AdminMenu } from "@/components/admin/AdminMenu";
 import { AttendanceButton } from "@/components/admin/AttendanceButton";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { TYPE_COLORS } from "@/lib/trainingTypes";
+import { longDay } from "@/lib/dates";
 
 const TYPE_LABEL: Record<TrainingType, string> = {
   групові: "Групові",
   персональні: "Персональне",
   спліт: "Спліт",
 };
-
-function formatDay(localDate: string) {
-  return new Date(localDate + "T12:00:00").toLocaleDateString("uk-UA", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
-}
 
 // "11 прийшли з 12 · 1 скасування" for the collapsed day row
 function daySummary(day: HistoryDay) {
@@ -187,7 +180,7 @@ export default function HistoryPage() {
             const expanded = open.has(day.localDate);
             const dayTitle = (
               <span className="flex flex-col">
-                <span className="text-heading text-sm font-semibold capitalize">{formatDay(day.localDate)}</span>
+                <span className="text-heading text-sm font-semibold capitalize">{longDay(day.localDate)}</span>
                 <span className={`text-xs ${day.status === "CANCELLED" ? "text-danger" : "text-muted"}`}>
                   {daySummary(day)}
                 </span>

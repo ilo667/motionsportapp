@@ -1,8 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api, FreezeRequest } from "@/lib/api";
-
-const ddmm = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+import { ddmm } from "@/lib/dates";
 
 // Top of «Клієнти»: clients asking to freeze (from today, 30 days) or to unfreeze (from today). Freezing cancels
 // their trainings in those days, so «Підтвердити» asks once more

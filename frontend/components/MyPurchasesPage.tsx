@@ -7,11 +7,7 @@ import { submitLiqPay } from "@/lib/liqpay";
 import { PageLayout } from "./PageLayout";
 import { PurchaseFlow, PurchaseMode, formatUah, lineName } from "./PurchaseFlow";
 import { FreezeBlock } from "./FreezeBlock";
-
-const formatDate = (isoDate: string) => {
-  const [, m, d] = isoDate.split("-");
-  return `${d}.${m}`;
-};
+import { ddmm } from "@/lib/dates";
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase text-xs tracking-wide";
 
@@ -86,17 +82,17 @@ function ClubCardBlock({ data }: { data: MyPurchases }) {
   const { card, lastCard } = data;
   const [badge, badgeText, label, hint] = card
     ? card.state === "active"
-      ? [BADGE.active, "Діє", card.label, `До ${formatDate(card.validUntil!)}`]
+      ? [BADGE.active, "Діє", card.label, `До ${ddmm(card.validUntil!)}`]
       : [
           BADGE.waiting,
           "Чекає активації",
           card.label,
-          `Тренер активує клубну карту, коли прийдете в зал. Встигніть до ${formatDate(card.activateBy)}`,
+          `Тренер активує клубну карту, коли прийдете в зал. Встигніть до ${ddmm(card.activateBy)}`,
         ]
     : lastCard?.state === "burned"
       ? [BADGE.ended, "Згоріла", lastCard.label, "Не активована вчасно. Купіть нову, щоб займатися в залі"]
       : lastCard?.state === "expired"
-        ? [BADGE.ended, "Закінчилась", lastCard.label, `Діяла до ${formatDate(lastCard.validUntil!)}`]
+        ? [BADGE.ended, "Закінчилась", lastCard.label, `Діяла до ${ddmm(lastCard.validUntil!)}`]
         : [BADGE.none, "Немає", null, "Потрібна, щоб займатися в залі і з тренером"];
 
   return (
@@ -265,9 +261,7 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
                     {p.trainingType === "групові" ? `Групові · ${p.title}` : p.title}
                   </span>
                   <span className="text-subtle text-xs whitespace-nowrap">
-                    {p.state === "active"
-                      ? `діє до ${formatDate(p.validUntil!)}`
-                      : `почати до ${formatDate(p.activateBy)}`}
+                    {p.state === "active" ? `діє до ${ddmm(p.validUntil!)}` : `почати до ${ddmm(p.activateBy)}`}
                   </span>
                 </div>
                 <TrainingDots done={p.total - p.left} total={p.total} />
@@ -289,7 +283,7 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
             .map((p) => (
               <p key={p.id} className="text-subtle text-xs px-1">
                 {p.trainingType === "групові" ? `Групові · ${p.title}` : p.title}: {p.left} з {p.total}{" "}
-                {p.state === "burned" ? "згоріли (не почато вчасно)" : `згоріли, строк до ${formatDate(p.validUntil!)}`}
+                {p.state === "burned" ? "згоріли (не почато вчасно)" : `згоріли, строк до ${ddmm(p.validUntil!)}`}
               </p>
             ))}
 

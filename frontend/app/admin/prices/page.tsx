@@ -5,6 +5,7 @@ import { api, PriceChange, PriceItem } from "@/lib/api";
 import { PriceList } from "@/components/PriceList";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
+import { kyivDateTime } from "@/lib/dates";
 
 // Same limit as UpdatePriceDto on the backend
 const MAX_PRICE_UAH = 100_000;
@@ -12,14 +13,6 @@ const MAX_PRICE_UAH = 100_000;
 const formatUah = (v: number) => `${v.toLocaleString("uk-UA")} ₴`;
 const itemName = (p: { title: string; optionLabel: string | null }) =>
   p.optionLabel ? `${p.title} · ${p.optionLabel}` : p.title;
-const formatWhen = (iso: string) =>
-  new Date(iso).toLocaleString("uk-UA", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Kyiv",
-  });
 
 function ConfirmModal({
   item,
@@ -220,7 +213,7 @@ export default function PricesPage() {
                     {item.optionLabel}
                     {item.updatedBy && item.updatedAt && (
                       <span className="text-muted text-xs ml-2">
-                        {item.updatedBy}, {formatWhen(item.updatedAt)}
+                        {item.updatedBy}, {kyivDateTime(item.updatedAt)}
                       </span>
                     )}
                   </span>
@@ -248,7 +241,7 @@ export default function PricesPage() {
                       {itemName(c)}: {formatUah(c.oldAmountUah)} → {formatUah(c.newAmountUah)}
                     </div>
                     <div className="text-muted text-xs">
-                      {c.changedBy}, {formatWhen(c.changedAt)}
+                      {c.changedBy}, {kyivDateTime(c.changedAt)}
                     </div>
                   </li>
                 ))}

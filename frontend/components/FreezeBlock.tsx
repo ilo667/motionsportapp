@@ -2,11 +2,7 @@
 import { useState } from "react";
 import { api, MyFreeze } from "@/lib/api";
 import { errorText } from "@/lib/apiErrors";
-
-const formatDate = (isoDate: string) => {
-  const [, m, d] = isoDate.split("-");
-  return `${d}.${m}`;
-};
+import { ddmm } from "@/lib/dates";
 
 // «Мій абонемент»: ask the trainer to freeze everything (club card and trainings) for up to 30 days, take the
 // request back, or ask to unfreeze. Nothing changes until the trainer approves
@@ -73,7 +69,7 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
       <div className="flex items-center justify-between space-x-3">
         <span className="text-heading font-semibold">Заморозка</span>
         <span className="text-xs font-semibold border rounded-full px-2.5 py-1 whitespace-nowrap text-warn bg-warn-bg border-warn-line">
-          {freeze.state === "requested" ? "Чекає тренера" : `До ${formatDate(freeze.until!)}`}
+          {freeze.state === "requested" ? "Чекає тренера" : `До ${ddmm(freeze.until!)}`}
         </span>
       </div>
       {freeze.state === "requested" && (
@@ -89,8 +85,8 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
       {freeze.state === "active" && (
         <>
           <p className="text-subtle text-xs mt-2">
-            Абонемент заморожено до {formatDate(freeze.until!)} включно. Записатися на тренування до того дня не можна;
-            строки вже подовжено.
+            Абонемент заморожено до {ddmm(freeze.until!)} включно. Записатися на тренування до того дня не можна; строки
+            вже подовжено.
           </p>
           <button
             onClick={() => run(api.requestUnfreeze)}
