@@ -417,7 +417,7 @@ export default function CalendarPage() {
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
           onClick={() => setModal(null)}
         >
-          <div className="absolute inset-0 bg-black/60" />
+          <div className="absolute inset-0 bg-background/70" />
           <div
             className="relative w-full max-w-sm bg-surface border border-line rounded-2xl p-5 space-y-4 max-h-full overflow-y-auto"
             onClick={(e) => e.stopPropagation()}

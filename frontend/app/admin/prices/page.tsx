@@ -51,7 +51,7 @@ function ConfirmModal({
         if (e.target === e.currentTarget && !saving) onDismiss();
       }}
     >
-      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+      <div className="absolute inset-0 bg-background/70 pointer-events-none" />
       <div
         role="dialog"
         aria-modal="true"

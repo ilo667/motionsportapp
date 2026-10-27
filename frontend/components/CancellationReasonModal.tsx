@@ -56,7 +56,7 @@ export function CancellationReasonModal({ action, switchTime, slotId, onConfirm,
         if (e.target === e.currentTarget) onDismiss();
       }}
     >
-      <div className="absolute inset-0 bg-black/40" />
+      <div className="absolute inset-0 bg-background/70" />
       <div className="relative w-full max-w-[480px] mx-auto bg-surface rounded-t-[20px] sm:rounded-2xl px-5 pt-6 pb-8 shadow-xl border border-line">
         <h2 className="font-geologica font-semibold text-lg text-heading mb-1">{title}</h2>
         {warning && (
