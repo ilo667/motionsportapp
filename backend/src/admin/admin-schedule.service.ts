@@ -588,16 +588,12 @@ export class AdminScheduleService {
   async updateSlot(adminId: string, slotId: string, dto: UpdateSlotDto) {
     const slot = await requireOwnSlot(this.database.db, adminId, slotId);
 
+    // Only cancelling (UpdateSlotDto); a training cancelled already is left as it is
     if (dto.status === 'CANCELLED' && slot.status === 'ACTIVE') {
       const cancelled = await this.database.db.transaction((tx) =>
         cancelSlotsTx(tx, [slotId], this.clock.now().toJSDate()),
       );
       await notifySlotsCancelled(this.notifications, [slot], cancelled);
-    } else {
-      await this.database.db
-        .update(trainingSlots)
-        .set({ status: dto.status, ...(dto.status === 'ACTIVE' ? { cancelledAt: null } : {}) })
-        .where(eq(trainingSlots.id, slotId));
     }
 
     const [updated] = await this.database.db.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).limit(1);
