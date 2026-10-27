@@ -107,14 +107,14 @@ export function SlotCard({
                   <button
                     type="submit"
                     disabled={!guestName.trim()}
-                    className="btn-primary flex-1 py-2.5 rounded-md text-sm font-medium transition-colors disabled:opacity-60"
+                    className="btn-primary flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
                   >
                     Додати гостя
                   </button>
                   <button
                     type="button"
                     onClick={() => setGuestName(null)}
-                    className="btn-ghost flex-1 py-2.5 rounded-md border text-sm transition-colors"
+                    className="btn-ghost flex-1 py-2.5 rounded-lg border text-sm transition-colors"
                   >
                     Ні
                   </button>

@@ -79,13 +79,13 @@ export function CancellationReasonModal({ action, switchTime, slotId, onConfirm,
           <button
             disabled={!canSubmit}
             onClick={handleSubmit}
-            className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 ${
+            className={`w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 ${
               action === "switch" ? "btn-primary" : "btn-danger"
             }`}
           >
             {submitLabel}
           </button>
-          <button onClick={onDismiss} className="btn-ghost w-full py-3 rounded-xl border text-sm transition-colors">
+          <button onClick={onDismiss} className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors">
             Назад
           </button>
         </div>

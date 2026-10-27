@@ -575,7 +575,7 @@ export default function CalendarPage() {
                 <button
                   onClick={editing ? handleSaveMembers : handleAdd}
                   disabled={saving}
-                  className="btn-primary w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-60"
+                  className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
                 >
                   {saving ? "Зачекайте..." : "Зберегти"}
                 </button>
@@ -584,7 +584,7 @@ export default function CalendarPage() {
                 <button
                   onClick={handleCancelSlot}
                   disabled={saving}
-                  className="btn-ghost hover-danger w-full py-3 rounded-xl border text-sm transition-colors disabled:opacity-60"
+                  className="btn-ghost hover-danger w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"
                 >
                   Скасувати тренування {editing.slotTime}
                 </button>

@@ -273,7 +273,7 @@ export default function GroupSchedulePage() {
           <button
             onClick={save}
             disabled={saving}
-            className="btn-primary w-full py-3.5 rounded-xl font-semibold transition-colors disabled:opacity-60"
+            className="btn-primary w-full py-3.5 rounded-lg font-semibold transition-colors disabled:opacity-60"
           >
             {saving ? "Збереження..." : "Зберегти"}
           </button>

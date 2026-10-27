@@ -38,7 +38,7 @@ export function CashRequests({ requests, onDecided }: { requests: CashRequest[];
             <button
               onClick={() => decide(r.id, true)}
               disabled={busyId === r.id}
-              className="btn-primary w-full py-3.5 rounded-xl font-semibold mt-4 transition-colors disabled:opacity-60"
+              className="btn-primary w-full py-3.5 rounded-lg font-semibold mt-4 transition-colors disabled:opacity-60"
             >
               Отримано {formatUah(r.totalUah)}
             </button>

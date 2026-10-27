@@ -234,7 +234,7 @@ export default function HistoryPage() {
             <button
               onClick={loadMore}
               disabled={loadingMore}
-              className="btn-ghost w-full py-3 rounded-xl border text-sm transition-colors disabled:opacity-60"
+              className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"
             >
               {loadingMore ? "Завантаження..." : "Показати ще"}
             </button>

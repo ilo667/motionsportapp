@@ -338,7 +338,7 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
               {canBuyService && (
                 <button
                   onClick={() => setBuying("service")}
-                  className="btn-primary w-full rounded-xl p-4 text-left transition-colors"
+                  className="btn-primary w-full rounded-lg p-4 text-left transition-colors"
                 >
                   <PersonIcon />
                   <span className="block font-semibold mt-3">З тренером</span>

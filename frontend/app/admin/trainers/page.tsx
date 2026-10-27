@@ -187,7 +187,7 @@ function DisableDialog({
           <button
             onClick={disable}
             disabled={busy || !transferToId}
-            className="btn-ghost hover-danger w-full py-3 rounded-xl border border-danger text-danger text-sm transition-colors disabled:opacity-60"
+            className="btn-ghost hover-danger w-full py-3 rounded-lg border border-danger text-danger text-sm transition-colors disabled:opacity-60"
           >
             {busy ? "Зачекайте..." : "Вимкнути"}
           </button>

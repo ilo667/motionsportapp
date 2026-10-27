@@ -80,7 +80,7 @@ export function GroupPassModal({
             <p className="text-body text-sm mb-4">Оплатіть тренеру в залі, і він підтвердить оплату.</p>
             <button
               onClick={onDismiss}
-              className="btn-primary w-full py-3 rounded-xl text-sm font-medium transition-colors"
+              className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors"
             >
               Добре
             </button>
@@ -100,7 +100,7 @@ export function GroupPassModal({
                       <button
                         onClick={() => buy(single, "LIQPAY")}
                         disabled={busy}
-                        className="btn-primary w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-60"
+                        className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
                       >
                         Купити разово · {formatUah(single.amountUah)}
                       </button>
@@ -109,7 +109,7 @@ export function GroupPassModal({
                       <button
                         onClick={() => buy(pass, "LIQPAY")}
                         disabled={busy}
-                        className="btn-primary w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-60"
+                        className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
                       >
                         Купити абонемент · {pass.optionLabel} · {formatUah(pass.amountUah)}
                       </button>
@@ -118,7 +118,7 @@ export function GroupPassModal({
                       <button
                         onClick={() => setStep("cash")}
                         disabled={busy}
-                        className="btn-ghost w-full py-3 rounded-xl border text-sm transition-colors disabled:opacity-60"
+                        className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"
                       >
                         Оплатити готівкою
                       </button>
@@ -132,7 +132,7 @@ export function GroupPassModal({
                         key={item.id}
                         onClick={() => buy(item, "CASH")}
                         disabled={busy}
-                        className="btn-primary w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-60"
+                        className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
                       >
                         {label(item)} · {formatUah(item.amountUah)}
                       </button>
@@ -154,7 +154,7 @@ export function GroupPassModal({
 
             <button
               onClick={() => (step === "cash" ? setStep("choose") : onDismiss())}
-              className="btn-ghost w-full py-3 rounded-xl border text-sm transition-colors mt-2"
+              className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors mt-2"
             >
               Назад
             </button>

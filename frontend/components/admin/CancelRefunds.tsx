@@ -54,7 +54,7 @@ export function CancelRefunds({ refunds, onDone }: { refunds: CancelRefund[]; on
             <button
               onClick={() => done(r.id)}
               disabled={busyId === r.id}
-              className="btn-primary w-full py-3.5 rounded-xl font-semibold mt-4 transition-colors disabled:opacity-60"
+              className="btn-primary w-full py-3.5 rounded-lg font-semibold mt-4 transition-colors disabled:opacity-60"
             >
               Повернено {formatUah(r.amountUah)}
             </button>

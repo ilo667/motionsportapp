@@ -199,13 +199,13 @@ export default function AdminPage() {
               <div className="flex space-x-2">
                 <button
                   onClick={handleCancelDay}
-                  className="btn-danger flex-1 py-2.5 rounded-md text-sm font-medium transition-colors"
+                  className="btn-danger flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors"
                 >
                   Скасувати
                 </button>
                 <button
                   onClick={() => setConfirmCancelDay(false)}
-                  className="btn-ghost flex-1 py-2.5 rounded-md border text-sm transition-colors"
+                  className="btn-ghost flex-1 py-2.5 rounded-lg border text-sm transition-colors"
                 >
                   Ні
                 </button>
@@ -248,13 +248,13 @@ export default function AdminPage() {
                   await handleMutate(() => api.updateAnnouncementText(schedule.localDate, editingText));
                   setEditingText(null);
                 }}
-                className="btn-primary flex-1 py-2 rounded-md text-sm transition-colors"
+                className="btn-primary flex-1 py-2 rounded-lg text-sm transition-colors"
               >
                 Зберегти
               </button>
               <button
                 onClick={() => setEditingText(null)}
-                className="btn-ghost flex-1 py-2 rounded-md border text-sm transition-colors"
+                className="btn-ghost flex-1 py-2 rounded-lg border text-sm transition-colors"
               >
                 Скасувати
               </button>

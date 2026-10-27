@@ -74,14 +74,14 @@ function ConfirmModal({
             ref={confirmRef}
             onClick={onConfirm}
             disabled={saving}
-            className="btn-primary w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-60"
+            className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
           >
             {saving ? "Збереження..." : "Так, змінити для всіх"}
           </button>
           <button
             onClick={onDismiss}
             disabled={saving}
-            className="btn-ghost w-full py-3 rounded-xl border text-sm transition-colors"
+            className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors"
           >
             Скасувати
           </button>

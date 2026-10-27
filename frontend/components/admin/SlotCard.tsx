@@ -106,13 +106,13 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                       setConfirmCancel(false);
                       onMutate(() => api.cancelSlot(slot.id));
                     }}
-                    className="btn-danger flex-1 py-2 rounded-md text-xs font-medium transition-colors"
+                    className="btn-danger flex-1 py-2 rounded-lg text-xs font-medium transition-colors"
                   >
                     Відмінити
                   </button>
                   <button
                     onClick={() => setConfirmCancel(false)}
-                    className="btn-ghost flex-1 py-2 rounded-md border text-xs transition-colors"
+                    className="btn-ghost flex-1 py-2 rounded-lg border text-xs transition-colors"
                   >
                     Ні
                   </button>

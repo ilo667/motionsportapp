@@ -50,14 +50,14 @@ export function FreezeRequests({ requests, onDecided }: { requests: FreezeReques
                   <button
                     onClick={() => decide(r, true)}
                     disabled={busyId === r.id}
-                    className="btn-primary flex-1 py-2.5 rounded-md text-sm font-medium transition-colors disabled:opacity-60"
+                    className="btn-primary flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
                   >
                     Заморозити
                   </button>
                   <button
                     onClick={() => setConfirmId(null)}
                     disabled={busyId === r.id}
-                    className="btn-ghost flex-1 py-2.5 rounded-md border text-sm transition-colors disabled:opacity-60"
+                    className="btn-ghost flex-1 py-2.5 rounded-lg border text-sm transition-colors disabled:opacity-60"
                   >
                     Ні
                   </button>
@@ -68,7 +68,7 @@ export function FreezeRequests({ requests, onDecided }: { requests: FreezeReques
                 <button
                   onClick={() => (r.kind === "freeze" ? setConfirmId(r.id) : decide(r, true))}
                   disabled={busyId === r.id}
-                  className="btn-primary w-full py-3.5 rounded-xl font-semibold mt-4 transition-colors disabled:opacity-60"
+                  className="btn-primary w-full py-3.5 rounded-lg font-semibold mt-4 transition-colors disabled:opacity-60"
                 >
                   {r.kind === "unfreeze" ? "Розморозити з сьогодні" : "Заморозити"}
                 </button>

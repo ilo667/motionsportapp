@@ -218,7 +218,7 @@ export function TrainerPicker({
         <button
           onClick={() => assign(myId)}
           disabled={saving}
-          className="btn-secondary text-xs px-3 py-1 rounded-md border transition-colors disabled:opacity-60"
+          className="btn-secondary text-xs px-3 py-1 rounded-lg border transition-colors disabled:opacity-60"
         >
           Забрати собі
         </button>
