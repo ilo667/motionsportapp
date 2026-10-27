@@ -1,4 +1,4 @@
-import { AnnouncementGeneratorService } from './announcement-generator.service';
+import { AnnouncementGeneratorService, withoutLongDash } from './announcement-generator.service';
 
 const GYM_NAMES = ['MotionSport', 'Motion Gym', 'MotionGym', 'мотіонспорт', 'моушн джим'];
 
@@ -112,5 +112,14 @@ describe('AnnouncementGeneratorService', () => {
       const result = await service.generate([]);
       expect(result.source).toBe('fallback');
     });
+  });
+});
+
+describe('withoutLongDash', () => {
+  it('puts a comma for a long dash, never one before the end mark', () => {
+    expect(withoutLongDash('Записуйтесь — місця обмежені.')).toBe('Записуйтесь, місця обмежені.');
+    expect(withoutLongDash('Ноги сьогодні —!')).toBe('Ноги сьогодні!');
+    expect(withoutLongDash('— Ноги сьогодні')).toBe('Ноги сьогодні');
+    expect(withoutLongDash('Без тире 💪')).toBe('Без тире 💪');
   });
 });

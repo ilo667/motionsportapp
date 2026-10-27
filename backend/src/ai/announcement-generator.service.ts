@@ -6,7 +6,7 @@ import { KY_ZONE } from '../schedule/training-types';
 const FALLBACK_TEXT = 'Записуйтесь на тренування! 💪 Чекаємо вас сьогодні.';
 const GEMINI_MODEL = 'gemini-3.5-flash-lite';
 // Bump when the instructions change (stored in ai_generations.prompt_version)
-export const PROMPT_VERSION = 'v2';
+export const PROMPT_VERSION = 'v3';
 
 // Stable part of every request: who writes, the gym's weekly programme, and the format.
 // The model picks the topic from the weekday it gets in the prompt
@@ -25,7 +25,16 @@ const SYSTEM_INSTRUCTION = `Ти тренер жіночого фітнес-за
 - дружній, енергійний, мотивуючий тон
 - можна 1-2 емодзі
 - тільки текст оголошення, без пояснень і заголовків
-- не називай зал`;
+- не називай зал
+- без довгого тире (—), став кому або крапку`;
+
+// The UI never shows a long dash (the members' texts don't use it); the model sometimes writes one anyway
+export function withoutLongDash(text: string) {
+  return text
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/^,\s*/, '')
+    .replace(/,\s*([.!?])/g, '$1');
+}
 
 export interface GenerateResult {
   text: string;
@@ -56,8 +65,8 @@ export class AnnouncementGeneratorService {
 
     const examplesText =
       examples.length > 0
-        ? examples.map((e, i) => `${i + 1}. ${e}`).join('\n')
-        : '1. Сьогодні тренуємось! 💪 Записуйтесь — місця обмежені.';
+        ? examples.map((e, i) => `${i + 1}. ${withoutLongDash(e)}`).join('\n')
+        : '1. Сьогодні тренуємось! 💪 Записуйтесь, місця обмежені.';
 
     const day = localDate
       ? DateTime.fromISO(localDate, { zone: KY_ZONE }).setLocale('uk').toFormat('cccc, d MMMM')
@@ -75,7 +84,7 @@ ${topic ? `\nОкрема тема на цей день: ${topic}` : ''}`;
       const result = await geminiModel.generateContent(prompt);
       const latencyMs = Date.now() - start;
       const raw = result.response.text().trim().replace(/\n+/g, ' ');
-      const text = raw.substring(0, 300);
+      const text = withoutLongDash(raw).substring(0, 300);
       const tokenUsage = result.response.usageMetadata?.totalTokenCount;
 
       if (!text) {
