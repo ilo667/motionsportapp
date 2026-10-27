@@ -52,6 +52,21 @@ const HISTORY_PAGE_DAYS = 14;
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
+type Mark = 'PRESENT' | 'ABSENT' | 'UNMARKED';
+// No attendance row (or a guest's null) = not marked yet
+const markOf = (status: string | null) => (status ?? 'UNMARKED') as Mark;
+
+// A new group training of this trainer (calendar, «Розклад групових» for a day)
+const groupSlotRow = (trainingDayId: string, slotTime: string, trainerId: string) => ({
+  trainingDayId,
+  slotTime,
+  status: 'ACTIVE' as const,
+  trainingType: GROUP_TYPE,
+  capacity: GROUP_CAPACITY,
+  bookedCount: 0,
+  trainerId,
+});
+
 type CancellationRow = {
   bookingId: string;
   displayName: string;
@@ -314,7 +329,7 @@ export class AdminScheduleService {
           const member = {
             bookingId: p.bookingId,
             displayName: p.displayName,
-            attendanceStatus: (p.attendanceStatus ?? 'UNMARKED') as 'PRESENT' | 'ABSENT' | 'UNMARKED',
+            attendanceStatus: markOf(p.attendanceStatus),
             switchedFromTime:
               cancellations.find((c) => c.switchedToSlotId === s.id && c.memberId === p.memberId)?.slotTime ?? null,
             guestOf: null as string | null,
@@ -327,7 +342,7 @@ export class AdminScheduleService {
                 {
                   bookingId: guest.id,
                   displayName: guest.name,
-                  attendanceStatus: (guest.attendance ?? 'UNMARKED') as 'PRESENT' | 'ABSENT' | 'UNMARKED',
+                  attendanceStatus: markOf(guest.attendance),
                   switchedFromTime: null,
                   guestOf: p.displayName,
                 },
@@ -444,15 +459,7 @@ export class AdminScheduleService {
       if (gapError) throw new BadRequestException(gapError);
       const [slot] = await tx
         .insert(trainingSlots)
-        .values({
-          trainingDayId: dayId,
-          slotTime,
-          status: 'ACTIVE',
-          trainingType: GROUP_TYPE,
-          capacity: GROUP_CAPACITY,
-          bookedCount: 0,
-          trainerId: adminId,
-        })
+        .values(groupSlotRow(dayId, slotTime, adminId))
         // A new training (a cancelled one at that time stays as it was); this trainer's active group one there
         // stays as is, their own active assigned training there is not taken over
         .onConflictDoUpdate({
@@ -650,17 +657,7 @@ export class AdminScheduleService {
         if (times.length === 0) return;
         await tx
           .insert(trainingSlots)
-          .values(
-            times.map(({ slotTime }) => ({
-              trainingDayId: dayId,
-              slotTime,
-              status: 'ACTIVE' as const,
-              trainingType: GROUP_TYPE,
-              capacity: GROUP_CAPACITY,
-              bookedCount: 0,
-              trainerId: adminId,
-            })),
-          )
+          .values(times.map(({ slotTime }) => groupSlotRow(dayId, slotTime, adminId)))
           .onConflictDoNothing();
       });
       return { ok: true };
@@ -739,13 +736,7 @@ export class AdminScheduleService {
     const now = this.clock.now().toJSDate();
     await this.database.db.transaction(async (tx) => {
       for (const booking of inLockOrder(activeBookings)) {
-        await tx
-          .insert(attendance)
-          .values({ bookingId: booking.id, status: 'PRESENT', markedAt: now, markedByAdminId: adminId })
-          .onConflictDoUpdate({
-            target: attendance.bookingId,
-            set: { status: 'PRESENT', markedAt: now, markedByAdminId: adminId },
-          });
+        await this.saveMark(tx, booking.id, 'PRESENT', now, adminId);
         await this.entitlements.syncSpend(tx, booking.id);
       }
       // Their guests too (nothing to spend)
@@ -822,18 +813,20 @@ export class AdminScheduleService {
       if (dto.status === 'UNMARKED') {
         await tx.delete(attendance).where(eq(attendance.bookingId, bookingId));
       } else {
-        await tx
-          .insert(attendance)
-          .values({ bookingId, status: dto.status, markedAt: now, markedByAdminId: adminId })
-          .onConflictDoUpdate({
-            target: attendance.bookingId,
-            set: { status: dto.status, markedAt: now, markedByAdminId: adminId },
-          });
+        await this.saveMark(tx, bookingId, dto.status, now, adminId);
       }
       await this.entitlements.syncSpend(tx, bookingId);
     });
 
     return { ok: true };
+  }
+
+  // ✓ / ✗ on a booking, or changed; the caller spends from the package (syncSpend) in the same transaction
+  private async saveMark(tx: Tx, bookingId: string, status: 'PRESENT' | 'ABSENT', at: Date, adminId: string) {
+    await tx
+      .insert(attendance)
+      .values({ bookingId, status, markedAt: at, markedByAdminId: adminId })
+      .onConflictDoUpdate({ target: attendance.bookingId, set: { status, markedAt: at, markedByAdminId: adminId } });
   }
 
   // A guest's mark: for the trainer's count only, nothing is spent. Only guests on this trainer's trainings
@@ -906,9 +899,9 @@ export class AdminScheduleService {
     });
   }
 
-  // For the reassign picker. Usernames only, never password hashes
   // All trainers (reassigning a client, the «Тренери» page): who invited whom, null = added by seed:admin
-  // Disabled trainers stay in the list (with who disabled them); the pickers leave them out
+  // Disabled trainers stay in the list (with who disabled them); the pickers leave them out. Usernames only, never
+  // password hashes
   async getTrainers() {
     const inviter = alias(admins, 'inviter');
     const disabler = alias(admins, 'disabler');
@@ -927,15 +920,20 @@ export class AdminScheduleService {
       .orderBy(asc(admins.username));
   }
 
-  // Hand a client to a trainer (or claim an unassigned one). Only the current trainer can do it; a disabled
-  // trainer answers 404 like a missing one
-  async assignTrainer(adminId: string, memberId: string, trainerId: string) {
+  // A trainer who can still sign in and take clients (a disabled one answers 404 like a missing one)
+  private async enabledTrainer(trainerId: string) {
     const [trainer] = await this.database.db
       .select({ id: admins.id })
       .from(admins)
       .where(and(eq(admins.id, trainerId), isNull(admins.disabledAt)))
       .limit(1);
-    if (!trainer) throw new NotFoundException('Trainer not found');
+    return trainer ?? null;
+  }
+
+  // Hand a client to a trainer (or claim an unassigned one). Only the current trainer can do it; a disabled
+  // trainer answers 404 like a missing one
+  async assignTrainer(adminId: string, memberId: string, trainerId: string) {
+    if (!(await this.enabledTrainer(trainerId))) throw new NotFoundException('Trainer not found');
 
     // Checked again in the update itself: the trainer may be disabled in between
     const [updated] = await this.database.db
@@ -964,14 +962,7 @@ export class AdminScheduleService {
       throw new BadRequestException('Cannot disable the first trainer');
     if (transferToId === trainerId) throw new BadRequestException('Cannot transfer to the same trainer');
 
-    const enabled = (id: string) =>
-      this.database.db
-        .select({ id: admins.id })
-        .from(admins)
-        .where(and(eq(admins.id, id), isNull(admins.disabledAt)))
-        .limit(1);
-    const [target] = await enabled(transferToId);
-    if (!target) throw new NotFoundException('Trainer not found');
+    if (!(await this.enabledTrainer(transferToId))) throw new NotFoundException('Trainer not found');
     const [trainer] = await this.database.db
       .select({ id: admins.id })
       .from(admins)
@@ -1076,12 +1067,7 @@ export class AdminScheduleService {
 
   // Client page: trainings the member was booked on up to today, with the trainer's mark (newest first)
   async getMemberVisits(adminId: string, memberId: string) {
-    const [member] = await this.database.db
-      .select({ id: members.id })
-      .from(members)
-      .where(and(eq(members.id, memberId), visibleTo(adminId)))
-      .limit(1);
-    if (!member) throw new NotFoundException('Member not found');
+    await this.ownMember(adminId, memberId);
 
     const rows = await this.database.db
       .select({
@@ -1107,25 +1093,31 @@ export class AdminScheduleService {
       .limit(MEMBER_HISTORY_LIMIT);
     return rows.map(({ status, ...r }) => ({
       ...r,
-      attendance: (status ?? 'UNMARKED') as 'PRESENT' | 'ABSENT' | 'UNMARKED',
+      attendance: markOf(status),
     }));
   }
 
-  // Clients page: one member's latest cancellations and moves
-  async getMemberCancellations(adminId: string, memberId: string) {
+  // The trainer's own or unassigned client; anyone else answers 404 like a missing one
+  private async ownMember(adminId: string, memberId: string) {
     const [member] = await this.database.db
       .select({ id: members.id })
       .from(members)
       .where(and(eq(members.id, memberId), visibleTo(adminId)))
       .limit(1);
     if (!member) throw new NotFoundException('Member not found');
+  }
+
+  // Clients page: one member's latest cancellations and moves
+  async getMemberCancellations(adminId: string, memberId: string) {
+    await this.ownMember(adminId, memberId);
 
     const rows = await this.memberCancellations(eq(bookings.memberId, memberId), MEMBER_HISTORY_LIMIT);
     return rows.map((r) => ({ ...toCancellationView(r), localDate: r.localDate, slotTime: r.slotTime }));
   }
 
   // Bookings the member cancelled or moved themselves (they always write a reason). System cancellations
-  // (expired payment, trainer cancelled the slot) have no reason and are left out
+  // (the trainer cancelled the training or removed the member, a freeze, cash «Відхилити») have no reason and
+  // are left out
   private async memberCancellations(filter: SQL, limit?: number) {
     const target = alias(trainingSlots, 'target_slot');
     const query = this.database.db

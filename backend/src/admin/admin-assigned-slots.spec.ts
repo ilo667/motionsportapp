@@ -272,15 +272,18 @@ describe('Attendance spends from the package', () => {
   it('a mark (✓ or ✗) and «—» both keep the package in step, in the same transaction', async () => {
     for (const status of ['PRESENT', 'ABSENT', 'UNMARKED'] as const) {
       const entitlements = { syncSpend: jest.fn() };
-      const { db } = makeDb([[{ id: 'b1' }]]);
+      const { db, values } = makeDb([[{ id: 'b1' }]]);
       await makeService(db, entitlements).updateBookingAttendance('b1', { status }, TRAINER);
       expect(entitlements.syncSpend).toHaveBeenCalledWith(db, 'b1');
+      // ✓ / ✗ saved as chosen; «—» saves no mark (the row is deleted)
+      if (status === 'UNMARKED') expect(values).toEqual([]);
+      else expect(values).toEqual([expect.objectContaining({ bookingId: 'b1', status, markedByAdminId: TRAINER })]);
     }
   });
 
   it('«Підтвердити всіх» spends for every booking', async () => {
     const entitlements = { syncSpend: jest.fn() };
-    const { db } = makeDb([
+    const { db, values } = makeDb([
       [{ id: 'slot-1', trainerId: TRAINER }],
       [
         { id: 'b1', memberId: 'm1' },
@@ -289,6 +292,7 @@ describe('Attendance spends from the package', () => {
     ]);
     await makeService(db, entitlements).markAllAttendance('slot-1', TRAINER);
     expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b1', 'b2']);
+    expect(values).toEqual(['b1', 'b2'].map((bookingId) => expect.objectContaining({ bookingId, status: 'PRESENT' })));
   });
 
   // Packages are locked member by member; the same order everywhere means two batches (this and the 22:00
