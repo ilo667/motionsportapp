@@ -241,13 +241,13 @@ describe('BookingService — cancel', () => {
   });
 
   it('cancels an assigned booking after 21:00 while the training has not started', async () => {
-    const { db } = makeDb([[booking], [validDay], [assignedSlot]]);
+    const { db } = makeDb([[{ ...booking, ...assignedSlot, localDate: TODAY }]]);
     const service = makeService(db, kyivAt(21, 10));
     await expect(service.cancel('member-1', 'slot-p', 'reason')).resolves.toEqual({ ok: true });
   });
 
   it('refuses to cancel an assigned booking once the training has started', async () => {
-    const { db } = makeDb([[booking], [validDay], [assignedSlot]]);
+    const { db } = makeDb([[{ ...booking, ...assignedSlot, localDate: TODAY }]]);
     const service = makeService(db, kyivAt(21, 30));
     await expect(service.cancel('member-1', 'slot-p', 'reason')).rejects.toThrow('already started');
   });
@@ -255,11 +255,14 @@ describe('BookingService — cancel', () => {
   // A booked no-show loses the training, so a group booking can't be dropped once its training started
   it('a group booking can be cancelled until its training starts, not after', async () => {
     const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '20:00', trainingType: 'групові' };
-    const late = makeDb([[{ ...booking, slotId: 'slot-1' }], [validDay], [groupSlot]]);
+    const late = makeDb([[{ ...booking, slotId: 'slot-1', ...groupSlot, localDate: TODAY }]]);
     await expect(makeService(late.db, kyivAt(20, 0)).cancel('member-1', 'slot-1', 'reason')).rejects.toThrow(
       'Training has already started',
     );
-    const inTime = makeDb([[{ ...booking, slotId: 'slot-1' }], [validDay], [groupSlot], [{ displayName: 'Оля' }]]);
+    const inTime = makeDb([
+      [{ ...booking, slotId: 'slot-1', ...groupSlot, localDate: TODAY }],
+      [{ displayName: 'Оля' }],
+    ]);
     await expect(makeService(inTime.db, kyivAt(19, 59)).cancel('member-1', 'slot-1', 'reason')).resolves.toEqual({
       ok: true,
     });
@@ -315,11 +318,9 @@ describe('BookingService — switch after a training started', () => {
   it('19:00 → 20:00 at 19:10: the own training already started', async () => {
     const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '20:00', trainerId: 'trainer-1' };
     const { db } = makeDb([
-      [target],
+      [{ ...target, localDate: TODAY }],
       MEMBER_TRAINER,
-      [current],
-      [validDay],
-      [{ bookedCount: 3, capacity: 8, slotTime: '19:00' }],
+      [{ ...current, slotTime: '19:00', trainerId: 'trainer-1' }],
     ]);
     await expect(makeService(db, kyivAt(19, 10)).switchSlot('member-1', 'slot-2', 'r')).rejects.toThrow(
       'Training has already started',
@@ -329,11 +330,9 @@ describe('BookingService — switch after a training started', () => {
   it('20:00 → 19:00 at 19:10: the target already started', async () => {
     const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '19:00', trainerId: 'trainer-1' };
     const { db } = makeDb([
-      [target],
+      [{ ...target, localDate: TODAY }],
       MEMBER_TRAINER,
-      [{ ...current, slotId: 'slot-2' }],
-      [validDay],
-      [{ bookedCount: 3, capacity: 8, slotTime: '20:00' }],
+      [{ ...current, slotId: 'slot-2', slotTime: '20:00', trainerId: 'trainer-1' }],
     ]);
     await expect(makeService(db, kyivAt(19, 10)).switchSlot('member-1', 'slot-1', 'r')).rejects.toThrow(
       'Booking window has closed',
@@ -357,7 +356,7 @@ describe('BookingService — trainer push with the reason', () => {
       trainingType: 'групові',
       trainerId: 'trainer-1',
     };
-    const { db } = makeDb([[booking], [validDay], [groupSlot], [{ displayName: 'Оля' }]]);
+    const { db } = makeDb([[{ ...booking, ...groupSlot, localDate: TODAY }], [{ displayName: 'Оля' }]]);
     const service = makeService(db, kyivAt(17));
     await service.cancel('member-1', 'slot-1', 'Захворіла');
 
@@ -382,11 +381,9 @@ describe('BookingService — trainer push with the reason', () => {
     const slot2 = { id: 'slot-2', status: 'ACTIVE', capacity: 8, bookedCount: 2 };
     const { db, sets } = makeDb(
       [
-        [target],
+        [{ ...target, localDate: TODAY }],
         MEMBER_TRAINER,
-        [current],
-        [validDay],
-        [{ bookedCount: 3, capacity: 8, slotTime: '19:00' }],
+        [{ ...current, slotTime: '19:00', trainerId: 'trainer-1' }],
         MEMBER,
         [slot1],
         [slot2],
@@ -479,9 +476,7 @@ describe('BookingService — guests', () => {
     (cancelGuests as jest.Mock).mockResolvedValueOnce(new Set(['booking-1']));
     const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '20:00', trainingType: 'групові' };
     const { db, sets } = makeDb([
-      [{ id: 'booking-1', memberId: 'member-1', slotId: 'slot-1', status: 'ACTIVE' }],
-      [validDay],
-      [groupSlot],
+      [{ id: 'booking-1', memberId: 'member-1', slotId: 'slot-1', status: 'ACTIVE', ...groupSlot, localDate: TODAY }],
       [{ displayName: 'Оля' }],
     ]);
     await makeService(db, at15).cancel('member-1', 'slot-1', 'reason');
@@ -494,11 +489,9 @@ describe('BookingService — guests', () => {
     const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '20:00', trainerId: 'trainer-1' };
     const slot1 = { id: 'slot-1', status: 'ACTIVE', capacity: 8, bookedCount: 3 };
     const reads = (slot2Booked: number) => [
-      [target],
+      [{ ...target, localDate: TODAY }],
       MEMBER_TRAINER,
-      [current],
-      [validDay],
-      [{ bookedCount: 3, capacity: 8, slotTime: '19:00' }],
+      [{ ...current, slotTime: '19:00', trainerId: 'trainer-1' }],
       MEMBER,
       [slot1],
       [{ id: 'slot-2', status: 'ACTIVE', capacity: 8, bookedCount: slot2Booked }],
@@ -523,9 +516,7 @@ describe("BookingService — «З'явилось місце»", () => {
   const at15 = kyivAt(15);
   const groupSlot = { bookedCount: 8, capacity: 8, slotTime: '19:00', trainingType: 'групові', trainerId: 'trainer-1' };
   const cancelReads = () => [
-    [{ id: 'booking-1', memberId: 'member-1', slotId: 'slot-1', status: 'ACTIVE' }],
-    [validDay],
-    [groupSlot],
+    [{ id: 'booking-1', memberId: 'member-1', slotId: 'slot-1', status: 'ACTIVE', ...groupSlot, localDate: TODAY }],
     [{ displayName: 'Оля' }],
   ];
   const vacancyCalls = (service: BookingService) =>
@@ -556,11 +547,9 @@ describe("BookingService — «З'явилось місце»", () => {
     const target = { trainingDayId: 'day-1', trainingType: 'групові', slotTime: '20:00', trainerId: 'trainer-1' };
     const { db } = makeDb(
       [
-        [target],
+        [{ ...target, localDate: TODAY }],
         MEMBER_TRAINER,
-        [current],
-        [validDay],
-        [{ bookedCount: 8, capacity: 8, slotTime: '19:00' }],
+        [{ ...current, slotTime: '19:00', trainerId: 'trainer-1' }],
         MEMBER,
         [{ id: 'slot-1', status: 'ACTIVE', capacity: 8, bookedCount: 8 }],
         [{ id: 'slot-2', status: 'ACTIVE', capacity: 8, bookedCount: 3 }],
@@ -590,9 +579,7 @@ describe('BookingService — late cancellation', () => {
 
   function cancelAt(now: DateTime, payer: unknown, spent: unknown[], type = 'персональні') {
     const { db, sets } = makeDb([
-      [booking],
-      [validDay],
-      [{ ...slot, trainingType: type }],
+      [{ ...booking, ...slot, trainingType: type, localDate: TODAY }],
       spent,
       [{ displayName: 'Оля' }],
     ]);

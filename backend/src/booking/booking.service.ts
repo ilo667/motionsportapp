@@ -116,34 +116,9 @@ export class BookingService {
 
   // A member can hold a group booking and several assigned ones, so the slot says which one to cancel
   async cancel(memberId: string, slotId: string, reason: string) {
-    const [booking] = await this.database.db
-      .select()
-      .from(bookings)
-      .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
-      .limit(1);
-
-    if (!booking) throw new NotFoundException('No active booking found');
-
-    // The day comes through the slot (bookings don't store it)
-    const [day] = await this.database.db
-      .select({ id: trainingDays.id, localDate: trainingDays.localDate, status: trainingDays.status })
-      .from(trainingDays)
-      .innerJoin(trainingSlots, eq(trainingSlots.trainingDayId, trainingDays.id))
-      .where(eq(trainingSlots.id, booking.slotId))
-      .limit(1);
-
-    const [slotBefore] = await this.database.db
-      .select({
-        slotTime: trainingSlots.slotTime,
-        trainingType: trainingSlots.trainingType,
-        trainerId: trainingSlots.trainerId,
-      })
-      .from(trainingSlots)
-      .where(eq(trainingSlots.id, booking.slotId))
-      .limit(1);
-
+    const booking = await this.bookingOnSlot(memberId, slotId);
     // Group or assigned: only until the training starts (a booked no-show loses the training)
-    if (day && slotBefore) this.validateBeforeStart(day.localDate, slotBefore.slotTime);
+    this.validateBeforeStart(booking.localDate, booking.slotTime);
 
     const wasFull = await this.database.db.transaction(async (tx) => {
       const now = this.clock.now().toJSDate();
@@ -152,43 +127,30 @@ export class BookingService {
         .set({ status: 'CANCELLED', cancelledAt: now, cancellationReason: reason })
         .where(and(eq(bookings.id, booking.id), eq(bookings.status, 'ACTIVE')));
       // Late: the training is spent from what pays for it, maybe half a single training's price back
-      if (day && slotBefore) {
-        await this.chargeLateCancel(
-          tx,
-          booking.id,
-          memberId,
-          slotBefore.trainingType,
-          day.localDate,
-          slotBefore.slotTime,
-        );
-      }
+      await this.chargeLateCancel(tx, booking.id, memberId, booking.trainingType, booking.localDate, booking.slotTime);
       // Their guest goes too: two seats free
       const seats = 1 + (await cancelGuests(tx, [booking.id], now)).size;
-      return freeSeats(tx, booking.slotId, seats);
+      return freeSeats(tx, slotId, seats);
     });
 
-    if (wasFull && day && slotBefore) {
+    if (wasFull) {
       await this.notifyVacancy(
-        booking.slotId,
-        `vacancy:${booking.slotId}:${booking.id}`,
-        slotBefore.slotTime,
-        day.localDate,
-        booking.memberId,
-      );
-    }
-
-    if (day && slotBefore) {
-      await this.notifyTrainer(
-        booking.id,
+        slotId,
+        `vacancy:${slotId}:${booking.id}`,
+        booking.slotTime,
+        booking.localDate,
         memberId,
-        slotBefore.trainerId,
-        slotBefore.slotTime,
-        day.localDate,
-        reason,
-        null,
       );
     }
-
+    await this.notifyTrainer(
+      booking.id,
+      memberId,
+      booking.trainerId,
+      booking.slotTime,
+      booking.localDate,
+      reason,
+      null,
+    );
     return { ok: true };
   }
 
@@ -200,8 +162,10 @@ export class BookingService {
         trainingType: trainingSlots.trainingType,
         slotTime: trainingSlots.slotTime,
         trainerId: trainingSlots.trainerId,
+        localDate: trainingDays.localDate,
       })
       .from(trainingSlots)
+      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
       .where(eq(trainingSlots.id, newSlotId))
       .limit(1);
 
@@ -215,28 +179,13 @@ export class BookingService {
     if (!current) throw new NotFoundException('No active booking to switch from');
     if (current.slotId === newSlotId) throw new BadRequestException('Already booked on this slot');
 
-    const [day] = await this.database.db
-      .select()
-      .from(trainingDays)
-      .where(eq(trainingDays.id, current.trainingDayId))
-      .limit(1);
-
+    // Same day: findGroupBooking looked in the target's day
+    const localDate = target.localDate;
     const oldSlotId = current.slotId;
 
-    const [oldSlotBefore] = await this.database.db
-      .select({
-        slotTime: trainingSlots.slotTime,
-        trainerId: trainingSlots.trainerId,
-      })
-      .from(trainingSlots)
-      .where(eq(trainingSlots.id, oldSlotId))
-      .limit(1);
-
     // Both trainings must not have started: the one they move to (its booking window), and the one they leave
-    if (day) {
-      await this.validateBookingWindow(day.localDate, target.slotTime, target.trainerId);
-      if (oldSlotBefore) this.validateBeforeStart(day.localDate, oldSlotBefore.slotTime);
-    }
+    await this.validateBookingWindow(localDate, target.slotTime, target.trainerId);
+    this.validateBeforeStart(localDate, current.slotTime);
 
     const [firstId, secondId] = [oldSlotId, newSlotId].sort();
 
@@ -285,27 +234,18 @@ export class BookingService {
     // Usually they came here from a vacancy push; stop alerts for the slot they now hold
     await this.vacancyAlerts.unsubscribe(memberId, newSlotId);
 
-    if (wasFull && day && oldSlotBefore) {
-      await this.notifyVacancy(
-        oldSlotId,
-        `vacancy:${oldSlotId}:${current.id}`,
-        oldSlotBefore.slotTime,
-        day.localDate,
-        current.memberId,
-      );
+    if (wasFull) {
+      await this.notifyVacancy(oldSlotId, `vacancy:${oldSlotId}:${current.id}`, current.slotTime, localDate, memberId);
     }
-
-    if (day && oldSlotBefore) {
-      await this.notifyTrainer(
-        current.id,
-        memberId,
-        oldSlotBefore.trainerId,
-        oldSlotBefore.slotTime,
-        day.localDate,
-        reason,
-        target.slotTime,
-      );
-    }
+    await this.notifyTrainer(
+      current.id,
+      memberId,
+      current.trainerId,
+      current.slotTime,
+      localDate,
+      reason,
+      target.slotTime,
+    );
 
     return { ok: true };
   }
@@ -316,20 +256,12 @@ export class BookingService {
     memberId: string,
     slotId: string,
   ): Promise<{ fee: CancelFee | null; single: boolean; refundUah: number | null }> {
-    const [row] = await this.database.db
-      .select({
-        bookingId: bookings.id,
-        trainingType: trainingSlots.trainingType,
-        slotTime: trainingSlots.slotTime,
-        localDate: trainingDays.localDate,
-      })
-      .from(bookings)
-      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
-      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
-      .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
-      .limit(1);
-    if (!row) throw new NotFoundException('No active booking found');
-    const payer = await this.entitlements.payerFor(this.database.db, { memberId, ...row }, row.bookingId);
+    const row = await this.bookingOnSlot(memberId, slotId);
+    const payer = await this.entitlements.payerFor(
+      this.database.db,
+      { memberId, trainingType: row.trainingType, localDate: row.localDate },
+      row.id,
+    );
     const msBefore = slotStartsAt(row.localDate, row.slotTime).toMillis() - this.clock.now().toMillis();
     const fee = cancelFee(row.trainingType, msBefore, payer?.total ?? null);
     return {
@@ -444,6 +376,25 @@ export class BookingService {
       .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
       .limit(1);
     return booking ?? null;
+  }
+
+  // The member's active booking on this slot with the training's time, type, trainer and date (cancel, its warning)
+  private async bookingOnSlot(memberId: string, slotId: string) {
+    const [row] = await this.database.db
+      .select({
+        id: bookings.id,
+        slotTime: trainingSlots.slotTime,
+        trainingType: trainingSlots.trainingType,
+        trainerId: trainingSlots.trainerId,
+        localDate: trainingDays.localDate,
+      })
+      .from(bookings)
+      .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
+      .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
+      .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
+      .limit(1);
+    if (!row) throw new NotFoundException('No active booking found');
+    return row;
   }
 
   private async activeGuest(tx: Tx, bookingId: string) {

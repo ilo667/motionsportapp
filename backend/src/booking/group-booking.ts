@@ -25,6 +25,8 @@ export async function findGroupBooking(db: Db | Tx, memberId: string, trainingDa
       slotId: bookings.slotId,
       trainingDayId: trainingSlots.trainingDayId,
       memberId: bookings.memberId,
+      slotTime: trainingSlots.slotTime,
+      trainerId: trainingSlots.trainerId,
     })
     .from(bookings)
     .innerJoin(trainingSlots, eq(trainingSlots.id, bookings.slotId))
