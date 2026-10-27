@@ -4,6 +4,7 @@ import { api, AdminMember, Trainer, MemberCancellation } from "@/lib/api";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { plural } from "@/lib/plural";
 import { ddmm, shortDay } from "@/lib/dates";
+import { Badge } from "@/components/Badge";
 
 // Pieces of a client shared by the «Клієнти» list and the client page
 
@@ -21,24 +22,25 @@ const TYPE_FORMS: Record<AdminMember["packagesLeft"][number]["trainingType"], [s
 // Under the client's name, one badge per line: frozen («Заморожено до DD.MM»), the club card («Клубна карта
 // чекає активації»), then one per type of trainings left («8 персональних», «9 групових»)
 export function PurchaseSummary({ m, className = "" }: { m: AdminMember; className?: string }) {
-  const [text, cardClass] = !m.clubCard
-    ? ["Без клубної карти", "text-subtle border-line"]
+  const [text, cardTone] = !m.clubCard
+    ? ["Без клубної карти", "none" as const]
     : m.clubCard.state === "active"
-      ? [`Клубна карта до ${ddmm(m.clubCard.until)}`, "text-accent bg-teal/10 border-teal/30"]
-      : ["Клубна карта чекає активації", "text-warn bg-warn-bg border-warn-line"];
-  const badge = "border rounded-full px-2.5 py-1";
+      ? [`Клубна карта до ${ddmm(m.clubCard.until)}`, "ok" as const]
+      : ["Клубна карта чекає активації", "warn" as const];
   return (
     <div className={`flex flex-col items-start space-y-1.5 text-xs ${className}`}>
       {m.frozenUntil && (
-        <span className={`font-semibold text-warn bg-warn-bg border-warn-line ${badge}`}>
+        <Badge tone="warn" size="status">
           Заморожено до {ddmm(m.frozenUntil)}
-        </span>
+        </Badge>
       )}
-      <span className={`font-semibold ${badge} ${cardClass}`}>{text}</span>
+      <Badge tone={cardTone} size="status">
+        {text}
+      </Badge>
       {m.packagesLeft.map((p) => (
-        <span key={p.trainingType} className={`text-body border-line ${badge}`}>
+        <Badge key={p.trainingType} size="status">
           {plural(p.left, TYPE_FORMS[p.trainingType])}
-        </span>
+        </Badge>
       ))}
     </div>
   );

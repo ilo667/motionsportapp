@@ -8,6 +8,7 @@ import { AttendanceButton } from "@/components/admin/AttendanceButton";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { TYPE_COLORS, TYPE_LABEL } from "@/lib/trainingTypes";
 import { longDay } from "@/lib/dates";
+import { Badge } from "@/components/Badge";
 
 // "11 прийшли з 12 · 1 скасування" for the collapsed day row
 function daySummary(day: HistoryDay) {
@@ -38,7 +39,7 @@ function HistorySlot({
       <div className="flex items-center justify-between space-x-2">
         <span className="font-geologica font-semibold text-heading">{slot.slotTime}</span>
         {slot.status === "CANCELLED" ? (
-          <span className="text-xs text-danger border border-danger/40 rounded-full px-2 py-0.5">Скасовано</span>
+          <Badge tone="danger">Скасовано</Badge>
         ) : (
           <span
             className="text-xs border rounded-full px-2 py-0.5"
@@ -59,11 +60,7 @@ function HistorySlot({
                 <span className={`text-body text-sm${p.guestOf ? " pl-4" : ""}`}>
                   {p.displayName}
                   {p.switchedFromTime && <span className="ml-2 text-xs text-warn">з {p.switchedFromTime}</span>}
-                  {p.guestOf && (
-                    <span className="ml-2 text-xs text-subtle border border-line rounded-full px-2 py-0.5 py-0.5">
-                      гість
-                    </span>
-                  )}
+                  {p.guestOf && <Badge className="ml-2">гість</Badge>}
                 </span>
                 <AttendanceButton
                   status={p.attendanceStatus}

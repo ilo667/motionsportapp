@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api, MyFreeze } from "@/lib/api";
 import { errorText } from "@/lib/apiErrors";
 import { ddmm } from "@/lib/dates";
+import { Badge } from "@/components/Badge";
 
 // «Мій абонемент»: ask the trainer to freeze everything (club card and trainings) for up to 30 days, take the
 // request back, or ask to unfreeze. Nothing changes until the trainer approves
@@ -68,9 +69,9 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
     <div className="rounded-xl border border-line bg-surface p-4">
       <div className="flex items-center justify-between space-x-3">
         <span className="text-heading font-semibold">Заморозка</span>
-        <span className="text-xs font-semibold border rounded-full px-2.5 py-1 whitespace-nowrap text-warn bg-warn-bg border-warn-line">
+        <Badge tone="warn" size="status" className="whitespace-nowrap">
           {freeze.state === "requested" ? "Чекає тренера" : `До ${ddmm(freeze.until!)}`}
-        </span>
+        </Badge>
       </div>
       {freeze.state === "requested" && (
         <>

@@ -5,6 +5,7 @@ import { feeLabel } from "@/lib/cancelFee";
 import { kyivDateTime } from "@/lib/dates";
 import { kyivTime } from "@/lib/kyivTime";
 import { errorText } from "@/lib/apiErrors";
+import { Badge } from "@/components/Badge";
 
 // "17:42" for today's page, "20 жовт., 15:02" when the date matters
 function formatCancelledAt(iso: string | null, withDate: boolean): string {
@@ -58,14 +59,14 @@ export function CancellationList({ title, items, withDate = false }: Cancellatio
                   {c.label ?? c.displayName}
                   {c.switchedToTime ? (
                     !c.moveInLabel && (
-                      <span className="ml-2 text-xs text-warn bg-warn-bg border border-warn-line rounded-full px-2 py-0.5">
+                      <Badge tone="warn" className="ml-2">
                         на {c.switchedToTime}
-                      </span>
+                      </Badge>
                     )
                   ) : (
-                    <span className="ml-2 text-xs text-danger border border-danger/40 rounded-full px-2 py-0.5">
+                    <Badge tone="danger" className="ml-2">
                       скасовано
-                    </span>
+                    </Badge>
                   )}
                 </span>
                 <span className="text-muted text-xs whitespace-nowrap tabular-nums">
@@ -75,11 +76,7 @@ export function CancellationList({ title, items, withDate = false }: Cancellatio
               <p className="text-muted italic break-words">{c.reason}</p>
               {fee && (
                 <div className="flex items-center justify-between space-x-2 mt-1">
-                  <span
-                    className={`text-xs border rounded-full px-2 py-0.5 ${fee.waived ? "text-subtle border-line" : "text-warn bg-warn-bg border-warn-line"}`}
-                  >
-                    {feeLabel(fee)}
-                  </span>
+                  <Badge tone={fee.waived ? "none" : "warn"}>{feeLabel(fee)}</Badge>
                   {!fee.waived && !fee.refundDone && (
                     <button
                       onClick={() => waive(c.bookingId)}

@@ -10,6 +10,7 @@ import { PushSubscribeButton } from "@/components/PushSubscribeButton";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { errorText } from "@/lib/apiErrors";
 import { longDay } from "@/lib/dates";
+import { Badge } from "@/components/Badge";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -141,9 +142,7 @@ export default function AdminPage() {
 
       <div className="flex items-center space-x-2 mb-6">
         {schedule.status === "CANCELLED" ? (
-          <span className="text-xs text-danger bg-danger/10 border border-danger/30 rounded-full px-2 py-0.5">
-            День скасовано
-          </span>
+          <Badge tone="danger">День скасовано</Badge>
         ) : !hasGroup ? null : schedule.bookingWindowOpen ? (
           <span className="text-sm font-semibold uppercase tracking-wide text-teal bg-teal/10 border border-teal/30 rounded-full px-4 py-1.5 flex items-center space-x-1.5">
             <span className="relative flex w-3 h-3 shrink-0 items-center justify-center mr-1.5">
@@ -153,13 +152,9 @@ export default function AdminPage() {
             Запис відкрито
           </span>
         ) : afterWindow ? (
-          <span className="text-xs text-muted bg-surface border border-line rounded-full px-2 py-0.5">
-            Запис закрито
-          </span>
+          <Badge>Запис закрито</Badge>
         ) : (
-          <span className="text-xs text-muted bg-surface border border-line rounded-full px-2 py-0.5">
-            До {kyivTime(schedule.bookingOpenAt)}
-          </span>
+          <Badge>До {kyivTime(schedule.bookingOpenAt)}</Badge>
         )}
       </div>
 

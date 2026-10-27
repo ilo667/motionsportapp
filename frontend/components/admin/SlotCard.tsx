@@ -4,6 +4,7 @@ import { api, AdminSlotView } from "@/lib/api";
 import { CancellationList } from "./CancellationList";
 import { AttendanceButton } from "./AttendanceButton";
 import { TYPE_LABEL } from "@/lib/trainingTypes";
+import { Badge } from "@/components/Badge";
 
 interface SlotCardProps {
   slot: AdminSlotView;
@@ -27,11 +28,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
           {!isGroup && <span className="text-muted text-sm">{TYPE_LABEL[slot.trainingType]}</span>}
         </div>
         <div className="flex items-center space-x-3">
-          {belowMin && (
-            <span className="text-xs text-muted bg-surface border border-line rounded-full px-2 py-0.5">
-              мало учасників
-            </span>
-          )}
+          {belowMin && <Badge>мало учасників</Badge>}
           <span className="text-muted text-sm">
             {slot.bookedCount}/{slot.capacity}
           </span>
@@ -51,11 +48,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                   <span className={`text-body text-sm${p.guestOf ? " pl-4" : ""}`}>
                     {p.displayName}
                     {p.switchedFromTime && <span className="ml-2 text-xs text-warn">з {p.switchedFromTime}</span>}
-                    {p.guestOf && (
-                      <span className="ml-2 text-xs text-subtle border border-line rounded-full px-2 py-0.5">
-                        гість
-                      </span>
-                    )}
+                    {p.guestOf && <Badge className="ml-2">гість</Badge>}
                   </span>
                   {/* Editable after "Підтвердити всіх" too: the trainer can fix a mistake */}
                   <AttendanceButton

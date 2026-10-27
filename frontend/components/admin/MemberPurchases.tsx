@@ -4,6 +4,7 @@ import { api, MemberPurchases as MemberPurchasesData, PriceItem, Purchase } from
 import { formatUah, lineName } from "@/components/PurchaseFlow";
 import { errorText } from "@/lib/apiErrors";
 import { ddmm } from "@/lib/dates";
+import { Badge, type BadgeTone } from "@/components/Badge";
 
 type Card = MemberPurchasesData["cards"][number];
 type Pack = MemberPurchasesData["packages"][number];
@@ -39,11 +40,11 @@ const packDates = (p: Pack): string => {
 
 const sectionTitle = "text-subtle text-xs font-semibold uppercase tracking-wide mb-2";
 
-const CARD_BADGE: Record<Card["state"], { text: string; className: string }> = {
-  waiting: { text: "Чекає", className: "text-warn bg-warn-bg border-warn-line" },
-  active: { text: "Діє", className: "text-accent bg-teal/10 border-teal/30" },
-  expired: { text: "Закінчилась", className: "text-subtle border-line" },
-  burned: { text: "Згоріла", className: "text-danger bg-danger/10 border-danger/30" },
+const CARD_BADGE: Record<Card["state"], { text: string; tone: BadgeTone }> = {
+  waiting: { text: "Чекає", tone: "warn" },
+  active: { text: "Діє", tone: "ok" },
+  expired: { text: "Закінчилась", tone: "none" },
+  burned: { text: "Згоріла", tone: "danger" },
 };
 
 const STATUS: Record<Purchase["status"], string> = {
@@ -142,11 +143,9 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
                   >
                     {c.label}
                   </span>
-                  <span
-                    className={`m-1 text-xs font-semibold border rounded-full px-2 py-0.5 ${CARD_BADGE[c.state].className}`}
-                  >
+                  <Badge tone={CARD_BADGE[c.state].tone} size="status" className="m-1">
                     {CARD_BADGE[c.state].text}
-                  </span>
+                  </Badge>
                 </p>
                 <p className="text-subtle text-xs mt-1">
                   {cardDates(c)}

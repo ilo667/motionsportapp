@@ -8,6 +8,7 @@ import { PageLayout } from "./PageLayout";
 import { PurchaseFlow, PurchaseMode, formatUah, lineName } from "./PurchaseFlow";
 import { FreezeBlock } from "./FreezeBlock";
 import { ddmm } from "@/lib/dates";
+import { Badge } from "@/components/Badge";
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase text-xs tracking-wide";
 
@@ -70,38 +71,31 @@ function BuyTile({
   );
 }
 
-const BADGE = {
-  waiting: "text-warn bg-warn-bg border-warn-line",
-  active: "text-accent bg-teal/10 border-teal/30",
-  ended: "text-danger bg-danger/10 border-danger/30",
-  none: "text-subtle bg-background border-line",
-};
-
 // The club card: what it is, a status badge, and one line on what happens next
 function ClubCardBlock({ data }: { data: MyPurchases }) {
   const { card, lastCard } = data;
   const [badge, badgeText, label, hint] = card
     ? card.state === "active"
-      ? [BADGE.active, "Діє", card.label, `До ${ddmm(card.validUntil!)}`]
+      ? ["ok" as const, "Діє", card.label, `До ${ddmm(card.validUntil!)}`]
       : [
-          BADGE.waiting,
+          "warn" as const,
           "Чекає активації",
           card.label,
           `Тренер активує клубну карту, коли прийдете в зал. Встигніть до ${ddmm(card.activateBy)}`,
         ]
     : lastCard?.state === "burned"
-      ? [BADGE.ended, "Згоріла", lastCard.label, "Не активована вчасно. Купіть нову, щоб займатися в залі"]
+      ? ["danger" as const, "Згоріла", lastCard.label, "Не активована вчасно. Купіть нову, щоб займатися в залі"]
       : lastCard?.state === "expired"
-        ? [BADGE.ended, "Закінчилась", lastCard.label, `Діяла до ${ddmm(lastCard.validUntil!)}`]
-        : [BADGE.none, "Немає", null, "Потрібна, щоб займатися в залі і з тренером"];
+        ? ["danger" as const, "Закінчилась", lastCard.label, `Діяла до ${ddmm(lastCard.validUntil!)}`]
+        : ["none" as const, "Немає", null, "Потрібна, щоб займатися в залі і з тренером"];
 
   return (
     <div className="rounded-xl border border-line bg-surface p-4">
       <div className="flex items-center justify-between space-x-3">
         <span className="text-heading font-semibold">Клубна карта</span>
-        <span className={`text-xs font-semibold border rounded-full px-2.5 py-1 whitespace-nowrap ${badge}`}>
+        <Badge tone={badge} size="status" className="whitespace-nowrap">
           {badgeText}
-        </span>
+        </Badge>
       </div>
       {label && <p className="text-body mt-2">{label}</p>}
       <p className="text-subtle text-xs mt-2">{hint}</p>
