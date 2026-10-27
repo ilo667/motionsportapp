@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api, CashRequest } from "@/lib/api";
-import { formatUah, lineName } from "@/components/PurchaseFlow";
+import { formatUah, lineName } from "@/lib/prices";
 
 // Top of «Клієнти»: clients who want to pay cash. «Оплату отримано» activates the purchase, «Відхилити» drops it
 export function CashRequests({ requests, onDecided }: { requests: CashRequest[]; onDecided: () => void }) {

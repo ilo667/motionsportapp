@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, StrayPayment } from "@/lib/api";
-import { formatUah, lineName } from "@/components/PurchaseFlow";
 import { kyivDateTime } from "@/lib/dates";
+import { formatUah, lineName } from "@/lib/prices";
 
 // Top of «Клієнти»: money that came after the purchase was cancelled or expired, so the client got nothing.
 // The trainer gives the purchase by hand or has the money refunded, then presses «Розібрано»

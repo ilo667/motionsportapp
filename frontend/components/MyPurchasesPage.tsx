@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { api, AssignedType, CatalogItem, MyFreeze, MyPurchases } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
 import { PageLayout } from "./PageLayout";
-import { PurchaseFlow, PurchaseMode, formatUah, lineName } from "./PurchaseFlow";
+import { PurchaseFlow, PurchaseMode } from "./PurchaseFlow";
 import { FreezeBlock } from "./FreezeBlock";
 import { ddmm } from "@/lib/dates";
 import { Badge } from "@/components/Badge";
+import { formatUah, lineName } from "@/lib/prices";
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase text-xs tracking-wide";
 

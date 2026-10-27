@@ -1,13 +1,10 @@
 "use client";
 import { useState } from "react";
-import { api, AssignedType, CatalogItem, MyPurchases, PurchaseLine, PurchaseMethod } from "@/lib/api";
+import { api, AssignedType, CatalogItem, MyPurchases, PurchaseMethod } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
 import { errorText } from "@/lib/apiErrors";
 import { TYPE_LABEL } from "@/lib/trainingTypes";
-
-export const formatUah = (v: number) => `${v.toLocaleString("uk-UA")} ₴`;
-export const lineName = (l: Pick<PurchaseLine, "title" | "optionLabel">) =>
-  l.optionLabel ? `${l.title} · ${l.optionLabel}` : l.title;
+import { formatUah, groupByTitle, lineName } from "@/lib/prices";
 
 type Step = "service" | "club" | "group" | "checkout" | "sent";
 
@@ -18,17 +15,6 @@ const SERVICE_GROUPS: { type: AssignedType; title: string }[] = [
   { type: "персональні", title: TYPE_LABEL.персональні },
   { type: "спліт", title: TYPE_LABEL.спліт },
 ];
-
-// Options of one list grouped under their title ("Повний день": 1 / 3 / 6 місяців), in price list order
-function groupByTitle(items: CatalogItem[]) {
-  const groups: { title: string; items: CatalogItem[] }[] = [];
-  for (const item of items) {
-    const last = groups[groups.length - 1];
-    if (last?.title === item.title) last.items.push(item);
-    else groups.push({ title: item.title, items: [item] });
-  }
-  return groups;
-}
 
 function Option({ item, selected, onSelect }: { item: CatalogItem; selected: boolean; onSelect: () => void }) {
   return (

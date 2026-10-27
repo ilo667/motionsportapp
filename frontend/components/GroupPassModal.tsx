@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, CatalogItem, MyPurchases } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
-import { formatUah } from "./PurchaseFlow";
 import { errorText } from "@/lib/apiErrors";
 import { Modal } from "@/components/Modal";
+import { formatUah, lineName } from "@/lib/prices";
 
 // «Записатись» without a group pass: buy a single visit or a pass by LiqPay (booked once paid), or pay cash to the
 // trainer in the hall (booked right away, the trainer confirms the money)
@@ -53,8 +53,6 @@ export function GroupPassModal({
       setBusy(false);
     }
   };
-
-  const label = (item: CatalogItem) => (item.optionLabel ? `${item.title} · ${item.optionLabel}` : item.title);
 
   return (
     <Modal onDismiss={onDismiss}>
@@ -118,7 +116,7 @@ export function GroupPassModal({
                       disabled={busy}
                       className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
                     >
-                      {label(item)} · {formatUah(item.amountUah)}
+                      {lineName(item)} · {formatUah(item.amountUah)}
                     </button>
                   ))
               )}

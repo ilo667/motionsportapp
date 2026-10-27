@@ -7,13 +7,10 @@ import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { kyivDateTime } from "@/lib/dates";
 import { Modal } from "@/components/Modal";
+import { formatUah, lineName } from "@/lib/prices";
 
 // Same limit as UpdatePriceDto on the backend
 const MAX_PRICE_UAH = 100_000;
-
-const formatUah = (v: number) => `${v.toLocaleString("uk-UA")} ₴`;
-const itemName = (p: { title: string; optionLabel: string | null }) =>
-  p.optionLabel ? `${p.title} · ${p.optionLabel}` : p.title;
 
 function ConfirmModal({
   item,
@@ -34,7 +31,7 @@ function ConfirmModal({
   return (
     <Modal onDismiss={onDismiss} canDismiss={!saving} labelledBy="price-confirm-title">
       <h2 id="price-confirm-title" className="font-geologica font-semibold text-lg text-heading mb-2">
-        {itemName(item)}
+        {lineName(item)}
       </h2>
       <p className="font-geologica text-2xl text-heading tabular-nums">
         <s className="text-muted text-lg mr-2">{formatUah(item.amountUah)}</s>
@@ -162,7 +159,7 @@ export default function PricesPage() {
                       <input
                         autoFocus
                         inputMode="numeric"
-                        aria-label={`Нова ціна: ${itemName(item)}, ₴`}
+                        aria-label={`Нова ціна: ${lineName(item)}, ₴`}
                         value={draft}
                         onChange={(e) => setDraft(e.target.value.replace(/\D/g, "").slice(0, 6))}
                         onKeyDown={(e) => {
@@ -200,7 +197,7 @@ export default function PricesPage() {
                   </span>
                   <button
                     onClick={() => startEdit(item)}
-                    aria-label={`Змінити ціну: ${itemName(item)}`}
+                    aria-label={`Змінити ціну: ${lineName(item)}`}
                     className="font-geologica text-heading tabular-nums whitespace-nowrap rounded-lg border border-transparent px-2 py-1 -mr-2 hover:border-line hover:bg-surface transition-colors"
                   >
                     {formatUah(item.amountUah)}
@@ -219,7 +216,7 @@ export default function PricesPage() {
                 {changes.map((c) => (
                   <li key={c.id} className="py-2 border-b border-line">
                     <div className="text-heading tabular-nums">
-                      {itemName(c)}: {formatUah(c.oldAmountUah)} → {formatUah(c.newAmountUah)}
+                      {lineName(c)}: {formatUah(c.oldAmountUah)} → {formatUah(c.newAmountUah)}
                     </div>
                     <div className="text-muted text-xs">
                       {c.changedBy}, {kyivDateTime(c.changedAt)}

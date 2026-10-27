@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { api, Revenue, TrainerStats } from "@/lib/api";
 import { PageLayout } from "@/components/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
-import { formatUah } from "@/components/PurchaseFlow";
 import { TYPE_COLORS } from "@/lib/trainingTypes";
+import { formatUah } from "@/lib/prices";
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase mb-3";
 const label = "text-subtle text-xs font-semibold uppercase tracking-wide mb-2";

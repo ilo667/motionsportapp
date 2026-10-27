@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { PriceListItem, PriceSection } from "@/lib/api";
+import { formatUah, groupByTitle } from "@/lib/prices";
 
 // The gym's price list as the trainer («Ціни» in the admin) and clients (/prices) see it: sections, then each
 // title with its options. The admin page passes `renderOption` to make prices editable
@@ -10,24 +11,11 @@ const SECTIONS: { key: PriceSection; title: string; note?: string }[] = [
   { key: "group", title: "Групові заняття" },
 ];
 
-export const formatPrice = (v: number) => `${v.toLocaleString("uk-UA")} ₴`;
-
-// Options of one section grouped under their title ("Повний день": 1 / 3 / 6 місяців), in page order
-function groupByTitle<T extends PriceListItem>(items: T[]) {
-  const groups: { title: string; options: T[] }[] = [];
-  for (const item of items) {
-    const last = groups[groups.length - 1];
-    if (last?.title === item.title) last.options.push(item);
-    else groups.push({ title: item.title, options: [item] });
-  }
-  return groups;
-}
-
 function ReadOnlyOption({ item }: { item: PriceListItem }) {
   return (
     <div className="flex items-center justify-between space-x-3 py-0.5">
       <span className="text-body">{item.optionLabel}</span>
-      <span className="font-geologica text-heading tabular-nums whitespace-nowrap">{formatPrice(item.amountUah)}</span>
+      <span className="font-geologica text-heading tabular-nums whitespace-nowrap">{formatUah(item.amountUah)}</span>
     </div>
   );
 }
@@ -57,16 +45,16 @@ export function PriceList<T extends PriceListItem>({
                     <ReadOnlyOption key={item.id} item={item} />
                   );
                 // One price with no option («Разове відвідування»): the title and the price on one line
-                const single = group.options.length === 1 && !group.options[0].optionLabel;
+                const single = group.items.length === 1 && !group.items[0].optionLabel;
                 return single ? (
                   <div key={group.title} className="py-3 border-b border-line flex items-center space-x-3">
                     <div className="text-heading font-medium">{group.title}</div>
-                    <div className="flex-1 min-w-0">{option(group.options[0])}</div>
+                    <div className="flex-1 min-w-0">{option(group.items[0])}</div>
                   </div>
                 ) : (
                   <div key={group.title} className="py-3 border-b border-line">
                     <div className="text-heading font-medium mb-1">{group.title}</div>
-                    {group.options.map(option)}
+                    {group.items.map(option)}
                   </div>
                 );
               })}
