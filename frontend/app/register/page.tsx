@@ -50,7 +50,9 @@ export default function RegisterPage() {
   if (result) {
     return (
       <PageLayout>
-        <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">Вітаємо!</h1>
+        <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-2">
+          Вітаємо!
+        </h1>
         <p className="text-muted text-sm mb-6">Збережіть ці дані. Код відновлення більше не покажеться.</p>
 
         <div className="bg-surface rounded-xl p-5 mb-4 space-y-4">
@@ -97,7 +99,9 @@ export default function RegisterPage() {
 
   return (
     <PageLayout>
-      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">Реєстрація</h1>
+      <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-2">
+        Реєстрація
+      </h1>
       <p className="text-body text-sm mb-8">
         Вже є код?{" "}
         <Link href="/login" className="text-accent hover:underline">

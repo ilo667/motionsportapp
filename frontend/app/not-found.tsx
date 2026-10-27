@@ -6,7 +6,9 @@ export default function NotFound() {
   return (
     <PageLayout className="items-center text-center">
       <p className="font-geologica font-semibold text-display text-accent mb-2">404</p>
-      <h1 className="font-geologica font-semibold text-title text-heading uppercase mb-8">Сторінку не знайдено</h1>
+      <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-8">
+        Сторінку не знайдено
+      </h1>
       <div className="w-full max-w-xs mx-auto">
         <Link
           href="/"

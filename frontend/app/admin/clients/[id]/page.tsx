@@ -152,7 +152,9 @@ export default function ClientPage() {
       {member && (
         <div className="flex flex-col space-y-6 mt-4">
           <div>
-            <h1 className="font-geologica font-semibold text-title text-heading uppercase">{member.displayName}</h1>
+            <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase">
+              {member.displayName}
+            </h1>
             <p className="text-muted text-xs mt-1">{member.memberCode}</p>
             <PurchaseSummary m={member} className="mt-2" />
             <TrainerPicker

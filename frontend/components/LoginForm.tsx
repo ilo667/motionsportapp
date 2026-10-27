@@ -138,7 +138,7 @@ export function LoginForm({ variant }: { variant: "member" | "admin" }) {
         ← Назад
       </Link>
       <h1
-        className={`font-geologica font-semibold text-3xl sm:text-4xl text-heading ${config.subtitle ? "mb-2" : "mb-8"}`}
+        className={`font-geologica font-semibold text-title sm:text-display text-heading uppercase ${config.subtitle ? "mb-2" : "mb-8"}`}
       >
         {config.title}
       </h1>

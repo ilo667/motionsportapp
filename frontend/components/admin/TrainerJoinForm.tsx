@@ -57,7 +57,9 @@ export function TrainerJoinForm({ token }: { token: string }) {
     return (
       <PageLayout>
         <div className="text-center">
-          <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-4">Посилання недійсне</h1>
+          <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-4">
+            Посилання недійсне
+          </h1>
           <p className="text-body text-sm mb-8">
             Його вже використали, відкликали або минуло 7 днів. Попросіть тренера надіслати нове.
           </p>
@@ -71,7 +73,9 @@ export function TrainerJoinForm({ token }: { token: string }) {
 
   return (
     <PageLayout>
-      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">Новий тренер</h1>
+      <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-2">
+        Новий тренер
+      </h1>
       <p className="text-body text-sm mb-8">Придумайте логін і пароль. З ними ви будете входити в Motion Gym.</p>
 
       <form onSubmit={submit} className="space-y-5">

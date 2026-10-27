@@ -55,7 +55,9 @@ export default function ForgotPage() {
   if (result) {
     return (
       <PageLayout>
-        <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">PIN змінено</h1>
+        <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-2">
+          PIN змінено
+        </h1>
         <p className="text-muted text-sm mb-6">Збережіть новий код відновлення. Він більше не покажеться.</p>
 
         <div className="bg-surface rounded-xl p-5 mb-4">
@@ -87,7 +89,9 @@ export default function ForgotPage() {
 
   return (
     <PageLayout>
-      <h1 className="font-geologica font-semibold text-3xl sm:text-4xl text-heading mb-2">Відновлення PIN</h1>
+      <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-2">
+        Відновлення PIN
+      </h1>
       <p className="text-body text-sm mb-8">
         Згадали PIN?{" "}
         <Link href="/login" className="text-accent hover:underline">
