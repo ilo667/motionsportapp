@@ -115,7 +115,7 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
       : state === "PENDING"
         ? {
             icon: "…",
-            iconClass: "text-amber-400",
+            iconClass: "text-warn",
             title: "Оплату не завершено",
             text: `Покупка чекає оплати ${holdUntil(expiresAt)}, далі скасується автоматично.`,
           }

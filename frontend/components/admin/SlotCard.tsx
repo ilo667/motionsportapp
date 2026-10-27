@@ -51,7 +51,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                 <li key={p.bookingId} className="flex items-center justify-between space-x-2">
                   <span className={`text-body text-sm${p.guestOf ? " pl-4" : ""}`}>
                     {p.displayName}
-                    {p.switchedFromTime && <span className="ml-2 text-xs text-amber-400">з {p.switchedFromTime}</span>}
+                    {p.switchedFromTime && <span className="ml-2 text-xs text-warn">з {p.switchedFromTime}</span>}
                     {p.guestOf && (
                       <span className="ml-2 text-xs text-subtle border border-line rounded-full px-2 py-0.5">
                         гість

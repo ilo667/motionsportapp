@@ -74,7 +74,7 @@ export function CancellationList({ title, items, withDate = false }: Cancellatio
                   {c.label ?? c.displayName}
                   {c.switchedToTime ? (
                     !c.moveInLabel && (
-                      <span className="ml-2 text-xs text-amber-400 border border-amber-400/40 rounded-full px-2">
+                      <span className="ml-2 text-xs text-warn bg-warn-bg border border-warn-line rounded-full px-2">
                         на {c.switchedToTime}
                       </span>
                     )
