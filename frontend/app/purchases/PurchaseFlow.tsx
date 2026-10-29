@@ -12,8 +12,8 @@ type Step = "service" | "club" | "group" | "checkout" | "sent";
 export type PurchaseMode = "service" | "card" | "group";
 
 const SERVICE_GROUPS: { type: AssignedType; title: string }[] = [
-  { type: "персональні", title: TYPE_LABEL.персональні },
-  { type: "спліт", title: TYPE_LABEL.спліт },
+  { type: "personal", title: TYPE_LABEL.personal },
+  { type: "split", title: TYPE_LABEL.split },
 ];
 
 function Option({ item, selected, onSelect }: { item: CatalogItem; selected: boolean; onSelect: () => void }) {

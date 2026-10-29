@@ -26,7 +26,7 @@ const emptyRevenue = (): Revenue => ({ clubCards: 0, personal: 0, split: 0, grou
 export function revenueKey(section: string, trainingType: string | null): keyof Omit<Revenue, 'total'> {
   if (section === 'club_card') return 'clubCards';
   if (section === 'group') return 'group';
-  return trainingType === 'спліт' ? 'split' : 'personal';
+  return trainingType === 'split' ? 'split' : 'personal';
 }
 
 // «Статистика»: the trainer's own numbers. Revenue = paid purchases of the trainer's clients (the trainer on the

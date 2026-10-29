@@ -35,7 +35,7 @@ export function inLockOrder<T extends { id: string; memberId: string }>(rows: T[
 
 export type PackageView = {
   id: string;
-  trainingType: 'групові' | 'персональні' | 'спліт';
+  trainingType: 'group' | 'personal' | 'split';
   title: string;
   total: number;
   left: number;

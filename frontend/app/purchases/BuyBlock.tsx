@@ -77,8 +77,8 @@ export function BuyBlock({
     data.packages.some(
       (p) => types.includes(p.trainingType) && p.left > 0 && (p.state === "waiting" || p.state === "active"),
     );
-  const canBuyService = !hasUnused(["персональні", "спліт"]);
-  const canBuyGroup = !hasUnused(["групові"]);
+  const canBuyService = !hasUnused(["personal", "split"]);
+  const canBuyGroup = !hasUnused(["group"]);
   const canBuyCard = !data.card;
   if (!canBuyService && !canBuyGroup && !canBuyCard) return null;
 

@@ -23,9 +23,9 @@ import { toAdminLogin } from "@/lib/adminAuth";
 
 // Short labels for calendar events — full names don't fit a day column
 const TYPE_SHORT: Record<TrainingType, string> = {
-  групові: "Груп.",
-  персональні: "Перс.",
-  спліт: "Спліт",
+  group: "Груп.",
+  personal: "Перс.",
+  split: "Спліт",
 };
 
 function hourOf(slotTime: string) {
@@ -74,7 +74,7 @@ export default function CalendarPage() {
 
   // A group training at a weekday and time of the schedule, created by itself while auto-creation is on
   const repeatsWeekly = (s: CalendarSlot) =>
-    s.trainingType === "групові" &&
+    s.trainingType === "group" &&
     !!schedule?.autoCreate &&
     schedule.times.some((t) => t.weekday === weekdayOf(s.localDate) && t.slotTime === s.slotTime);
 
@@ -123,7 +123,7 @@ export default function CalendarPage() {
     const colors = TYPE_COLORS[s.trainingType];
     // Group: how full it is. Assigned: who has a package ("Спліт · Катя ✓, Оля")
     const detail =
-      s.trainingType === "групові"
+      s.trainingType === "group"
         ? `${s.bookedCount}/${s.capacity}`
         : s.members
             .map((m) => `${m.displayName}${m.booked && (m.spent || m.packageLeft > 0) ? " ✓" : ""}`)

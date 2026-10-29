@@ -189,7 +189,7 @@ describe('Trainer — client purchases', () => {
 
   it('rejecting cash in a full group training tells those waiting for a seat, not the member', async () => {
     const { db } = makeDb(
-      [[{ bookedCount: 8, capacity: 8, trainingType: 'групові' }], [{ slotTime: '19:00', localDate: '2026-10-24' }]],
+      [[{ bookedCount: 8, capacity: 8, trainingType: 'group' }], [{ slotTime: '19:00', localDate: '2026-10-24' }]],
       () => [{ id: 'purchase-1', bookingId: 'b1', slotId: 's1', memberId: 'm1' }],
     );
     db.delete = jest.fn(() => ({ where: () => Promise.resolve() }));
@@ -204,7 +204,7 @@ describe('Trainer — client purchases', () => {
   });
 
   it('rejecting cash in a training that was not full sends nothing', async () => {
-    const { db } = makeDb([[{ bookedCount: 5, capacity: 8, trainingType: 'групові' }]], () => [
+    const { db } = makeDb([[{ bookedCount: 5, capacity: 8, trainingType: 'group' }]], () => [
       { id: 'purchase-1', bookingId: 'b1', slotId: 's1', memberId: 'm1' },
     ]);
     db.delete = jest.fn(() => ({ where: () => Promise.resolve() }));

@@ -102,7 +102,7 @@ async function errorsOf(cls: any, body: object) {
 }
 
 describe('Assigned slots — DTO validation', () => {
-  const valid = { slotTime: '18:15', trainingType: 'спліт', memberIds: [M1, M2] };
+  const valid = { slotTime: '18:15', trainingType: 'split', memberIds: [M1, M2] };
 
   it('accepts any time in 15-minute steps', async () => {
     expect(await errorsOf(CreateAssignedSlotDto, valid)).toHaveLength(0);
@@ -114,8 +114,8 @@ describe('Assigned slots — DTO validation', () => {
     expect(await errorsOf(CreateAssignedSlotDto, { ...valid, slotTime: '24:00' })).not.toHaveLength(0);
   });
 
-  it('rejects групові as an assigned slot type', async () => {
-    expect(await errorsOf(CreateAssignedSlotDto, { ...valid, trainingType: 'групові' })).not.toHaveLength(0);
+  it('rejects group as an assigned slot type', async () => {
+    expect(await errorsOf(CreateAssignedSlotDto, { ...valid, trainingType: 'group' })).not.toHaveLength(0);
   });
 
   it('requires 1 to 3 distinct members', async () => {
@@ -130,13 +130,13 @@ describe('Assigned slots — createAssignedSlot', () => {
     const { db, values } = makeDb([[{ id: M1 }, { id: M2 }]]);
     const result = await makeService(db).createAssignedSlot(TRAINER, '2026-10-21', {
       slotTime: '10:30',
-      trainingType: 'спліт',
+      trainingType: 'split',
       memberIds: [M1, M2],
     });
 
     expect(result).toEqual({ ok: true, slotId: 'slot-new' });
     expect(values).toContainEqual(
-      expect.objectContaining({ slotTime: '10:30', trainingType: 'спліт', capacity: 3, bookedCount: 2 }),
+      expect.objectContaining({ slotTime: '10:30', trainingType: 'split', capacity: 3, bookedCount: 2 }),
     );
     expect(values).toContainEqual([
       { slotId: 'slot-new', memberId: M1 },
@@ -154,7 +154,7 @@ describe('Assigned slots — createAssignedSlot', () => {
     await expect(
       makeService(db).createAssignedSlot(TRAINER, '2026-10-21', {
         slotTime: '10:30',
-        trainingType: 'персональні',
+        trainingType: 'personal',
         memberIds: [M1, M2],
       }),
     ).rejects.toThrow(BadRequestException);
@@ -168,7 +168,7 @@ describe('Assigned slots — createAssignedSlot', () => {
     await expect(
       makeService(db).createAssignedSlot(TRAINER, '2026-10-21', {
         slotTime: '10:30',
-        trainingType: 'спліт',
+        trainingType: 'split',
         memberIds: [M1, M2],
       }),
     ).rejects.toThrow('Member is frozen');
@@ -179,7 +179,7 @@ describe('Assigned slots — createAssignedSlot', () => {
     await expect(
       makeService(db).createAssignedSlot(TRAINER, '2026-10-21', {
         slotTime: '10:30',
-        trainingType: 'спліт',
+        trainingType: 'split',
         memberIds: [M1, M2],
       }),
     ).rejects.toThrow(NotFoundException);
@@ -190,7 +190,7 @@ describe('Assigned slots — createAssignedSlot', () => {
     await expect(
       makeService(db).createAssignedSlot(TRAINER, '2026-10-20', {
         slotTime: '11:45',
-        trainingType: 'персональні',
+        trainingType: 'personal',
         memberIds: [M1],
       }),
     ).rejects.toThrow('in the past');
@@ -204,7 +204,7 @@ describe('Assigned slots — createAssignedSlot', () => {
     await expect(
       makeService(db).createAssignedSlot(TRAINER, '2026-10-21', {
         slotTime: '19:00',
-        trainingType: 'персональні',
+        trainingType: 'personal',
         memberIds: [M1],
       }),
     ).rejects.toThrow(ConflictException);
@@ -213,7 +213,7 @@ describe('Assigned slots — createAssignedSlot', () => {
 
 describe('Assigned slots — updateSlotMembers', () => {
   // requireOwnSlot reads the slot with its date
-  const split = { id: 'slot-1', trainingType: 'спліт', status: 'ACTIVE', trainerId: TRAINER, localDate: '2026-10-21' };
+  const split = { id: 'slot-1', trainingType: 'split', status: 'ACTIVE', trainerId: TRAINER, localDate: '2026-10-21' };
 
   // Reads: the slot, the members check, who is on the slot now, their active bookings with marks
   const onSlot = (...ids: string[]) => ids.map((memberId) => ({ memberId }));
@@ -288,7 +288,7 @@ describe('Assigned slots — updateSlotMembers', () => {
   });
 
   it('refuses group slots (open to everyone)', async () => {
-    const { db } = makeDb([[{ ...split, trainingType: 'групові' }]]);
+    const { db } = makeDb([[{ ...split, trainingType: 'group' }]]);
     await expect(makeService(db).updateSlotMembers(TRAINER, 'slot-1', [M1])).rejects.toThrow(BadRequestException);
   });
 });
@@ -341,7 +341,7 @@ describe('Group slots — upsertGroupSlot', () => {
   it('any time from 06:00 to 21:00 in 15-minute steps (no longer only 19:00 / 20:00)', async () => {
     const { db, values } = makeDb([[]]);
     await makeService(db).upsertGroupSlot(TRAINER, '2026-10-21', '18:00');
-    expect(values).toContainEqual(expect.objectContaining({ slotTime: '18:00', trainingType: 'групові', capacity: 8 }));
+    expect(values).toContainEqual(expect.objectContaining({ slotTime: '18:00', trainingType: 'group', capacity: 8 }));
     await expect(makeService(makeDb().db).upsertGroupSlot(TRAINER, '2026-10-21', '05:45')).rejects.toThrow(
       new BadRequestException('Group trainings are from 06:00 to 21:00'),
     );
@@ -380,7 +380,7 @@ describe('Training day SCHEDULED — the trainer schedule of that weekday', () =
     const { db, values } = makeDb();
     await makeService(db).upsertTrainingDay(TRAINER, '2026-10-21', { status: 'SCHEDULED' } as any);
     expect(values).toContainEqual([
-      expect.objectContaining({ slotTime: '18:00', trainingType: 'групові', trainerId: TRAINER }),
+      expect.objectContaining({ slotTime: '18:00', trainingType: 'group', trainerId: TRAINER }),
     ]);
   });
 });
@@ -423,7 +423,7 @@ describe('Calendar — assigned slot members', () => {
         localDate: '2026-10-21',
         slotId: 'g1',
         slotTime: '19:00',
-        trainingType: 'групові',
+        trainingType: 'group',
         bookedCount: 3,
         capacity: 8,
         trainerId: TRAINER,
@@ -432,7 +432,7 @@ describe('Calendar — assigned slot members', () => {
         localDate: '2026-10-21',
         slotId: 'p1',
         slotTime: '10:30',
-        trainingType: 'спліт',
+        trainingType: 'split',
         bookedCount: 0,
         capacity: 2,
         trainerId: TRAINER,
@@ -451,8 +451,8 @@ describe('Calendar — assigned slot members', () => {
       ],
     ]);
     const summaries = new Map([
-      [M1, { clubCard: null, packagesLeft: [{ trainingType: 'спліт', left: 5 }] }],
-      [M2, { clubCard: null, packagesLeft: [{ trainingType: 'персональні', left: 2 }] }],
+      [M1, { clubCard: null, packagesLeft: [{ trainingType: 'split', left: 5 }] }],
+      [M2, { clubCard: null, packagesLeft: [{ trainingType: 'personal', left: 2 }] }],
     ]);
     const entitlements = { summaries: jest.fn().mockResolvedValue(summaries) };
     const result = await makeService(db, entitlements).getCalendar(TRAINER, '2026-10');
@@ -602,7 +602,7 @@ describe('History of past trainings', () => {
     trainingDayId: 'day-20',
     slotTime: '19:00',
     status: 'ACTIVE',
-    trainingType: 'групові',
+    trainingType: 'group',
     capacity: 8,
     bookedCount: 2,
     trainerId: TRAINER,
@@ -758,7 +758,7 @@ describe('Cancelling a training gives the trainings back', () => {
     trainingDayId: 'day-1',
     slotTime: '18:00',
     status: 'ACTIVE',
-    trainingType: 'персональні',
+    trainingType: 'personal',
     trainerId: TRAINER,
     localDate: '2026-10-20',
   };
@@ -817,7 +817,7 @@ describe('Each trainer sees and changes only own trainings', () => {
     trainingDayId: 'day-1',
     slotTime: '19:00',
     status: 'ACTIVE',
-    trainingType: 'групові',
+    trainingType: 'group',
     trainerId: 'trainer-2',
   };
 
@@ -840,7 +840,7 @@ describe('Each trainer sees and changes only own trainings', () => {
     await expect(
       makeService(db).createAssignedSlot(TRAINER, '2026-10-21', {
         slotTime: '10:30',
-        trainingType: 'персональні',
+        trainingType: 'personal',
         memberIds: [M1],
       }),
     ).rejects.toThrow(NotFoundException);
@@ -859,8 +859,8 @@ describe("Trainer's today page — the booking window of the trainer's own sched
     mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '08:00', autoCreate: true, times: [] });
     const day = { id: 'day-1', localDate: '2026-10-20', status: 'SCHEDULED' };
     const own = [
-      { id: 'g', slotTime: '10:00', trainingType: 'групові', status: 'ACTIVE', capacity: 8, bookedCount: 0 },
-      { id: 'p', slotTime: '18:00', trainingType: 'персональні', status: 'ACTIVE', capacity: 1, bookedCount: 1 },
+      { id: 'g', slotTime: '10:00', trainingType: 'group', status: 'ACTIVE', capacity: 8, bookedCount: 0 },
+      { id: 'p', slotTime: '18:00', trainingType: 'personal', status: 'ACTIVE', capacity: 1, bookedCount: 1 },
     ];
     const { db } = makeDb([[day], own]);
     const result = await makeService(db).getSchedule(TRAINER); // 12:00: the 10:00 group is over, 18:00 ahead

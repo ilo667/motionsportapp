@@ -68,7 +68,7 @@ describe('Admin members — trainer note', () => {
         'm1',
         {
           clubCard: { state: 'active', until: '2026-12-15' },
-          packagesLeft: [{ trainingType: 'персональні', left: 5 }],
+          packagesLeft: [{ trainingType: 'personal', left: 5 }],
         },
       ],
     ]);
@@ -77,7 +77,7 @@ describe('Admin members — trainer note', () => {
         id: 'm1',
         displayName: 'Катя',
         clubCard: { state: 'active', until: '2026-12-15' },
-        packagesLeft: [{ trainingType: 'персональні', left: 5 }],
+        packagesLeft: [{ trainingType: 'personal', left: 5 }],
         frozenUntil: null,
       },
     ]);
@@ -144,19 +144,19 @@ describe('Admin members — client page', () => {
 
   it('visits: past and today trainings with the mark, newest first; unmarked ones are UNMARKED', async () => {
     const rows = [
-      { bookingId: 'b2', localDate: '2026-10-22', slotTime: '19:00', trainingType: 'групові', status: null },
-      { bookingId: 'b1', localDate: '2026-10-20', slotTime: '18:00', trainingType: 'персональні', status: 'ABSENT' },
+      { bookingId: 'b2', localDate: '2026-10-22', slotTime: '19:00', trainingType: 'group', status: null },
+      { bookingId: 'b1', localDate: '2026-10-20', slotTime: '18:00', trainingType: 'personal', status: 'ABSENT' },
     ];
     // the visibility check, then the visits
     const { db } = makeDb(rows);
     const visits = await makeService(db).getMemberVisits('trainer-1', 'm1');
     expect(visits).toEqual([
-      { bookingId: 'b2', localDate: '2026-10-22', slotTime: '19:00', trainingType: 'групові', attendance: 'UNMARKED' },
+      { bookingId: 'b2', localDate: '2026-10-22', slotTime: '19:00', trainingType: 'group', attendance: 'UNMARKED' },
       {
         bookingId: 'b1',
         localDate: '2026-10-20',
         slotTime: '18:00',
-        trainingType: 'персональні',
+        trainingType: 'personal',
         attendance: 'ABSENT',
       },
     ]);

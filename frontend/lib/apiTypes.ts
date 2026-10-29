@@ -1,6 +1,6 @@
 // What the backend answers (and takes): the types of lib/api.ts, imported from there
 
-export type TrainingType = "групові" | "персональні" | "спліт";
+export type TrainingType = "group" | "personal" | "split";
 
 export interface AdminMember {
   id: string;
@@ -88,7 +88,7 @@ export interface PriceChange {
 // first mark. Not activated within a month of the purchase, it burns
 
 export type PurchaseMethod = "LIQPAY" | "CASH";
-export type AssignedType = Exclude<TrainingType, "групові">;
+export type AssignedType = Exclude<TrainingType, "group">;
 
 export interface LiqPayCheckout {
   data: string;

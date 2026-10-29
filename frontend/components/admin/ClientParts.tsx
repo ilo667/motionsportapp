@@ -14,9 +14,9 @@ export const FREQUENT_CANCELLATIONS = 3;
 
 // Word forms for 1, 2–4 and 5+ trainings («1 персональне», «3 групові», «8 персональних»)
 const TYPE_FORMS: Record<AdminMember["packagesLeft"][number]["trainingType"], [string, string, string]> = {
-  групові: ["групове", "групові", "групових"],
-  персональні: ["персональне", "персональні", "персональних"],
-  спліт: ["спліт", "спліт", "спліт"],
+  group: ["групове", "групові", "групових"],
+  personal: ["персональне", "персональні", "персональних"],
+  split: ["спліт", "спліт", "спліт"],
 };
 
 // Under the client's name, one badge per line: frozen («Заморожено до DD.MM»), the club card («Клубна карта

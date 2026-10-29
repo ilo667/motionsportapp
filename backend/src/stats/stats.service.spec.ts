@@ -3,9 +3,9 @@ import { revenueKey, summarizeLoad } from './stats.service';
 describe('stats — revenue columns', () => {
   it('club cards, group passes, and trainer services by type', () => {
     expect(revenueKey('club_card', null)).toBe('clubCards');
-    expect(revenueKey('group', 'групові')).toBe('group');
-    expect(revenueKey('assigned', 'персональні')).toBe('personal');
-    expect(revenueKey('assigned', 'спліт')).toBe('split');
+    expect(revenueKey('group', 'group')).toBe('group');
+    expect(revenueKey('assigned', 'personal')).toBe('personal');
+    expect(revenueKey('assigned', 'split')).toBe('split');
   });
 });
 

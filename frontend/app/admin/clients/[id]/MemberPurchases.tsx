@@ -214,7 +214,7 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
           {data.packages.map((p) => (
             <div key={p.id} className="flex justify-between space-x-3">
               <span className={p.state === "waiting" || p.state === "active" ? "text-heading" : "text-subtle"}>
-                {p.trainingType === "групові" ? `Групові · ${p.title}` : p.title}
+                {p.trainingType === "group" ? `Групові · ${p.title}` : p.title}
                 <span className="block text-subtle text-xs">{packDates(p)}</span>
               </span>
               <span className="tabular-nums text-body whitespace-nowrap">

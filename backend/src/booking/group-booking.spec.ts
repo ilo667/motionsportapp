@@ -62,7 +62,7 @@ const slot = {
   id: 'slot-1',
   status: 'ACTIVE',
   slotTime: '19:00',
-  trainingType: 'групові',
+  trainingType: 'group',
   capacity: 8,
   bookedCount: 3,
   trainerId: 'trainer-1',
@@ -137,14 +137,14 @@ describe('tryBookGroup — booking inside someone else’s transaction, never th
   it("another trainer's slot or an assigned one: NOT_FOUND", async () => {
     const a = makeTx([MEMBER, [{ ...slot, trainerId: 'trainer-2' }], TRAINER, []]);
     expect(await tryBookGroup(a.tx, at(15), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'NOT_FOUND' });
-    const b = makeTx([MEMBER, [{ ...slot, trainingType: 'спліт' }], TRAINER, []]);
+    const b = makeTx([MEMBER, [{ ...slot, trainingType: 'split' }], TRAINER, []]);
     expect(await tryBookGroup(b.tx, at(15), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'NOT_FOUND' });
   });
 });
 
 describe('freeSeats — a booking (and its guest) gave its seats back', () => {
   it('locks the training, frees the seats, never below zero', async () => {
-    const { tx, updates } = makeTx([[{ bookedCount: 3, capacity: 8, trainingType: 'групові' }]]);
+    const { tx, updates } = makeTx([[{ bookedCount: 3, capacity: 8, trainingType: 'group' }]]);
     await freeSeats(tx, 'slot-1', 2);
     expect(tx.select.mock.results[0].value.for).toHaveBeenCalledWith('update');
     const { sql, params } = new PgDialect().sqlToQuery((updates[0].set as { bookedCount: SQL }).bookedCount);
@@ -153,17 +153,17 @@ describe('freeSeats — a booking (and its guest) gave its seats back', () => {
   });
 
   it("a full group training: «З'явилось місце» is due", async () => {
-    const { tx } = makeTx([[{ bookedCount: 8, capacity: 8, trainingType: 'групові' }]]);
+    const { tx } = makeTx([[{ bookedCount: 8, capacity: 8, trainingType: 'group' }]]);
     expect(await freeSeats(tx, 'slot-1', 1)).toBe(true);
   });
 
   it('not full: nothing to tell', async () => {
-    const { tx } = makeTx([[{ bookedCount: 7, capacity: 8, trainingType: 'групові' }]]);
+    const { tx } = makeTx([[{ bookedCount: 7, capacity: 8, trainingType: 'group' }]]);
     expect(await freeSeats(tx, 'slot-1', 1)).toBe(false);
   });
 
   it('a full assigned training: nobody waits for it (no vacancy alerts there)', async () => {
-    const { tx } = makeTx([[{ bookedCount: 1, capacity: 1, trainingType: 'персональні' }]]);
+    const { tx } = makeTx([[{ bookedCount: 1, capacity: 1, trainingType: 'personal' }]]);
     expect(await freeSeats(tx, 'slot-p', 1)).toBe(false);
   });
 });

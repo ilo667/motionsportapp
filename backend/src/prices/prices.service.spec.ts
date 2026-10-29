@@ -153,14 +153,14 @@ describe('Prices', () => {
         expect([1, 6, 8, 12]).toContain(p.trainingCount);
         expect(p.durationMonths).toBe(1);
       } else {
-        expect(p.trainingType).toBe('групові');
+        expect(p.trainingType).toBe('group');
         expect([1, 10]).toContain(p.trainingCount);
         expect(p.durationMonths).toBe(1);
       }
     }
     expect(DEFAULT_PRICE_LIST.find((p) => p.code === 'club_single')?.durationMonths).toBe(0);
     expect(DEFAULT_PRICE_LIST.find((p) => p.code === 'personal_8')).toMatchObject({
-      trainingType: 'персональні',
+      trainingType: 'personal',
       trainingCount: 8,
     });
   });

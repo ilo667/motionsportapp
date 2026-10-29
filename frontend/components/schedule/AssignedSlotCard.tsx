@@ -29,7 +29,7 @@ export function AssignedSlotCard({ slot, onMutate }: AssignedSlotCardProps) {
           </div>
           <div className="text-right">
             <span className="text-sm text-body">{TYPE_LABEL[slot.trainingType]}</span>
-            {slot.trainingType === "спліт" && (
+            {slot.trainingType === "split" && (
               <p className="text-muted text-xs mt-1">
                 {slot.bookedCount}/{slot.capacity} місць
               </p>

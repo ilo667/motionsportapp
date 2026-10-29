@@ -85,7 +85,7 @@ const PERSONAL = {
 const SPLIT = { id: 'price-s1', section: 'assigned', title: 'Спліт', optionLabel: '1 тренування', amountUah: 400 };
 const GROUP = { id: 'price-g', section: 'group', title: 'Абонемент', optionLabel: '10 занять', amountUah: 2200 };
 const MEMBER = [{ trainerId: 'trainer-1', displayName: 'Катя' }];
-const GROUP_SLOT = [{ trainingType: 'групові' }];
+const GROUP_SLOT = [{ trainingType: 'group' }];
 
 function makeService(db: any, opts: { card?: unknown; packages?: unknown[] } = {}) {
   const entitlements = {
@@ -134,8 +134,8 @@ describe('Purchases — create', () => {
   });
 
   it('409 for more personal trainings while the member still has some to use', async () => {
-    const { db, inserts } = makeDb([[{ ...PERSONAL, trainingType: 'персональні' }]]);
-    const packages = [{ trainingType: 'персональні', state: 'active', left: 2 }];
+    const { db, inserts } = makeDb([[{ ...PERSONAL, trainingType: 'personal' }]]);
+    const packages = [{ trainingType: 'personal', state: 'active', left: 2 }];
     await expect(
       makeService(db, { card: { id: 'c' }, packages }).svc.create('m1', {
         priceItemIds: ['price-p8'],
@@ -146,11 +146,11 @@ describe('Purchases — create', () => {
   });
 
   it('a used-up, burned or expired package does not stop a new purchase; another type does not either', async () => {
-    const { db } = makeDb([[{ ...PERSONAL, trainingType: 'персональні' }], MEMBER, []]);
+    const { db } = makeDb([[{ ...PERSONAL, trainingType: 'personal' }], MEMBER, []]);
     const packages = [
-      { trainingType: 'персональні', state: 'used', left: 0 },
-      { trainingType: 'персональні', state: 'burned', left: 3 },
-      { trainingType: 'спліт', state: 'active', left: 4 },
+      { trainingType: 'personal', state: 'used', left: 0 },
+      { trainingType: 'personal', state: 'burned', left: 3 },
+      { trainingType: 'split', state: 'active', left: 4 },
     ];
     await expect(
       makeService(db, { card: { id: 'c' }, packages }).svc.create('m1', {
@@ -161,8 +161,8 @@ describe('Purchases — create', () => {
   });
 
   it('409 for a group pass while the member still has group trainings to use', async () => {
-    const { db } = makeDb([[{ ...GROUP, trainingType: 'групові' }]]);
-    const packages = [{ trainingType: 'групові', state: 'waiting', left: 10 }];
+    const { db } = makeDb([[{ ...GROUP, trainingType: 'group' }]]);
+    const packages = [{ trainingType: 'group', state: 'waiting', left: 10 }];
     await expect(
       makeService(db, { packages }).svc.create('m1', { priceItemIds: ['price-g'], method: 'LIQPAY' }),
     ).rejects.toThrow(ConflictException);
@@ -200,7 +200,7 @@ describe('Purchases — create', () => {
   });
 
   it('a slot that is not a group training → 404', async () => {
-    const { db, inserts } = makeDb([[GROUP], [{ trainingType: 'персональні' }]]);
+    const { db, inserts } = makeDb([[GROUP], [{ trainingType: 'personal' }]]);
     await expect(
       makeService(db).svc.create('m1', { priceItemIds: ['price-g'], method: 'LIQPAY', slotId: 'slot-p' }),
     ).rejects.toThrow(NotFoundException);

@@ -17,7 +17,7 @@ export function MemberPickers({
 }) {
   return (
     <div className="flex flex-col space-y-2">
-      <p className="text-muted text-xs uppercase tracking-wide">{type === "спліт" ? "Люди (до трьох)" : "Людина"}</p>
+      <p className="text-muted text-xs uppercase tracking-wide">{type === "split" ? "Люди (до трьох)" : "Людина"}</p>
       {memberIds.map((id, i) => (
         <select
           key={i}

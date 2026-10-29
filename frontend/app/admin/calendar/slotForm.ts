@@ -2,9 +2,9 @@ import { useState } from "react";
 import type { TrainingType } from "@/lib/api";
 import { errorText } from "@/lib/apiErrors";
 
-export const TYPES: TrainingType[] = ["групові", "персональні", "спліт"];
+export const TYPES: TrainingType[] = ["group", "personal", "split"];
 // Member pickers per type: персональні exactly 1, спліт 1 required + 2 optional
-const MEMBER_FIELDS: Record<TrainingType, number> = { групові: 0, персональні: 1, спліт: 3 };
+const MEMBER_FIELDS: Record<TrainingType, number> = { group: 0, personal: 1, split: 3 };
 export const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
 export const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 

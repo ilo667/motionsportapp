@@ -12,7 +12,7 @@ export type PriceListItem = {
   // How long it lasts from activation (0 = that day only). Not activated within a month of the purchase, it burns
   durationMonths?: number;
   // Trainer service / group pass: which slots the package pays for, and how many trainings it holds
-  trainingType?: 'групові' | 'персональні' | 'спліт';
+  trainingType?: 'group' | 'personal' | 'split';
   trainingCount?: number;
 };
 
@@ -95,7 +95,7 @@ export const DEFAULT_PRICE_LIST: PriceListItem[] = [
     title: 'Персональне',
     optionLabel: '1 тренування',
     amountUah: 600,
-    trainingType: 'персональні',
+    trainingType: 'personal',
     trainingCount: 1,
     durationMonths: 1,
   },
@@ -105,7 +105,7 @@ export const DEFAULT_PRICE_LIST: PriceListItem[] = [
     title: 'Персональне',
     optionLabel: '6 тренувань',
     amountUah: 2800,
-    trainingType: 'персональні',
+    trainingType: 'personal',
     trainingCount: 6,
     durationMonths: 1,
   },
@@ -115,7 +115,7 @@ export const DEFAULT_PRICE_LIST: PriceListItem[] = [
     title: 'Персональне',
     optionLabel: '8 тренувань',
     amountUah: 3600,
-    trainingType: 'персональні',
+    trainingType: 'personal',
     trainingCount: 8,
     durationMonths: 1,
   },
@@ -125,7 +125,7 @@ export const DEFAULT_PRICE_LIST: PriceListItem[] = [
     title: 'Персональне',
     optionLabel: '12 тренувань',
     amountUah: 5200,
-    trainingType: 'персональні',
+    trainingType: 'personal',
     trainingCount: 12,
     durationMonths: 1,
   },
@@ -135,7 +135,7 @@ export const DEFAULT_PRICE_LIST: PriceListItem[] = [
     title: 'Спліт',
     optionLabel: '1 тренування',
     amountUah: 400,
-    trainingType: 'спліт',
+    trainingType: 'split',
     trainingCount: 1,
     durationMonths: 1,
   },
@@ -145,7 +145,7 @@ export const DEFAULT_PRICE_LIST: PriceListItem[] = [
     title: 'Спліт',
     optionLabel: '6 тренувань',
     amountUah: 2300,
-    trainingType: 'спліт',
+    trainingType: 'split',
     trainingCount: 6,
     durationMonths: 1,
   },
@@ -155,7 +155,7 @@ export const DEFAULT_PRICE_LIST: PriceListItem[] = [
     title: 'Спліт',
     optionLabel: '8 тренувань',
     amountUah: 2700,
-    trainingType: 'спліт',
+    trainingType: 'split',
     trainingCount: 8,
     durationMonths: 1,
   },
@@ -165,7 +165,7 @@ export const DEFAULT_PRICE_LIST: PriceListItem[] = [
     title: 'Спліт',
     optionLabel: '12 тренувань',
     amountUah: 3400,
-    trainingType: 'спліт',
+    trainingType: 'split',
     trainingCount: 12,
     durationMonths: 1,
   },
@@ -175,7 +175,7 @@ export const DEFAULT_PRICE_LIST: PriceListItem[] = [
     title: 'Разове відвідування',
     optionLabel: null,
     amountUah: 250,
-    trainingType: 'групові',
+    trainingType: 'group',
     trainingCount: 1,
     durationMonths: 1,
   },
@@ -185,7 +185,7 @@ export const DEFAULT_PRICE_LIST: PriceListItem[] = [
     title: 'Абонемент',
     optionLabel: '10 занять',
     amountUah: 2200,
-    trainingType: 'групові',
+    trainingType: 'group',
     trainingCount: 10,
     durationMonths: 1,
   },

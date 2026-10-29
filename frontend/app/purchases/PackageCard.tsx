@@ -2,7 +2,7 @@ import { TrainingPackage } from "@/lib/api";
 import { ddmm } from "@/lib/dates";
 
 // «Групові · Абонемент 10»; a trainer service's title already says what it is
-export const packageTitle = (p: TrainingPackage) => (p.trainingType === "групові" ? `Групові · ${p.title}` : p.title);
+export const packageTitle = (p: TrainingPackage) => (p.trainingType === "group" ? `Групові · ${p.title}` : p.title);
 
 // One circle per training: done ones filled with a check, the next one outlined in green, the rest grey.
 // Wraps onto a second row for 10–12

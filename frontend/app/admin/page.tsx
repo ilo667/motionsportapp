@@ -114,7 +114,7 @@ export default function AdminPage() {
   const closeAt = new Date(schedule.bookingCloseAt);
   const afterWindow = now >= closeAt;
   // Booking is only for group trainings: a day with only personal / split ones shows no booking badge
-  const hasGroup = schedule.slots.some((s) => s.trainingType === "групові");
+  const hasGroup = schedule.slots.some((s) => s.trainingType === "group");
 
   return (
     <PageLayout variant="top" action={<AdminMenu />}>

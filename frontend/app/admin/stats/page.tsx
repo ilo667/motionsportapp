@@ -14,9 +14,9 @@ const label = "text-subtle text-xs font-semibold uppercase tracking-wide mb-2";
 // Each column with its dot: training types in their calendar colors, club cards in the secondary text color
 const REVENUE_ROWS: [keyof Omit<Revenue, "total">, string, string][] = [
   ["clubCards", "Клубні карти", ""], // the bg-subtle class (theme colors aren't CSS variables here)
-  ["personal", "Персональні", TYPE_COLORS["персональні"].border],
-  ["split", "Спліт", TYPE_COLORS["спліт"].border],
-  ["group", "Групові", TYPE_COLORS["групові"].border],
+  ["personal", "Персональні", TYPE_COLORS["personal"].border],
+  ["split", "Спліт", TYPE_COLORS["split"].border],
+  ["group", "Групові", TYPE_COLORS["group"].border],
 ];
 
 // Months on the chart, current one last

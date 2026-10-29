@@ -42,7 +42,7 @@ export function EditSlotModal({
       .catch(() => setCancellations([]));
   }, [slot.slotId]);
 
-  const assigned = slot.trainingType !== "групові";
+  const assigned = slot.trainingType !== "group";
   // The trainer's own and unassigned clients, plus anyone already on this training (another trainer's client
   // must not silently disappear from the picker and be dropped on save)
   const pickerMembers: { id: string; displayName: string; memberCode?: string }[] = [

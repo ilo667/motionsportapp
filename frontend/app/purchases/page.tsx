@@ -1,9 +1,9 @@
 import { MyPurchasesPage } from "./MyPurchasesPage";
 import type { AssignedType } from "@/lib/api";
 
-const TYPES: AssignedType[] = ["персональні", "спліт"];
+const TYPES: AssignedType[] = ["personal", "split"];
 
-// ?type=персональні|спліт: opened from «Оплатити» on a training card, the purchase flow starts with that type
+// ?type=personal|split: opened from «Оплатити» on a training card, the purchase flow starts with that type
 export default async function PurchasesPage({
   searchParams,
 }: {

@@ -27,7 +27,7 @@ export function AddSlotModal({
   onDone: () => Promise<void>;
   onClose: () => void;
 }) {
-  const [selectedType, setSelectedType] = useState<TrainingType>("групові");
+  const [selectedType, setSelectedType] = useState<TrainingType>("group");
   const [time, setTime] = useState(initialTime);
   // Group trainings only: «Лише цього дня» or «Щотижня» (adds the time to the schedule)
   const [weekly, setWeekly] = useState(false);
@@ -36,7 +36,7 @@ export function AddSlotModal({
 
   // A group training before the trainer's booking opens can't be booked: warned under the time
   const opensAt = schedule?.bookingOpensAt ?? "";
-  const assigned = selectedType !== "групові";
+  const assigned = selectedType !== "group";
 
   const selectType = (type: TrainingType) => {
     setSelectedType(type);
@@ -45,7 +45,7 @@ export function AddSlotModal({
 
   const handleAdd = () => {
     if (!TIME_RE.test(time)) return setError("Вкажіть час з кроком 15 хвилин, наприклад 18:30");
-    if (selectedType === "групові") {
+    if (selectedType === "group") {
       if (!weekly) return run(() => api.upsertGroupSlot(date, time), "Помилка збереження. Спробуйте ще раз.");
       return addWeekly();
     }

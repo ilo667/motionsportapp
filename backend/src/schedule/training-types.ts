@@ -2,17 +2,18 @@ import { DateTime } from 'luxon';
 
 export const KY_ZONE = 'Europe/Kyiv';
 
-export const GROUP_TYPE = 'групові';
+// Training types as stored in the DB and sent by the API (UI words: групові, персональні, спліт; the frontend maps them)
+export const GROUP_TYPE = 'group';
 export const GROUP_CAPACITY = 8;
 // Assigned slots: visible only to members listed in slot_members, paid via LiqPay, bookable until the start
-export const ASSIGNED_TYPES = ['персональні', 'спліт'];
+export const ASSIGNED_TYPES = ['personal', 'split'];
 // What a package can pay for: trainer services and group passes
 export const PASS_TYPES = [GROUP_TYPE, ...ASSIGNED_TYPES];
-// Members an assigned slot is assigned to: персональні exactly 1, спліт 1–3.
-// Capacity is always `max` (персональні 1, спліт 3), however many members are assigned
+// Members an assigned slot is assigned to: personal exactly 1, split 1–3.
+// Capacity is always `max` (personal 1, split 3), however many members are assigned
 export const ASSIGNED_MEMBER_LIMITS: Record<string, { min: number; max: number }> = {
-  персональні: { min: 1, max: 1 },
-  спліт: { min: 1, max: 3 },
+  personal: { min: 1, max: 1 },
+  split: { min: 1, max: 3 },
 };
 
 export function isAssignedType(trainingType: string) {

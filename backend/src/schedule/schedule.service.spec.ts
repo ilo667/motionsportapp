@@ -278,11 +278,11 @@ describe('ScheduleService — assigned trainings', () => {
         id: 'p-morning',
         localDate: TODAY,
         slotTime: '12:00',
-        trainingType: 'персональні',
+        trainingType: 'personal',
         capacity: 1,
         bookedCount: 0,
       },
-      { id: 'p-evening', localDate: TODAY, slotTime: '18:00', trainingType: 'спліт', capacity: 2, bookedCount: 1 },
+      { id: 'p-evening', localDate: TODAY, slotTime: '18:00', trainingType: 'split', capacity: 2, bookedCount: 1 },
     ];
     const { db } = makeDb([
       assigned,
@@ -303,12 +303,12 @@ describe('ScheduleService — assigned trainings', () => {
       validUntil: '2026-10-25',
     };
     const packages = [
-      { trainingType: 'спліт', left: 3, ...waiting },
-      { trainingType: 'спліт', left: 2, ...active },
-      { trainingType: 'персональні', left: 4, ...waiting },
+      { trainingType: 'split', left: 3, ...waiting },
+      { trainingType: 'split', left: 2, ...active },
+      { trainingType: 'personal', left: 4, ...waiting },
       // Can't pay for a training today: burned (not activated in time), expired, bought after it
       {
-        trainingType: 'спліт',
+        trainingType: 'split',
         left: 8,
         purchasedOn: '2026-09-01',
         activateBy: '2026-10-01',
@@ -316,7 +316,7 @@ describe('ScheduleService — assigned trainings', () => {
         validUntil: null,
       },
       {
-        trainingType: 'спліт',
+        trainingType: 'split',
         left: 6,
         purchasedOn: '2026-08-01',
         activateBy: '2026-09-01',
@@ -324,7 +324,7 @@ describe('ScheduleService — assigned trainings', () => {
         validUntil: '2026-09-02',
       },
       {
-        trainingType: 'спліт',
+        trainingType: 'split',
         left: 10,
         purchasedOn: '2026-10-21',
         activateBy: '2026-11-21',
@@ -343,7 +343,7 @@ describe('ScheduleService — assigned trainings', () => {
 
   it('marks an assigned training as started (no payment) during its hour', async () => {
     const assigned = [
-      { id: 'p1', localDate: TODAY, slotTime: '15:00', trainingType: 'персональні', capacity: 1, bookedCount: 0 },
+      { id: 'p1', localDate: TODAY, slotTime: '15:00', trainingType: 'personal', capacity: 1, bookedCount: 0 },
     ];
     const { db } = makeDb([assigned, [], [{ trainerId: 'trainer-1' }], [trainingDay], HAS_GROUP, slots, [], [], []]);
     const result = await makeService(db, kyivAt(15)).getNext('member-1');
@@ -369,7 +369,7 @@ describe('ScheduleService — no group day ahead', () => {
 
   it("still returns the member's assigned trainings when there is no group day", async () => {
     const assigned = [
-      { id: 'p1', localDate: TODAY, slotTime: '18:00', trainingType: 'персональні', capacity: 1, bookedCount: 0 },
+      { id: 'p1', localDate: TODAY, slotTime: '18:00', trainingType: 'personal', capacity: 1, bookedCount: 0 },
     ];
     const { db } = makeDb([assigned, [], []]);
     const result = await makeService(db, kyivAt(15)).getNext('member-1');
@@ -441,7 +441,7 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
       expect.objectContaining({
         trainingDayId: 'd-wed',
         slotTime: '19:00',
-        trainingType: 'групові',
+        trainingType: 'group',
         capacity: 8,
         trainerId: 'trainer-2',
       }),

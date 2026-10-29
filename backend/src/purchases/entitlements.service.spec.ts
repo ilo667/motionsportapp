@@ -127,7 +127,7 @@ describe('Entitlements — buying', () => {
           optionLabel: '8 тренувань',
           section: 'assigned',
           durationMonths: 1,
-          trainingType: 'персональні',
+          trainingType: 'personal',
           trainingCount: 8,
           createdAt: BOUGHT,
         }),
@@ -140,7 +140,7 @@ describe('Entitlements — buying', () => {
         values: {
           memberId: 'm1',
           purchaseItemId: 'line-2',
-          trainingType: 'персональні',
+          trainingType: 'personal',
           total: 8,
           durationMonths: 1,
           purchasedOn: '2026-10-23',
@@ -150,7 +150,7 @@ describe('Entitlements — buying', () => {
     ]);
   });
 
-  it('a group pass is a package of type групові', async () => {
+  it('a group pass is a package of type group', async () => {
     const { db, inserts } = makeDb([
       [
         line({
@@ -158,7 +158,7 @@ describe('Entitlements — buying', () => {
           title: 'Абонемент',
           optionLabel: '10 занять',
           durationMonths: 1,
-          trainingType: 'групові',
+          trainingType: 'group',
           trainingCount: 10,
           createdAt: BOUGHT,
         }),
@@ -167,7 +167,7 @@ describe('Entitlements — buying', () => {
     await makeService(db).activate(db, 'p1');
     expect(inserts[0]).toMatchObject({
       table: packages,
-      values: { trainingType: 'групові', total: 10, purchasedOn: '2026-10-23', activateBy: '2026-11-23' },
+      values: { trainingType: 'group', total: 10, purchasedOn: '2026-10-23', activateBy: '2026-11-23' },
     });
   });
 });
@@ -178,7 +178,7 @@ describe('Entitlements — group pass bought from «Записатися»', () 
     title: 'Разове відвідування',
     optionLabel: null,
     durationMonths: 1,
-    trainingType: 'групові',
+    trainingType: 'group',
     trainingCount: 1,
     createdAt: BOUGHT,
   });
@@ -219,7 +219,7 @@ describe('Entitlements — group pass bought from «Записатися»', () 
 describe('Entitlements — spends', () => {
   const booking = (over: Record<string, unknown>) => ({
     memberId: 'm1',
-    trainingType: 'персональні',
+    trainingType: 'personal',
     localDate: '2026-10-25',
     marked: 'b1',
     spentFrom: null,
@@ -314,14 +314,14 @@ describe('Entitlements — spends', () => {
   });
 
   it('a group training spends from a group pass', async () => {
-    const { db, inserts } = makeDb([[booking({ trainingType: 'групові' })], [pack({ total: 10 })], []]);
+    const { db, inserts } = makeDb([[booking({ trainingType: 'group' })], [pack({ total: 10 })], []]);
     await makeService(db).syncSpend(db, 'b1');
     expect(inserts).toEqual([{ table: packageSpends, values: { bookingId: 'b1', packageId: 'p' } }]);
   });
 
   it('the pass bought for this booking pays first, even when an older one has trainings left', async () => {
     const { db, inserts } = makeDb([
-      [booking({ trainingType: 'групові' })],
+      [booking({ trainingType: 'group' })],
       [pack({ id: 'older', total: 10 }), pack({ id: 'bought-for-it', total: 1, forBooking: true })],
       [],
     ]);
