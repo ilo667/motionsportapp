@@ -2,8 +2,8 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { PriceListItem } from "@/lib/api";
-import { PageLayout } from "@/components/PageLayout";
-import { PriceList } from "@/components/PriceList";
+import { PageLayout } from "@/components/ui/PageLayout";
+import { PriceList } from "@/components/prices/PriceList";
 
 // Straight to the backend (the same address the /api rewrite uses): the browser's /api path means nothing on the
 // server, and the browser's session cookie has to be passed on by hand. Only `session`, nothing else the browser sent

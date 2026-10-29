@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, AdminMember, Trainer, CashRequest, FreezeRequest, CancelRefund } from "@/lib/api";
-import { PageLayout } from "@/components/PageLayout";
+import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
-import { CashRequests } from "@/components/admin/CashRequests";
-import { StrayPayments } from "@/components/admin/StrayPayments";
-import { FreezeRequests } from "@/components/admin/FreezeRequests";
-import { CancelRefunds } from "@/components/admin/CancelRefunds";
+import { CashRequests } from "./CashRequests";
+import { StrayPayments } from "./StrayPayments";
+import { FreezeRequests } from "./FreezeRequests";
+import { CancelRefunds } from "./CancelRefunds";
 import { FREQUENT_CANCELLATIONS, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
 import { toAdminLogin } from "@/lib/adminAuth";
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Rubik, Inter } from "next/font/google";
-import { SwRegister } from "../components/SwRegister";
-import { OfflineBanner } from "../components/OfflineBanner";
+import { SwRegister } from "@/components/pwa/SwRegister";
+import { OfflineBanner } from "@/components/pwa/OfflineBanner";
 import "./globals.css";
 
 const rubik = Rubik({

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, statusOf } from "@/lib/api";
-import { PageLayout } from "../PageLayout";
+import { PageLayout } from "@/components/ui/PageLayout";
 
 const FIELD = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 const MIN_PASSWORD = 10;

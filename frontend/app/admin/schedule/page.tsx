@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, SkippedTraining, TrainerSchedule } from "@/lib/api";
-import { PageLayout } from "@/components/PageLayout";
+import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { errorText } from "@/lib/apiErrors";
 import { trainingsCount } from "@/lib/plural";

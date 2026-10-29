@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { CatalogItem, MyPurchases } from "@/lib/api";
 import { formatUah } from "@/lib/prices";
-import type { PurchaseMode } from "@/components/PurchaseFlow";
+import type { PurchaseMode } from "./PurchaseFlow";
 
 // «від 250 ₴»: the cheapest option of a list
 const fromPrice = (items: CatalogItem[]) =>

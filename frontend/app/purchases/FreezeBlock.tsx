@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api, MyFreeze } from "@/lib/api";
 import { errorText } from "@/lib/apiErrors";
 import { ddmm } from "@/lib/dates";
-import { Badge } from "@/components/Badge";
+import { Badge } from "@/components/ui/Badge";
 
 // «Мій абонемент»: ask the trainer to freeze everything (club card and trainings) for up to 30 days, take the
 // request back, or ask to unfreeze. Nothing changes until the trainer approves

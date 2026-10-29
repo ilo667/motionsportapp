@@ -4,7 +4,7 @@ import { api, AdminMember, TrainerSchedule, TrainingType } from "@/lib/api";
 import { TYPE_COLORS, TYPE_LABEL_PLURAL } from "@/lib/trainingTypes";
 import { errorText } from "@/lib/apiErrors";
 import { longDay } from "@/lib/dates";
-import { Modal } from "@/components/Modal";
+import { Modal } from "@/components/ui/Modal";
 import { MemberPickers } from "./MemberPickers";
 import { FIELD_CLASS, TIME_RE, TYPES, fieldsFor, useSave, weekdayOf } from "./slotForm";
 

@@ -5,7 +5,7 @@ import { feeLabel } from "@/lib/cancelFee";
 import { kyivDateTime } from "@/lib/dates";
 import { kyivTime } from "@/lib/kyivTime";
 import { errorText } from "@/lib/apiErrors";
-import { Badge } from "@/components/Badge";
+import { Badge } from "@/components/ui/Badge";
 
 // "17:42" for today's page, "20 жовт., 15:02" when the date matters
 function formatCancelledAt(iso: string | null, withDate: boolean): string {

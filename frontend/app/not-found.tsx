@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageLayout } from "@/components/PageLayout";
+import { PageLayout } from "@/components/ui/PageLayout";
 
 // Any unknown URL (and notFound() calls). Rendered inside the root layout
 export default function NotFound() {

@@ -2,13 +2,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, AdminSlotView, AttendanceStatus, HistoryDay } from "@/lib/api";
-import { PageLayout } from "@/components/PageLayout";
+import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { AttendanceButton } from "@/components/admin/AttendanceButton";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { TYPE_COLORS, TYPE_LABEL } from "@/lib/trainingTypes";
 import { longDay } from "@/lib/dates";
-import { Badge } from "@/components/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { toAdminLogin } from "@/lib/adminAuth";
 
 // "11 прийшли з 12 · 1 скасування" for the collapsed day row

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { api, AdminMember, CalendarSlot, Cancellation } from "@/lib/api";
 import { TYPE_LABEL } from "@/lib/trainingTypes";
 import { longDay } from "@/lib/dates";
-import { Modal } from "@/components/Modal";
+import { Modal } from "@/components/ui/Modal";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { memberLabel } from "./memberLabel";
 import { MemberPickers } from "./MemberPickers";

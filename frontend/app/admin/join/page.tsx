@@ -1,4 +1,4 @@
-import { TrainerJoinForm } from "@/components/admin/TrainerJoinForm";
+import { TrainerJoinForm } from "./TrainerJoinForm";
 
 // The page an invite link opens: /admin/join?t=<token>
 export default async function TrainerJoinPage({

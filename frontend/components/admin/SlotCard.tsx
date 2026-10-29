@@ -4,7 +4,7 @@ import { api, AdminSlotView } from "@/lib/api";
 import { CancellationList } from "./CancellationList";
 import { AttendanceButton } from "./AttendanceButton";
 import { TYPE_LABEL } from "@/lib/trainingTypes";
-import { Badge } from "@/components/Badge";
+import { Badge } from "@/components/ui/Badge";
 
 interface SlotCardProps {
   slot: AdminSlotView;

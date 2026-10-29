@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, Trainer, TrainerInvite } from "@/lib/api";
-import { PageLayout } from "@/components/PageLayout";
+import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { toAdminLogin } from "@/lib/adminAuth";
 import { DisableDialog } from "./DisableDialog";

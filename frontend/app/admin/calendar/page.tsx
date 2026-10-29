@@ -12,7 +12,7 @@ import interactionPlugin from "@fullcalendar/react/interaction";
 import ukLocale from "@fullcalendar/react/locales/uk";
 import type { DatesSetInfo, EventClickInfo, DateClickInfo } from "@fullcalendar/react";
 import { api, AdminMember, CalendarSlot, TrainerSchedule, TrainingType } from "@/lib/api";
-import { PageLayout } from "@/components/PageLayout";
+import { PageLayout } from "@/components/ui/PageLayout";
 import { useIsClient } from "@/lib/clientStore";
 import { TYPE_COLORS, TYPE_LABEL_PLURAL } from "@/lib/trainingTypes";
 import { AdminMenu } from "@/components/admin/AdminMenu";

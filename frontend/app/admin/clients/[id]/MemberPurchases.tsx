@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, MemberPurchases as MemberPurchasesData, PriceItem, Purchase } from "@/lib/api";
 import { errorText } from "@/lib/apiErrors";
 import { ddmm } from "@/lib/dates";
-import { Badge, type BadgeTone } from "@/components/Badge";
+import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { formatUah, lineName } from "@/lib/prices";
 
 type Card = MemberPurchasesData["cards"][number];

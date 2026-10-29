@@ -3,10 +3,10 @@ import { useEffect, useRef, useCallback, useState, useSyncExternalStore } from "
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ScheduleNext, statusOf } from "@/lib/api";
-import { PageLayout } from "@/components/PageLayout";
-import { SlotCard } from "@/components/SlotCard";
+import { PageLayout } from "@/components/ui/PageLayout";
+import { SlotCard } from "@/components/schedule/SlotCard";
 import { kyivTime } from "@/lib/kyivTime";
-import { AssignedSlotCard } from "@/components/AssignedSlotCard";
+import { AssignedSlotCard } from "@/components/schedule/AssignedSlotCard";
 import { noopSubscribe } from "@/lib/clientStore";
 import { resyncExistingSubscription } from "@/lib/pushUtils";
 import { nextPollDelay } from "@/lib/schedulePoll";

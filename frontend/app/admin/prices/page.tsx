@@ -2,11 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, PriceChange, PriceItem, statusOf } from "@/lib/api";
-import { PriceList } from "@/components/PriceList";
-import { PageLayout } from "@/components/PageLayout";
+import { PriceList } from "@/components/prices/PriceList";
+import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { kyivDateTime } from "@/lib/dates";
-import { Modal } from "@/components/Modal";
+import { Modal } from "@/components/ui/Modal";
 import { formatUah, lineName } from "@/lib/prices";
 import { toAdminLogin } from "@/lib/adminAuth";
 

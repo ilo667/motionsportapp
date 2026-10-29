@@ -1,4 +1,4 @@
-import { PaymentResult } from "@/components/PaymentResult";
+import { PaymentResult } from "./PaymentResult";
 
 export default async function PaymentReturnPage({
   searchParams,

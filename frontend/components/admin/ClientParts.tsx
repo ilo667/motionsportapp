@@ -4,7 +4,7 @@ import { api, AdminMember, Trainer, MemberCancellation } from "@/lib/api";
 import { CancellationList } from "@/components/admin/CancellationList";
 import { plural } from "@/lib/plural";
 import { ddmm, shortDay } from "@/lib/dates";
-import { Badge } from "@/components/Badge";
+import { Badge } from "@/components/ui/Badge";
 
 // Pieces of a client shared by the «Клієнти» list and the client page
 

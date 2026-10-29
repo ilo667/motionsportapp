@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api, Trainer, statusOf } from "@/lib/api";
-import { Modal } from "@/components/Modal";
+import { Modal } from "@/components/ui/Modal";
 
 const FIELD = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 

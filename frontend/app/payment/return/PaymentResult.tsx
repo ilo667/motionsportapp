@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, PaymentStatus } from "@/lib/api";
-import { PageLayout } from "./PageLayout";
+import { PageLayout } from "@/components/ui/PageLayout";
 
 // Backend asks LiqPay on each call while PENDING, so a few short retries cover a late callback
 const POLL_INTERVAL_MS = 2000;

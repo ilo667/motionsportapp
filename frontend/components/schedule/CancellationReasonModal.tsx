@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { api, CancelFeePreview } from "@/lib/api";
 import { feeWarning } from "@/lib/cancelFee";
-import { Modal } from "@/components/Modal";
+import { Modal } from "@/components/ui/Modal";
 
 interface Props {
   action: "cancel" | "switch";

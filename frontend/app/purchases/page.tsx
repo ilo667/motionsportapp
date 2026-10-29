@@ -1,4 +1,4 @@
-import { MyPurchasesPage } from "@/components/MyPurchasesPage";
+import { MyPurchasesPage } from "./MyPurchasesPage";
 import type { AssignedType } from "@/lib/api";
 
 const TYPES: AssignedType[] = ["персональні", "спліт"];

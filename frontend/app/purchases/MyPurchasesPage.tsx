@@ -3,14 +3,14 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, AssignedType, MyFreeze, MyPurchases, statusOf } from "@/lib/api";
-import { PageLayout } from "./PageLayout";
+import { PageLayout } from "@/components/ui/PageLayout";
 import { PurchaseFlow, PurchaseMode } from "./PurchaseFlow";
 import { FreezeBlock } from "./FreezeBlock";
 import { ddmm } from "@/lib/dates";
-import { ClubCardBlock } from "./purchases/ClubCardBlock";
-import { PackageCard, packageTitle } from "./purchases/PackageCard";
-import { PendingPurchase } from "./purchases/PendingPurchase";
-import { BuyBlock } from "./purchases/BuyBlock";
+import { ClubCardBlock } from "./ClubCardBlock";
+import { PackageCard, packageTitle } from "./PackageCard";
+import { PendingPurchase } from "./PendingPurchase";
+import { BuyBlock } from "./BuyBlock";
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase text-xs tracking-wide";
 

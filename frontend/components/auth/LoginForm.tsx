@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, statusOf } from "@/lib/api";
-import { PageLayout } from "./PageLayout";
+import { PageLayout } from "@/components/ui/PageLayout";
 import { errorText } from "@/lib/apiErrors";
 
 interface FieldConfig {

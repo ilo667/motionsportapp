@@ -4,7 +4,7 @@ import Link from "next/link";
 import { api, CatalogItem, MyPurchases } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
 import { errorText } from "@/lib/apiErrors";
-import { Modal } from "@/components/Modal";
+import { Modal } from "@/components/ui/Modal";
 import { formatUah, lineName } from "@/lib/prices";
 
 // «Записатись» without a group pass: buy a single visit or a pass by LiqPay (booked once paid), or pay cash to the
