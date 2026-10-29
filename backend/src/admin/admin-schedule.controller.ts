@@ -20,6 +20,7 @@ import { UpsertTrainingDayDto } from './dto/upsert-training-day.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { CreateAssignedSlotDto } from './dto/create-assigned-slot.dto';
 import { SlotMembersDto } from './dto/update-slot-members.dto';
+import { ParseDatePipe, ParseMonthPipe, ParseTimePipe } from '../common/pipes/date-pipes';
 
 @Controller('admin')
 @UseGuards(SessionGuard, AdminGuard)
@@ -32,11 +33,11 @@ export class AdminScheduleController {
   }
 
   @Get('history')
-  getHistory(@CurrentUser() user: SessionUser, @Query('before') before?: string) {
-    return this.adminScheduleService.getHistory(
-      user.id,
-      before && /^\d{4}-\d{2}-\d{2}$/.test(before) ? before : undefined,
-    );
+  getHistory(
+    @CurrentUser() user: SessionUser,
+    @Query('before', new ParseDatePipe({ optional: true })) before: string | undefined,
+  ) {
+    return this.adminScheduleService.getHistory(user.id, before);
   }
 
   @Get('slots/:slotId/cancellations')
@@ -45,13 +46,17 @@ export class AdminScheduleController {
   }
 
   @Get('calendar')
-  getCalendar(@Query('month') month: string, @CurrentUser() user: SessionUser) {
+  getCalendar(@Query('month', ParseMonthPipe) month: string, @CurrentUser() user: SessionUser) {
     return this.adminScheduleService.getCalendar(user.id, month);
   }
 
   @Put('training-days/:date')
   @HttpCode(HttpStatus.OK)
-  upsertTrainingDay(@Param('date') date: string, @Body() dto: UpsertTrainingDayDto, @CurrentUser() user: SessionUser) {
+  upsertTrainingDay(
+    @Param('date', ParseDatePipe) date: string,
+    @Body() dto: UpsertTrainingDayDto,
+    @CurrentUser() user: SessionUser,
+  ) {
     return this.adminScheduleService.upsertTrainingDay(user.id, date, dto);
   }
 
@@ -59,8 +64,8 @@ export class AdminScheduleController {
   @Put('training-days/:date/slots/:slotTime')
   @HttpCode(HttpStatus.OK)
   upsertCalendarSlot(
-    @Param('date') date: string,
-    @Param('slotTime') slotTime: string,
+    @Param('date', ParseDatePipe) date: string,
+    @Param('slotTime', ParseTimePipe) slotTime: string,
     @CurrentUser() user: SessionUser,
   ) {
     return this.adminScheduleService.upsertGroupSlot(user.id, date, slotTime);
@@ -68,7 +73,7 @@ export class AdminScheduleController {
 
   @Post('training-days/:date/assigned-slots')
   createAssignedSlot(
-    @Param('date') date: string,
+    @Param('date', ParseDatePipe) date: string,
     @Body() dto: CreateAssignedSlotDto,
     @CurrentUser() user: SessionUser,
   ) {

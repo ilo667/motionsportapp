@@ -23,14 +23,14 @@ export class AdminAttendanceController {
 
   @Put('slots/:slotId/attendance/all')
   @HttpCode(HttpStatus.OK)
-  markAllAttendance(@Param('slotId') slotId: string, @CurrentUser() user: SessionUser) {
+  markAllAttendance(@Param('slotId', ParseUUIDPipe) slotId: string, @CurrentUser() user: SessionUser) {
     return this.adminAttendanceService.markAllAttendance(slotId, user.id);
   }
 
   @Patch('bookings/:bookingId/attendance')
   @HttpCode(HttpStatus.OK)
   updateBookingAttendance(
-    @Param('bookingId') bookingId: string,
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Body() dto: UpdateAttendanceDto,
     @CurrentUser() user: SessionUser,
   ) {

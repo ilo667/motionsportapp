@@ -1,4 +1,4 @@
-import { Controller, Put, Delete, Param, UseGuards, Req, HttpCode } from '@nestjs/common';
+import { Controller, Put, Delete, Param, UseGuards, Req, HttpCode, ParseUUIDPipe } from '@nestjs/common';
 import { SessionGuard } from '../auth/session.guard';
 import { VacancyAlertsService } from './vacancy-alerts.service';
 
@@ -9,7 +9,7 @@ export class VacancyAlertsController {
 
   @Put(':slotId/vacancy-alert')
   @HttpCode(200)
-  async subscribe(@Param('slotId') slotId: string, @Req() req: Express.Request) {
+  async subscribe(@Param('slotId', ParseUUIDPipe) slotId: string, @Req() req: Express.Request) {
     const user = (req as unknown as { user: { id: string } }).user;
     await this.svc.subscribe(user.id, slotId);
     return { ok: true };
@@ -17,7 +17,7 @@ export class VacancyAlertsController {
 
   @Delete(':slotId/vacancy-alert')
   @HttpCode(200)
-  async unsubscribe(@Param('slotId') slotId: string, @Req() req: Express.Request) {
+  async unsubscribe(@Param('slotId', ParseUUIDPipe) slotId: string, @Req() req: Express.Request) {
     const user = (req as unknown as { user: { id: string } }).user;
     await this.svc.unsubscribe(user.id, slotId);
     return { ok: true };
