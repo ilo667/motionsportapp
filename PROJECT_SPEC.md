@@ -1,4 +1,6 @@
-# GymFlow — PROJECT_SPEC.md
+# Motion Gym — PROJECT_SPEC.md
+
+> **Historical document.** This is the original v1 specification (2026-10-16). The app has since grown well beyond it: several trainers with their own schedules, purchases and payments, freezes, guests, late-cancellation rules. Some v1 decisions changed too: training times are no longer fixed at 19:00 / 20:00 on Mon / Wed / Fri, and the repository is `frontend/` + `backend/`, not `apps/`. For the current behaviour see [README.md](README.md) and [CLAUDE.md](CLAUDE.md).
 
 > Product requirements, architecture, implementation contract and delivery plan for Claude Code.
 > Language of the product: Ukrainian. Technical naming/code: English.
@@ -7,7 +9,7 @@
 
 ## 0. Instructions for Claude Code (read first)
 
-You are implementing **GymFlow**, a small-gym class-booking Progressive Web App, initially a portfolio showcase and later a real service. **Respect confirmed decisions** in this document. Do not introduce features that were rejected or deferred. Build iteratively, in small reviewable phases, and explain key NestJS/TypeScript architectural choices to the project owner as you go. Ask only when a genuine product decision is blocking; otherwise choose the simplest maintainable technical solution and document it.
+You are implementing **Motion Gym**, a small-gym class-booking Progressive Web App, initially a portfolio showcase and later a real service. **Respect confirmed decisions** in this document. Do not introduce features that were rejected or deferred. Build iteratively, in small reviewable phases, and explain key NestJS/TypeScript architectural choices to the project owner as you go. Ask only when a genuine product decision is blocking; otherwise choose the simplest maintainable technical solution and document it.
 
 **Do not start coding solely because this specification is supplied.** Wait for an explicit instruction such as “implement Phase 1.” At implementation time: propose a concise phase plan, show the files you will create/change, implement one phase, run lint/typecheck/tests, report results, and wait for approval before continuing. Do not claim something was tested if it was not.
 
@@ -21,7 +23,7 @@ Priorities: (1) correct transactional booking and privacy, (2) simple mobile UX,
 
 ## 1. Product and MVP scope
 
-GymFlow replaces informal Viber voting for a small gym. A client signs in, sees the nearest training day and the two groups (19:00 and 20:00), views counts (not others' names), books or switches one slot, and optionally subscribes to a free-seat alert. One coach/admin manages exceptions to the regular schedule, cancels groups, confirms attendance and edits AI-written motivational announcements.
+Motion Gym replaces informal Viber voting for a small gym. A client signs in, sees the nearest training day and the two groups (19:00 and 20:00), views counts (not others' names), books or switches one slot, and optionally subscribes to a free-seat alert. One coach/admin manages exceptions to the regular schedule, cancels groups, confirms attendance and edits AI-written motivational announcements.
 
 Initially a **portfolio app**, with an isolated interactive demo; later intended for **real gym usage**. No calendar UI, payments, memberships, attendance QR, multi-admin management, client history dashboard, or manual coach manipulation of individual bookings in MVP.
 
@@ -182,7 +184,7 @@ Do **not** send push for a member's own booking, cancellation or slot switch; sh
 ### Proposed directory structure
 
 ```text
-GymFlow/
+motionsportapp/
 ├── apps/
 │   ├── web/                  # Next.js PWA, member and admin UIs
 │   └── api/                  # NestJS modules/controllers/services/guards
@@ -415,7 +417,7 @@ This roadmap is intentionally concrete for a portfolio AI Engineering / LLMOps s
 1. **Read-only trainer assistant:** coach asks in Ukrainian, “Скільки людей записано сьогодні на 19:00?”; assistant calls a strictly scoped availability tool, then explains the result.
 2. **Attendance summary:** coach asks, “Скільки людей фактично було на тренуваннях цього тижня?”; assistant calls a read-only attendance aggregation tool. This is not a replacement for manual attendance confirmation.
 3. **Document-grounded gym FAQ (RAG):** coach uploads gym policies, training descriptions and FAQ; assistant answers questions using retrieved source passages and cites the underlying document.
-4. **MCP integration showcase:** expose a small read-only GymFlow tool catalog to explicitly authorized MCP clients. Do not expose a public unauthenticated MCP endpoint.
+4. **MCP integration showcase:** expose a small read-only Motion Gym tool catalog to explicitly authorized MCP clients. Do not expose a public unauthenticated MCP endpoint.
 
 **Non-goals:** autonomous booking/cancellation, changing schedule, approving attendance, sending pushes, reading PINs/recovery codes, exposing participant names to ordinary members, making health/training prescriptions, or inventing policies. Do not add a multi-agent framework merely for portfolio buzzwords. Start with a single assistant that calls deterministic tools.
 

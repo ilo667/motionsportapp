@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Motion Gym** — gym class-booking PWA. Full spec at `PROJECT_SPEC.md` (read before implementing anything). The spec uses "GymFlow" as a codename — the product name is **Motion Gym**.
+**Motion Gym** — gym class-booking PWA. The original v1 spec is `PROJECT_SPEC.md` (historical: the app has grown past it; where it and this file disagree, this file is right).
 
 ## Structure
 
