@@ -23,6 +23,14 @@ import type { ChangePasswordDto } from './dto/change-password.dto';
 
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const BCRYPT_ROUNDS = 12;
+// Hash of a random string nobody knows, same cost as real ones: an unknown member code or username still costs one
+// bcrypt compare, so the response time doesn't tell which codes exist
+const DUMMY_HASH = '$2b$12$t.Mnp58vbb/O.oSG0aHVEuyog3GrnDk1woQu4pJdSwJ0TDWhl7DkO';
+
+export async function secretMatches(secret: string, hash: string | undefined): Promise<boolean> {
+  const valid = await bcrypt.compare(secret, hash ?? DUMMY_HASH);
+  return valid && hash !== undefined;
+}
 
 @Injectable()
 export class AuthService {
@@ -55,10 +63,8 @@ export class AuthService {
       .where(eq(members.memberCode, dto.memberCode))
       .limit(1);
 
-    if (!member || member.disabledAt) throw new UnauthorizedException('Invalid credentials');
-
-    const valid = await bcrypt.compare(dto.pin, member.pinHash);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    const valid = await secretMatches(dto.pin, member?.pinHash);
+    if (!member || member.disabledAt || !valid) throw new UnauthorizedException('Invalid credentials');
 
     const sessionToken = await this.createSession('member', member.id);
     return { memberCode: member.memberCode, displayName: member.displayName, sessionToken };
@@ -71,10 +77,8 @@ export class AuthService {
       .where(eq(members.memberCode, dto.memberCode))
       .limit(1);
 
-    if (!member || member.disabledAt) throw new UnauthorizedException('Invalid credentials');
-
-    const valid = await bcrypt.compare(dto.recoveryCode, member.recoveryHash);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    const valid = await secretMatches(dto.recoveryCode, member?.recoveryHash);
+    if (!member || member.disabledAt || !valid) throw new UnauthorizedException('Invalid credentials');
 
     const newPinHash = await bcrypt.hash(dto.newPin, BCRYPT_ROUNDS);
     const newRawRecovery = crypto.randomBytes(20).toString('base64url');
@@ -98,10 +102,8 @@ export class AuthService {
     const [admin] = await this.database.db.select().from(admins).where(eq(admins.username, dto.username)).limit(1);
 
     // A disabled trainer gets the same answer as a wrong password
-    if (!admin || admin.disabledAt) throw new UnauthorizedException('Invalid credentials');
-
-    const valid = await bcrypt.compare(dto.password, admin.passwordHash);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    const valid = await secretMatches(dto.password, admin?.passwordHash);
+    if (!admin || admin.disabledAt || !valid) throw new UnauthorizedException('Invalid credentials');
 
     const sessionToken = await this.createSession('admin', admin.id);
     return { username: admin.username, sessionToken };
@@ -192,7 +194,7 @@ export class AuthService {
 
   private async generateUniqueMemberCode(): Promise<string> {
     for (let attempt = 0; attempt < 10; attempt++) {
-      const digits = Math.floor(10000 + Math.random() * 90000);
+      const digits = crypto.randomInt(10000, 100000);
       const code = `GYM-${digits}`;
       const [existing] = await this.database.db
         .select({ id: members.id })
