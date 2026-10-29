@@ -7,6 +7,7 @@ import { AdminMenu } from "@/components/admin/AdminMenu";
 import { TYPE_COLORS } from "@/lib/trainingTypes";
 import { formatUah } from "@/lib/prices";
 import { toAdminLogin } from "@/lib/adminAuth";
+import { kyivToday } from "@/lib/dates";
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase mb-3";
 const label = "text-subtle text-xs font-semibold uppercase tracking-wide mb-2";
@@ -30,7 +31,7 @@ const noRevenue = (month: string): MonthRevenue => ({ month, clubCards: 0, perso
 // Every month from the first paid one (at least the last 12, for the chart) up to the current one (Kyiv),
 // with zeros for months nobody paid
 function monthsUpToNow(months: MonthRevenue[]) {
-  const [y, m] = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" }).split("-").map(Number);
+  const [y, m] = kyivToday().split("-").map(Number);
   const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const firstPaid = months.reduce((first, x) => (x.month < first ? x.month : first), key(new Date(y, m - 1, 1)));
   const result: MonthRevenue[] = [];

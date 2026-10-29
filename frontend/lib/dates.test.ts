@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { ddmm, kyivDateTime, longDay, shortDay } from "@/lib/dates";
+import { ddmm, kyivDateTime, kyivToday, longDay, shortDay } from "@/lib/dates";
+
+describe("kyivToday", () => {
+  it("the Kyiv date, not the browser's, around midnight", () => {
+    // 23:30 UTC = 01:30 in Kyiv (winter), already the next day there
+    expect(kyivToday(new Date("2026-12-20T23:30:00Z"))).toBe("2026-12-21");
+    // 21:30 UTC = 00:30 in Kyiv (summer)
+    expect(kyivToday(new Date("2026-07-10T21:30:00Z"))).toBe("2026-07-11");
+    expect(kyivToday(new Date("2026-07-10T20:30:00Z"))).toBe("2026-07-10");
+  });
+
+  it("the same whatever the browser's time zone", () => {
+    const realTz = process.env.TZ;
+    try {
+      for (const tz of ["Pacific/Honolulu", "Pacific/Kiritimati", "Europe/Kyiv"]) {
+        process.env.TZ = tz;
+        expect(kyivToday(new Date("2026-12-20T23:30:00Z"))).toBe("2026-12-21");
+      }
+    } finally {
+      process.env.TZ = realTz;
+    }
+  });
+});
 
 describe("ddmm", () => {
   it("«27.10» from a date or an ISO time", () => {

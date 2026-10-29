@@ -20,6 +20,7 @@ import { AddSlotModal } from "./AddSlotModal";
 import { EditSlotModal } from "./EditSlotModal";
 import { TYPES, weekdayOf } from "./slotForm";
 import { toAdminLogin } from "@/lib/adminAuth";
+import { kyivToday } from "@/lib/dates";
 
 // Short labels for calendar events — full names don't fit a day column
 const TYPE_SHORT: Record<TrainingType, string> = {
@@ -161,12 +162,9 @@ export default function CalendarPage() {
   };
 
   const handleDateClick = (arg: DateClickInfo) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     // Month view gives "YYYY-MM-DD", week-with-hours gives "YYYY-MM-DDTHH:mm:ss+03:00" (prefills the time)
     const date = arg.dateStr.slice(0, 10);
-    const clicked = new Date(date + "T12:00:00");
-    if (clicked < today) return;
+    if (date < kyivToday()) return;
     setModal({ mode: "add", date, time: arg.dateStr.slice(11, 16) });
   };
 

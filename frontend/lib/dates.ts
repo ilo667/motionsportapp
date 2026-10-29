@@ -2,6 +2,9 @@
 // browser (local noon formatted in Kyiv time is the next day in a browser at UTC−10)
 const noon = (localDate: string) => new Date(`${localDate}T12:00:00Z`);
 
+// Today's date in Kyiv as 'YYYY-MM-DD' (compare training days with it as strings), whatever the browser's time zone
+export const kyivToday = (now = new Date()) => now.toLocaleDateString("sv-SE", { timeZone: "Europe/Kyiv" });
+
 // «27.10» from 'YYYY-MM-DD' (or an ISO time starting with it)
 export const ddmm = (date: string) => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
 
