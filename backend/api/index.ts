@@ -5,7 +5,9 @@ import { configureApp } from '../src/configure-app';
 import type { INestApplication } from '@nestjs/common';
 import type { IncomingMessage, ServerResponse } from 'http';
 
-let app: INestApplication | undefined;
+// The bootstrap itself, not its result: Vercel sends several requests to one instance at once, and those arriving
+// during a cold start must wait for the same Nest instead of each starting their own
+let appPromise: Promise<INestApplication> | undefined;
 
 async function bootstrap(): Promise<INestApplication> {
   const instance = await NestFactory.create(AppModule);
@@ -15,6 +17,11 @@ async function bootstrap(): Promise<INestApplication> {
 }
 
 module.exports = async (req: IncomingMessage, res: ServerResponse) => {
-  if (!app) app = await bootstrap();
+  // A failed start is not kept: the next request tries again
+  appPromise ??= bootstrap().catch((err: unknown) => {
+    appPromise = undefined;
+    throw err;
+  });
+  const app = await appPromise;
   app.getHttpAdapter().getInstance()(req, res);
 };
