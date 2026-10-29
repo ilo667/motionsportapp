@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { safeEqual } from '../auth/token';
 
 export function liqpaySign(privateKey: string, data: string): string {
   return crypto
@@ -16,10 +17,7 @@ export function liqpayDecode(data: string): Record<string, unknown> {
 }
 
 export function liqpayVerify(privateKey: string, data: string, signature: string): boolean {
-  const expected = Buffer.from(liqpaySign(privateKey, data));
-  const actual = Buffer.from(signature ?? '');
-  // timingSafeEqual throws on length mismatch, so check the length first
-  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  return safeEqual(liqpaySign(privateKey, data), signature);
 }
 
 const LIQPAY_API_URL = 'https://www.liqpay.ua/api/request';

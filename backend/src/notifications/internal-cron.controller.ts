@@ -1,5 +1,4 @@
 import { Controller, Get, Headers, ForbiddenException } from '@nestjs/common';
-import * as crypto from 'crypto';
 import { and, eq, isNull } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { NotificationService } from './notification.service';
@@ -13,6 +12,7 @@ import { bookingOpensAt } from '../trainer-schedule/rules';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { getDefaultTrainerId } from '../schedule/default-trainer';
 import { trainingDayOn } from '../schedule/training-day.store';
+import { safeEqual } from '../auth/token';
 
 // Vercel Cron invokes paths with GET and sends `Authorization: Bearer $CRON_SECRET`.
 // Manual run: curl -H "Authorization: Bearer $CRON_SECRET" https://<backend>/internal/cron/<job>
@@ -198,10 +198,6 @@ export class InternalCronController {
       if (process.env.NODE_ENV === 'production') throw new ForbiddenException('CRON_SECRET is not configured');
       return;
     }
-    const expected = Buffer.from(`Bearer ${cronSecret}`);
-    const actual = Buffer.from(auth ?? '');
-    if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
-      throw new ForbiddenException();
-    }
+    if (!safeEqual(`Bearer ${cronSecret}`, auth)) throw new ForbiddenException();
   }
 }

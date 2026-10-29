@@ -1,5 +1,6 @@
-import { Controller, Put, Delete, Param, UseGuards, Req, HttpCode, ParseUUIDPipe } from '@nestjs/common';
-import { SessionGuard } from '../auth/session.guard';
+import { Controller, Put, Delete, Param, UseGuards, HttpCode, ParseUUIDPipe } from '@nestjs/common';
+import { SessionGuard, SessionUser } from '../auth/session.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { VacancyAlertsService } from './vacancy-alerts.service';
 
 @Controller('slots')
@@ -9,16 +10,14 @@ export class VacancyAlertsController {
 
   @Put(':slotId/vacancy-alert')
   @HttpCode(200)
-  async subscribe(@Param('slotId', ParseUUIDPipe) slotId: string, @Req() req: Express.Request) {
-    const user = (req as unknown as { user: { id: string } }).user;
+  async subscribe(@Param('slotId', ParseUUIDPipe) slotId: string, @CurrentUser() user: SessionUser) {
     await this.svc.subscribe(user.id, slotId);
     return { ok: true };
   }
 
   @Delete(':slotId/vacancy-alert')
   @HttpCode(200)
-  async unsubscribe(@Param('slotId', ParseUUIDPipe) slotId: string, @Req() req: Express.Request) {
-    const user = (req as unknown as { user: { id: string } }).user;
+  async unsubscribe(@Param('slotId', ParseUUIDPipe) slotId: string, @CurrentUser() user: SessionUser) {
     await this.svc.unsubscribe(user.id, slotId);
     return { ok: true };
   }
