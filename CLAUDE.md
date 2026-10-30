@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Structure
 
+The pre-commit hook lives in `.githooks/pre-commit` (in the repo; once per clone: `git config core.hooksPath .githooks`). It rejects `gap-*` and a long dash in UI text in staged frontend files, and unformatted (prettier) backend / frontend files. Change the checks there, not in `.git/hooks`.
+
 Two independent projects, no shared root `package.json`:
 
 ```
@@ -23,7 +25,7 @@ npm run dev        # localhost:3000
 npm run build
 npm run lint
 npm run test       # Vitest, *.test.ts next to the code; pure functions only (no DOM). Pages can't export helpers, so a tested one lives in its own file (lib/schedulePoll.ts, app/admin/calendar/memberLabel.ts)
-npm run format     # prettier (printWidth 120, double quotes; *.md ignored); the local pre-commit hook rejects unformatted frontend files
+npm run format     # prettier (printWidth 120, double quotes; *.md ignored); the pre-commit hook rejects unformatted frontend files
 ```
 
 ### Backend (`cd backend`)
@@ -36,7 +38,7 @@ npm run db:push    # apply src/database/schema.ts to the DB (drizzle-kit push)
 npm run seed:admin # create a trainer account or reset its password (ADMIN_USERNAME / ADMIN_PASSWORD); new trainers normally come by invite link
 npm run seed:prices # add missing price list rows (src/prices/price-list.ts); never overwrites amounts
 npm run lint       # check only, does not change files
-npm run format     # prettier (printWidth 120); the local pre-commit hook rejects unformatted backend files
+npm run format     # prettier (printWidth 120); the pre-commit hook rejects unformatted backend files
 ```
 
 ## Architecture

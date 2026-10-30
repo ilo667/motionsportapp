@@ -1,0 +1,53 @@
+#!/bin/sh
+
+# Check for gap-* Tailwind classes in staged frontend files
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep '^frontend/.*\.\(tsx\|ts\|css\)$')
+
+if [ -n "$STAGED" ]; then
+  MATCHES=$(echo "$STAGED" | xargs grep -n '\bgap-' 2>/dev/null)
+  if [ -n "$MATCHES" ]; then
+    echo "❌ gap-* знайдено. Використовуй space-y-* або space-x-* замість gap-*:"
+    echo "$MATCHES"
+    exit 1
+  fi
+fi
+
+# No long dash in UI text: added lines of staged frontend files, comments skipped. A dash with a space next to it
+# is text («Час — кроком 15 хвилин»); a lone "—" (the «no mark» attendance symbol) is fine
+DASH_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '^frontend/.*\.\(tsx\|ts\)$')
+
+if [ -n "$DASH_FILES" ]; then
+  DASHES=$(git diff --cached -U0 -- $DASH_FILES \
+    | grep '^+[^+]' \
+    | grep -vE '^\+[[:space:]]*(//|\*|/\*|\{/\*)' \
+    | grep -E '[[:space:]]—|—[[:space:]]')
+  if [ -n "$DASHES" ]; then
+    echo "❌ Довге тире в тексті інтерфейсу. Перепиши без «—» (крапка, кома, двокрапка або інше речення):"
+    echo "$DASHES"
+    exit 1
+  fi
+fi
+
+# Check prettier formatting of staged backend files
+BACKEND=$(git diff --cached --name-only --diff-filter=ACM | grep '^backend/.*\.ts$' | sed 's|^backend/||')
+
+if [ -n "$BACKEND" ]; then
+  if ! (cd backend && echo "$BACKEND" | xargs npx prettier --check >/dev/null 2>&1); then
+    echo "❌ Бекенд не відформатований. Запусти: cd backend && npm run format"
+    (cd backend && echo "$BACKEND" | xargs npx prettier --list-different)
+    exit 1
+  fi
+fi
+
+# Check prettier formatting of staged frontend files
+FRONTEND=$(git diff --cached --name-only --diff-filter=ACM | grep '^frontend/.*\.\(tsx\|ts\|mjs\|css\|json\)$' | sed 's|^frontend/||')
+
+if [ -n "$FRONTEND" ]; then
+  if ! (cd frontend && echo "$FRONTEND" | xargs npx prettier --check --ignore-unknown >/dev/null 2>&1); then
+    echo "❌ Фронтенд не відформатований. Запусти: cd frontend && npm run format"
+    (cd frontend && echo "$FRONTEND" | xargs npx prettier --list-different --ignore-unknown)
+    exit 1
+  fi
+fi
+
+exit 0

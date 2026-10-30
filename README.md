@@ -70,6 +70,7 @@ An opaque session token in an `httpOnly` cookie named `session` (no JWT). The da
 ## Local dev
 
 ```bash
+git config core.hooksPath .githooks            # once: the pre-commit checks (prettier, no gap-*, no long dash in UI text)
 cp backend/.env.example backend/.env           # fill in DATABASE_URL at least
 cp frontend/.env.example frontend/.env.local
 
