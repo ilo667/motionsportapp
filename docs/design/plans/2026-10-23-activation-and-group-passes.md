@@ -1,14 +1,12 @@
 # Активація карт і платні групові — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Клубні карти, пакети тренера й групові абонементи діють з активації (карта — кнопкою тренера, пакет / абонемент — першою відміткою), згорають, якщо не активовані за місяць від покупки; групові стають платними (абонемент або разове, LiqPay або готівка); карту можна купити окремо.
 
 **Architecture:** Групові абонементи — це `packages` з `training_type = 'групові'`, тож пакети тренера й абонементи мають один механізм: `activate_by`, `activated_on`, `valid_until`, списання в `syncSpend`. Правила дат — чисті функції в `purchases/validity.ts`. Запис на групове винесено в `tryBookGroup(tx, …)`, який використовують і `BookingService.book`, і активація покупки після LiqPay (у тій самій транзакції, без винятків: спершу перевірки, потім insert).
 
 **Tech Stack:** NestJS 11, Drizzle ORM (Neon Postgres), Jest (мок-ланцюжки drizzle, як у `entitlements.service.spec.ts`), Next.js 16, Tailwind v4.
 
-**Spec:** `docs/superpowers/specs/2026-10-23-activation-and-group-passes-design.md` (продовжує `2026-10-23-purchases-design.md`).
+**Spec:** `docs/design/specs/2026-10-23-activation-and-group-passes-design.md` (продовжує `2026-10-23-purchases-design.md`).
 
 ## Global Constraints
 

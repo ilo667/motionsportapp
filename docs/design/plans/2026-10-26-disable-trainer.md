@@ -1,14 +1,12 @@
 # Вимкнення тренера — план реалізації
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** На «Тренерах» будь-який тренер вимикає іншого: клієнти й готівкові оплати, що чекають, переходять до обраного тренера, тренування, що не закінчились, скасовуються, вимкнений не може увійти.
 
 **Architecture:** Дві колонки в `admins`. Уся дія — один метод `AdminScheduleService.disableTrainer` в одній транзакції; він живе поруч зі скасуванням слотів, сповіщеннями й `getTrainers`/`assignTrainer`, тож спільне скасування слотів виноситься в приватний метод цього ж сервісу (відхилення від «`TrainersModule`» у дизайні: там немає ні скасування, ні сповіщень, і без цього довелося б дублювати правила). Фронтенд: кнопка й вікно на `/admin/trainers`, фільтр вимкнених у виборі тренера.
 
 **Tech Stack:** NestJS 11, Drizzle ORM (Neon Postgres), Jest; Next.js 16, Tailwind v4.
 
-**Spec:** `docs/superpowers/specs/2026-10-26-disable-trainer-design.md`
+**Spec:** `docs/design/specs/2026-10-26-disable-trainer-design.md`
 
 ## Global Constraints
 

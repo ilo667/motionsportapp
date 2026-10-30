@@ -2,16 +2,11 @@
 
 > **Historical document.** This is the original v1 specification (2026-10-16). The app has since grown well beyond it: several trainers with their own schedules, purchases and payments, freezes, guests, late-cancellation rules. Some v1 decisions changed too: training times are no longer fixed at 19:00 / 20:00 on Mon / Wed / Fri, and the repository is `frontend/` + `backend/`, not `apps/`. For the current behaviour see [README.md](README.md) and [CLAUDE.md](CLAUDE.md).
 
-> Product requirements, architecture, implementation contract and delivery plan for Claude Code.
+> Product requirements, architecture and delivery plan.
 > Language of the product: Ukrainian. Technical naming/code: English.
-> Status: specification only. **Do not implement code until explicitly instructed.**
 > Version: 1.1 — 2026-10-16 (expanded post-MVP AI Engineering roadmap).
 
-## 0. Instructions for Claude Code (read first)
-
-You are implementing **Motion Gym**, a small-gym class-booking Progressive Web App, initially a portfolio showcase and later a real service. **Respect confirmed decisions** in this document. Do not introduce features that were rejected or deferred. Build iteratively, in small reviewable phases, and explain key NestJS/TypeScript architectural choices to the project owner as you go. Ask only when a genuine product decision is blocking; otherwise choose the simplest maintainable technical solution and document it.
-
-**Do not start coding solely because this specification is supplied.** Wait for an explicit instruction such as “implement Phase 1.” At implementation time: propose a concise phase plan, show the files you will create/change, implement one phase, run lint/typecheck/tests, report results, and wait for approval before continuing. Do not claim something was tested if it was not.
+## 0. Principles
 
 Priorities: (1) correct transactional booking and privacy, (2) simple mobile UX, (3) reliability, (4) clear AI integration and observable LLMOps, (5) portfolio quality without overengineering. All booking logic is deterministic; **AI must never decide bookings, capacity, schedules or permissions**.
 
@@ -573,7 +568,7 @@ These are **additional phases after the existing MVP Phase 9**, not replacements
 | **A3 — MCP** | Local authenticated read-only MCP integration + test client | Tool parity, no writes, no sensitive data leaks |
 | **A4 — Advanced LLMOps** | Traces, evaluation regression reports, quota/cost tracking, injection tests, portfolio artifacts | Reproducible results and privacy review |
 
-### Scope discipline for Claude Code
+### Scope discipline
 
 - Implement **MVP Phases 0–9 first**. Do not create agent/RAG/MCP folders, DB tables, embeddings, dependencies or endpoints prematurely unless the owner explicitly approves the corresponding post-MVP phase.
 - Preserve a clean `AiModule` interface in MVP so later phases are additive.
@@ -581,7 +576,3 @@ These are **additional phases after the existing MVP Phase 9**, not replacements
 - Favor simple, verifiable implementations over unnecessary agent frameworks, vector infrastructure or multi-agent orchestration.
 - Do not assume Gemini Free Tier supports every capability indefinitely; validate model/tool/embedding availability at implementation time.
 - Keep demo and production identities, knowledge bases, traces and credentials isolated.
-
----
-
-**Final instruction to Claude Code:** Treat this file as the source of truth for agreed product behavior. Start with a feasibility/design review and wait for explicit permission to implement Phase 1. Preserve simplicity and do not add a calendar, payment system, manual coach booking controls, mandatory AI approval, or 21:00 attendance approval queue.

@@ -1,14 +1,12 @@
 # Регулярний розклад тренера — план реалізації
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Кожен тренер на сторінці «Мій розклад» задає дні, час групових і час відкриття запису; програма створює його групові на 3 тижні вперед, запис відкривається о його часі й закривається на початку кожного тренування.
 
 **Architecture:** Налаштування — дві таблиці (`trainer_schedules`, `trainer_schedule_times`) і чисті правила в `backend/src/trainer-schedule/rules.ts`. Читання налаштувань — проста функція `loadTrainerSchedule(db, trainerId)` (як `getMemberTrainerId`), щоб Booking/Schedule/Admin/Cron брали її без циклу модулів. Перший тренер без збережених налаштувань отримує теперішні (Пн/Ср/Пт 19:00, 20:00, 14:00, автостворення увімкнене) — без скрипта міграції.
 
 **Tech Stack:** NestJS 11, Drizzle + Neon, Luxon (Europe/Kyiv), Jest (ланцюгові моки drizzle, як у сусідніх spec), Next.js 16, Tailwind v4.
 
-**Spec:** `docs/superpowers/specs/2026-10-23-trainer-schedule-design.md`
+**Spec:** `docs/design/specs/2026-10-23-trainer-schedule-design.md`
 
 ## Global Constraints
 

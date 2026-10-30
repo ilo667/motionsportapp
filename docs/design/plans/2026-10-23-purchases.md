@@ -1,14 +1,12 @@
 # Purchases (club cards + trainer packages) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** A member buys a trainer package (персональне / спліт, 1–12 trainings) and, when they have no valid club card, a club card first; pays by LiqPay or cash confirmed by their trainer. Attendance marks spend trainings from the package.
 
 **Architecture:** New `purchases` module owns purchases, their snapshot lines, club cards, packages and per-booking spends. `PaymentService` keeps its LiqPay state machine (compare-and-set, reconcile, expiry) but now pays a *purchase* instead of a booking; the per-slot 700 ₴ checkout and `PRICE_UAH` are removed. Assigning a member to an assigned slot now creates their booking directly; marking attendance (✓/✗, also the 22:00 cron) spends one training from the oldest matching package, «—» gives it back.
 
 **Tech Stack:** NestJS 11, Drizzle ORM (Neon Postgres, `db:push`), Jest; Next.js 16 App Router, Tailwind v4.
 
-**Spec:** `docs/superpowers/specs/2026-10-23-purchases-design.md` (mockup: https://claude.ai/artifact/MSAG1K2rZcqifkJjp3pZWF)
+**Spec:** `docs/design/specs/2026-10-23-purchases-design.md` (mockup: https://claude.ai/artifact/MSAG1K2rZcqifkJjp3pZWF)
 
 ## Global Constraints
 
