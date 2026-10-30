@@ -111,7 +111,28 @@ export class PurchasesService {
 
   // Prices are read from the price list now: the client never sends an amount
   async create(memberId: string, dto: CreatePurchaseDto) {
-    const ids = [...new Set(dto.priceItemIds)];
+    const items = await this.priceItemsOf(dto.priceItemIds);
+    await this.checkCanBuy(memberId, dto, items);
+
+    // The club card goes first, as on the page
+    const lines = [...sectionOf(items, 'club_card'), ...sectionOf(items, 'assigned'), ...sectionOf(items, 'group')];
+    const totalUah = lines.reduce((sum, l) => sum + l.amountUah, 0);
+    const { purchaseId, trainerId, displayName } = await this.insertPurchase(memberId, dto, lines, totalUah);
+
+    if (dto.method === 'LIQPAY') {
+      return { purchaseId, checkout: await this.payments.checkoutPurchase(purchaseId, memberId) };
+    }
+    await this.notifications.enqueueAndProcess('CASH_REQUESTED', `cash-requested:${purchaseId}`, {
+      trainerId: trainerId!,
+      displayName,
+      totalUah,
+    });
+    return { purchaseId };
+  }
+
+  // The price list rows asked for, with today's amounts (the client never sends a price)
+  private async priceItemsOf(priceItemIds: string[]) {
+    const ids = [...new Set(priceItemIds)];
     const items = await this.database.db
       .select({
         id: priceItems.id,
@@ -124,11 +145,15 @@ export class PurchasesService {
       .from(priceItems)
       .where(inArray(priceItems.id, ids));
     if (items.length !== ids.length) throw new NotFoundException('Price not found');
+    return items;
+  }
 
+  // What may be bought together and by whom; throws the reason otherwise. Nothing is written yet
+  private async checkCanBuy(memberId: string, dto: CreatePurchaseDto, items: PriceLine[]) {
     // One purchase is: a group pass alone; or a club card, a trainer service, or both
-    const groups = items.filter((i) => i.section === 'group');
-    const services = items.filter((i) => i.section === 'assigned');
-    const cards = items.filter((i) => i.section === 'club_card');
+    const groups = sectionOf(items, 'group');
+    const services = sectionOf(items, 'assigned');
+    const cards = sectionOf(items, 'club_card');
     const groupAlone = groups.length === 1 && items.length === 1;
     const cardAndService = groups.length === 0 && cards.length <= 1 && services.length <= 1;
     if (!groupAlone && !cardAndService) throw new BadRequestException('Not a valid set of items');
@@ -158,12 +183,11 @@ export class PurchasesService {
       );
       if (unused) throw new ConflictException('Member still has trainings of this type');
     }
+  }
 
-    // The club card goes first, as on the page
-    const lines = [...cards, ...services, ...groups];
-    const totalUah = lines.reduce((sum, l) => sum + l.amountUah, 0);
-
-    const { purchaseId, trainerId, displayName } = await this.database.db.transaction(async (tx) => {
+  // The purchase and its lines, under the member lock; cash for a group training also books it
+  private async insertPurchase(memberId: string, dto: CreatePurchaseDto, lines: PriceLine[], totalUah: number) {
+    return this.database.db.transaction(async (tx) => {
       // Locked, so two requests at once can't both start a purchase
       const member = await lockMember(tx, memberId);
       if (!member) throw new NotFoundException('Member not found');
@@ -209,20 +233,8 @@ export class PurchasesService {
       }
       return { purchaseId: created.id, trainerId: member.trainerId, displayName: member.displayName };
     });
-
-    if (dto.method === 'LIQPAY') {
-      return { purchaseId, checkout: await this.payments.checkoutPurchase(purchaseId, memberId) };
-    }
-    await this.notifications.enqueueAndProcess('CASH_REQUESTED', `cash-requested:${purchaseId}`, {
-      trainerId: trainerId!,
-      displayName,
-      totalUah,
-    });
-    return { purchaseId };
   }
 
-  // The member changed their mind before paying. Open LiqPay attempts stop counting: money that still
-  // arrives for one of them is handled by hand (PaymentService)
   async cancel(memberId: string, purchaseId: string) {
     const now = this.clock.now().toJSDate();
     await this.database.db.transaction(async (tx) => {
@@ -253,3 +265,14 @@ export class PurchasesService {
 
   // ── Trainer side ──────────────────────────────────────────────────────────
 }
+
+type PriceLine = {
+  id: string;
+  section: string;
+  title: string;
+  optionLabel: string | null;
+  amountUah: number;
+  trainingType: string | null;
+};
+
+const sectionOf = (items: PriceLine[], section: string) => items.filter((i) => i.section === section);

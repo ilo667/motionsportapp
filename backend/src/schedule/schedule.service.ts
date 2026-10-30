@@ -65,30 +65,10 @@ export class ScheduleService {
 
     const assignedSlots = memberId ? await this.getAssignedSlots(memberId, now) : [];
 
-    // "Наступне тренування" is the next group day; days with only assigned trainings are skipped
     // Group trainings of the member's trainer only (the first trainer for members without one and for visitors)
     const trainerId = await getMemberTrainerId(this.database.db, memberId);
-
-    const upcoming = await this.withGroupSlots(
-      trainerId,
-      await this.database.db
-        .select()
-        .from(trainingDays)
-        .where(and(gte(trainingDays.localDate, today), eq(trainingDays.status, 'SCHEDULED')))
-        .orderBy(trainingDays.localDate)
-        .limit(10),
-    );
-
-    // The next day with a group training of this trainer that has not started yet
-    const targetDay = upcoming.find((day) => now < slotStartsAt(day.localDate, day.lastTime));
-
-    // Frozen today or on that day: «Записатись» gives way to «Абонемент заморожено до …» (last frozen day)
-    const freeze = memberId
-      ? (await loadFreezes(this.database.db, [memberId])).find(
-          (f) => frozenOn(f, today) || (!!targetDay && frozenOn(f, targetDay.localDate)),
-        )
-      : undefined;
-    const frozenUntil = freeze ? plusDays(freeze.endsOn!, -1) : null;
+    const targetDay = await this.nextGroupDay(trainerId, now);
+    const frozenUntil = memberId ? await this.frozenUntil(memberId, today, targetDay) : null;
 
     // No group day ahead (e.g. the trainer cancelled them): the member still gets their assigned trainings
     if (!targetDay) {
@@ -114,14 +94,64 @@ export class ScheduleService {
     const closeAt = slotStartsAt(targetDay.localDate, targetDay.lastTime);
     const bookingWindowOpen = now >= openAt && now < closeAt;
 
+    const slots = await this.groupSlotViews(trainerId!, targetDay, memberId, now);
+    const published = await this.publishedAnnouncement(targetDay.id);
+    const announcement = bookingWindowOpen ? published : null;
+
+    return {
+      localDate: targetDay.localDate,
+      status: targetDay.status,
+      bookingWindowOpen,
+      bookingOpenAt: openAt.toUTC().toISO(),
+      bookingCloseAt: closeAt.toUTC().toISO(),
+      slots,
+      assignedSlots,
+      // Group trainings are paid: 0 → «Записатися» offers to buy a pass
+      groupPassLeft: memberId ? await this.entitlements.groupPassLeft(memberId, targetDay.localDate) : 0,
+      frozenUntil,
+      serverTime: now.toUTC().toISO(),
+      announcement,
+    };
+  }
+
+  // "Наступне тренування": the next day with a group training of this trainer that has not started yet (days with
+  // only assigned trainings are skipped)
+  private async nextGroupDay(trainerId: string | null, now: DateTime) {
+    const upcoming = await this.withGroupSlots(
+      trainerId,
+      await this.database.db
+        .select()
+        .from(trainingDays)
+        .where(and(gte(trainingDays.localDate, now.toISODate()!), eq(trainingDays.status, 'SCHEDULED')))
+        .orderBy(trainingDays.localDate)
+        .limit(10),
+    );
+    return upcoming.find((day) => now < slotStartsAt(day.localDate, day.lastTime));
+  }
+
+  // Frozen today or on the shown day: «Записатись» gives way to «Абонемент заморожено до …» (the last frozen day)
+  private async frozenUntil(memberId: string, today: string, targetDay: { localDate: string } | undefined) {
+    const freeze = (await loadFreezes(this.database.db, [memberId])).find(
+      (f) => frozenOn(f, today) || (!!targetDay && frozenOn(f, targetDay.localDate)),
+    );
+    return freeze ? plusDays(freeze.endsOn!, -1) : null;
+  }
+
+  // The day's group trainings of this trainer, as the member sees them (their booking, guest, alerts, late cancels)
+  private async groupSlotViews(
+    trainerId: string,
+    day: { id: string; localDate: string },
+    memberId: string | undefined,
+    now: DateTime,
+  ) {
     const slots = await this.database.db
       .select()
       .from(trainingSlots)
       .where(
         and(
-          eq(trainingSlots.trainingDayId, targetDay.id),
+          eq(trainingSlots.trainingDayId, day.id),
           eq(trainingSlots.trainingType, GROUP_TYPE),
-          eq(trainingSlots.trainerId, trainerId!),
+          eq(trainingSlots.trainerId, trainerId),
         ),
       )
       .orderBy(trainingSlots.slotTime);
@@ -133,46 +163,35 @@ export class ScheduleService {
         )
       : null;
 
+    return slots.map((s) => ({
+      id: s.id,
+      slotTime: s.slotTime,
+      status: s.status,
+      trainingType: s.trainingType,
+      capacity: s.capacity,
+      bookedCount: s.bookedCount,
+      isMyBooking: s.id === mine?.bookedSlotId,
+      isMyVacancyAlert: !!mine?.alertSlotIds.has(s.id),
+      // The guest the member brings to this training (only on their own booking)
+      myGuest: s.id === mine?.bookedSlotId ? mine.guest : null,
+      // The member cancelled it late (and paid): no booking it again
+      lateCancelled: !!mine?.lateCancelled.has(s.id),
+      // Booking, cancelling and switching for this training are over
+      started: now >= slotStartsAt(day.localDate, s.slotTime),
+    }));
+  }
+
+  // The day's announcement once the trainer published it (shown while booking is open)
+  private async publishedAnnouncement(dayId: string) {
     const [ann] = await this.database.db
       .select({
         text: announcements.text,
         publishedAt: announcements.publishedAt,
       })
       .from(announcements)
-      .where(eq(announcements.trainingDayId, targetDay.id))
+      .where(eq(announcements.trainingDayId, dayId))
       .limit(1);
-
-    const announcement = bookingWindowOpen && ann?.publishedAt && ann.text ? ann.text : null;
-
-    return {
-      localDate: targetDay.localDate,
-      status: targetDay.status,
-      bookingWindowOpen,
-      bookingOpenAt: openAt.toUTC().toISO(),
-      bookingCloseAt: closeAt.toUTC().toISO(),
-      slots: slots.map((s) => ({
-        id: s.id,
-        slotTime: s.slotTime,
-        status: s.status,
-        trainingType: s.trainingType,
-        capacity: s.capacity,
-        bookedCount: s.bookedCount,
-        isMyBooking: s.id === mine?.bookedSlotId,
-        isMyVacancyAlert: !!mine?.alertSlotIds.has(s.id),
-        // The guest the member brings to this training (only on their own booking)
-        myGuest: s.id === mine?.bookedSlotId ? mine.guest : null,
-        // The member cancelled it late (and paid): no booking it again
-        lateCancelled: !!mine?.lateCancelled.has(s.id),
-        // Booking, cancelling and switching for this training are over
-        started: now >= slotStartsAt(targetDay.localDate, s.slotTime),
-      })),
-      assignedSlots,
-      // Group trainings are paid: 0 → «Записатися» offers to buy a pass
-      groupPassLeft: memberId ? await this.entitlements.groupPassLeft(memberId, targetDay.localDate) : 0,
-      frozenUntil,
-      serverTime: now.toUTC().toISO(),
-      announcement,
-    };
+    return ann?.publishedAt && ann.text ? ann.text : null;
   }
 
   // The member on the day's group trainings: the one they are booked on (one a day) and their guest there, the ones
@@ -348,6 +367,22 @@ export class ScheduleService {
     const aheadOn = (date: string) =>
       timesOn(DateTime.fromISO(date, { zone: KY_ZONE }).weekday).filter((t) => slotStartsAt(date, t) > now);
 
+    const dayIdOf = await this.scheduledDays(dates);
+    const own = await this.ownGroupSlots(trainerId, [...dayIdOf.values()]);
+    const { toInsert, skipped } = planGroupSlots(dates, aheadOn, dayIdOf, own);
+
+    const created = await this.insertGroupSlots(trainerId, toInsert);
+    // Not created = the conflict: another active training of theirs there (an assigned one) has the time
+    for (const row of toInsert) {
+      if (created.some((c) => c.trainingDayId === row.trainingDayId && c.slotTime === row.slotTime)) continue;
+      skipped.push({ date: row.date, slotTime: row.slotTime, reason: 'taken' });
+    }
+    skipped.sort((a, b) => a.date.localeCompare(b.date) || a.slotTime.localeCompare(b.slotTime));
+    return { added: created.length, skipped };
+  }
+
+  // The SCHEDULED days on these dates (created when missing; a CANCELLED day stays cancelled): date → day id
+  private async scheduledDays(dates: string[]) {
     await this.database.db
       .insert(trainingDays)
       .values(dates.map((localDate) => ({ localDate, status: 'SCHEDULED' })))
@@ -357,90 +392,95 @@ export class ScheduleService {
       .select({ id: trainingDays.id, localDate: trainingDays.localDate })
       .from(trainingDays)
       .where(and(inArray(trainingDays.localDate, dates), eq(trainingDays.status, 'SCHEDULED')));
-    const dayIdOf = new Map(days.map((d) => [d.localDate, d.id]));
-
-    const own =
-      days.length === 0
-        ? []
-        : await this.database.db
-            .select({
-              trainingDayId: trainingSlots.trainingDayId,
-              status: trainingSlots.status,
-              slotTime: trainingSlots.slotTime,
-            })
-            .from(trainingSlots)
-            .where(
-              and(
-                inArray(
-                  trainingSlots.trainingDayId,
-                  days.map((d) => d.id),
-                ),
-                eq(trainingSlots.trainerId, trainerId),
-                eq(trainingSlots.trainingType, GROUP_TYPE),
-              ),
-            );
-    const cancelledByTrainer = (dayId: string) => {
-      const slots = own.filter((s) => s.trainingDayId === dayId);
-      return slots.some((s) => s.status === 'CANCELLED') && !slots.some((s) => s.status === 'ACTIVE');
-    };
-
-    const overlapsActive = (dayId: string, slotTime: string) =>
-      !!groupTimeError(
-        slotTime,
-        own
-          .filter((o) => o.trainingDayId === dayId && o.status === 'ACTIVE' && o.slotTime !== slotTime)
-          .map((o) => o.slotTime),
-      );
-
-    const ownAt = (dayId: string, slotTime: string) =>
-      own.filter((o) => o.trainingDayId === dayId && o.slotTime === slotTime);
-    // Every schedule time still ahead: already there (an active group at that very time: nothing to add or report),
-    // left out with a reason, or to be inserted
-    const toInsert: { trainingDayId: string; slotTime: string; date: string }[] = [];
-    const skipped: SkippedTraining[] = [];
-    for (const date of dates) {
-      const dayId = dayIdOf.get(date);
-      for (const slotTime of aheadOn(date)) {
-        if (!dayId || cancelledByTrainer(dayId)) {
-          skipped.push({ date, slotTime, reason: 'cancelled' });
-          continue;
-        }
-        if (ownAt(dayId, slotTime).some((o) => o.status === 'ACTIVE')) continue;
-        // The trainer cancelled the group training at that time: it is not brought back
-        if (ownAt(dayId, slotTime).length > 0) {
-          skipped.push({ date, slotTime, reason: 'cancelled' });
-          continue;
-        }
-        // A changed time must not overlap a group training already created that day (an hour apart)
-        if (overlapsActive(dayId, slotTime)) skipped.push({ date, slotTime, reason: 'taken' });
-        else toInsert.push({ trainingDayId: dayId, slotTime, date });
-      }
-    }
-
-    const created =
-      toInsert.length > 0
-        ? await this.database.db
-            .insert(trainingSlots)
-            .values(
-              toInsert.map(({ trainingDayId, slotTime }) => ({
-                trainingDayId,
-                slotTime,
-                status: 'ACTIVE' as const,
-                trainingType: GROUP_TYPE,
-                capacity: GROUP_CAPACITY,
-                bookedCount: 0,
-                trainerId,
-              })),
-            )
-            .onConflictDoNothing()
-            .returning({ trainingDayId: trainingSlots.trainingDayId, slotTime: trainingSlots.slotTime })
-        : [];
-    // Not created = the conflict: another active training of theirs there (an assigned one) has the time
-    for (const row of toInsert) {
-      if (created.some((c) => c.trainingDayId === row.trainingDayId && c.slotTime === row.slotTime)) continue;
-      skipped.push({ date: row.date, slotTime: row.slotTime, reason: 'taken' });
-    }
-    skipped.sort((a, b) => a.date.localeCompare(b.date) || a.slotTime.localeCompare(b.slotTime));
-    return { added: created.length, skipped };
+    return new Map(days.map((d) => [d.localDate, d.id]));
   }
+
+  // This trainer's group trainings on those days, cancelled ones too
+  private async ownGroupSlots(trainerId: string, dayIds: string[]): Promise<OwnGroupSlot[]> {
+    if (dayIds.length === 0) return [];
+    return this.database.db
+      .select({
+        trainingDayId: trainingSlots.trainingDayId,
+        status: trainingSlots.status,
+        slotTime: trainingSlots.slotTime,
+      })
+      .from(trainingSlots)
+      .where(
+        and(
+          inArray(trainingSlots.trainingDayId, dayIds),
+          eq(trainingSlots.trainerId, trainerId),
+          eq(trainingSlots.trainingType, GROUP_TYPE),
+        ),
+      );
+  }
+
+  // Inserts the planned group trainings; returns the ones created (a time taken meanwhile is left out)
+  private async insertGroupSlots(trainerId: string, toInsert: PlannedGroupSlot[]) {
+    if (toInsert.length === 0) return [];
+    return this.database.db
+      .insert(trainingSlots)
+      .values(
+        toInsert.map(({ trainingDayId, slotTime }) => ({
+          trainingDayId,
+          slotTime,
+          status: 'ACTIVE' as const,
+          trainingType: GROUP_TYPE,
+          capacity: GROUP_CAPACITY,
+          bookedCount: 0,
+          trainerId,
+        })),
+      )
+      .onConflictDoNothing()
+      .returning({ trainingDayId: trainingSlots.trainingDayId, slotTime: trainingSlots.slotTime });
+  }
+}
+
+type OwnGroupSlot = { trainingDayId: string; status: string; slotTime: string };
+type PlannedGroupSlot = { trainingDayId: string; slotTime: string; date: string };
+
+// Every schedule time still ahead on these dates: already there (an active group at that very time: nothing to add
+// or report), left out with a reason, or to be inserted. No database here: `own` = the trainer's group trainings
+// on those days, cancelled ones too
+export function planGroupSlots(
+  dates: string[],
+  aheadOn: (date: string) => string[],
+  dayIdOf: Map<string, string>,
+  own: OwnGroupSlot[],
+): { toInsert: PlannedGroupSlot[]; skipped: SkippedTraining[] } {
+  // The trainer cancelled their trainings that day (a cancelled group, none active): the day is not brought back
+  const cancelledByTrainer = (dayId: string) => {
+    const slots = own.filter((s) => s.trainingDayId === dayId);
+    return slots.some((s) => s.status === 'CANCELLED') && !slots.some((s) => s.status === 'ACTIVE');
+  };
+  const overlapsActive = (dayId: string, slotTime: string) =>
+    !!groupTimeError(
+      slotTime,
+      own
+        .filter((o) => o.trainingDayId === dayId && o.status === 'ACTIVE' && o.slotTime !== slotTime)
+        .map((o) => o.slotTime),
+    );
+  const ownAt = (dayId: string, slotTime: string) =>
+    own.filter((o) => o.trainingDayId === dayId && o.slotTime === slotTime);
+
+  const toInsert: PlannedGroupSlot[] = [];
+  const skipped: SkippedTraining[] = [];
+  for (const date of dates) {
+    const dayId = dayIdOf.get(date);
+    for (const slotTime of aheadOn(date)) {
+      if (!dayId || cancelledByTrainer(dayId)) {
+        skipped.push({ date, slotTime, reason: 'cancelled' });
+        continue;
+      }
+      if (ownAt(dayId, slotTime).some((o) => o.status === 'ACTIVE')) continue;
+      // The trainer cancelled the group training at that time: it is not brought back
+      if (ownAt(dayId, slotTime).length > 0) {
+        skipped.push({ date, slotTime, reason: 'cancelled' });
+        continue;
+      }
+      // A changed time must not overlap a group training already created that day (an hour apart)
+      if (overlapsActive(dayId, slotTime)) skipped.push({ date, slotTime, reason: 'taken' });
+      else toInsert.push({ trainingDayId: dayId, slotTime, date });
+    }
+  }
+  return { toInsert, skipped };
 }
