@@ -7,8 +7,7 @@ import { pushSubscriptions, adminPushSubscriptions, members } from '../database/
 export class PushSubscriptionsService {
   constructor(private readonly database: DatabaseService) {}
 
-  // One browser = one role: whoever subscribes last gets its pushes, so the same browser's trainer
-  // subscription is switched off (a phone signed in as a member must not get trainer pushes)
+  // One browser = one role: the same endpoint's trainer subscription is switched off
   async upsert(memberId: string, endpoint: string, p256dh: string, auth: string) {
     await this.database.db.transaction(async (tx) => {
       await tx
@@ -36,7 +35,6 @@ export class PushSubscriptionsService {
     return this.database.db.select().from(pushSubscriptions).where(isNull(pushSubscriptions.disabledAt));
   }
 
-  // Members whose trainer is one of these (and members without a trainer, when asked)
   async findForTrainers(trainerIds: string[], includeUnassigned: boolean) {
     const ofTrainers = trainerIds.length > 0 ? inArray(members.trainerId, trainerIds) : undefined;
     const unassigned = includeUnassigned ? isNull(members.trainerId) : undefined;
@@ -64,8 +62,7 @@ export class PushSubscriptionsService {
       .where(eq(pushSubscriptions.endpoint, endpoint));
   }
 
-  // Trainer's devices live in their own table, so member-wide sends (BOOKING_OPEN) never reach them
-  // Same rule the other way: the browser's member subscription is switched off
+  // Separate table, so member-wide sends never reach trainers. Switches off the endpoint's member subscription
   async upsertAdmin(adminId: string, endpoint: string, p256dh: string, auth: string) {
     await this.database.db.transaction(async (tx) => {
       await tx

@@ -5,7 +5,6 @@ import { MemberGuard } from '../common/guards/member.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 
-// A member's own purchases: club cards and trainer packages
 @Controller('purchases')
 @UseGuards(SessionGuard, MemberGuard)
 export class PurchasesController {

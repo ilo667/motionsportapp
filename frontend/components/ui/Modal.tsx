@@ -2,32 +2,30 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 const PANEL = {
-  // Comes up from the bottom on a phone, centered from `sm`
+  // From the bottom on a phone, centered from `sm`
   sheet:
     "relative w-full max-w-[480px] mx-auto bg-surface rounded-t-[20px] sm:rounded-2xl px-5 pt-6 pb-8 shadow-xl border border-line",
-  // A card with a margin around it, scrolls when taller than the screen (calendar, trainers)
+  // Scrolls when taller than the screen
   card: "relative w-full max-w-sm bg-surface border border-line rounded-2xl p-5 space-y-4 max-h-full overflow-y-auto",
 };
 
 interface ModalProps {
   variant?: keyof typeof PANEL;
   onDismiss: () => void;
-  // false while saving: a click outside or Escape doesn't close it then
+  // false while saving: ignore click outside and Escape
   canDismiss?: boolean;
-  labelledBy?: string; // id of the heading inside
+  labelledBy?: string;
   children: ReactNode;
 }
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-// The page's navy over everything, the dialog on top. Closes on a click outside it or Escape.
-// Focus: on open it goes to the dialog itself (not the first field, which would pop the phone keyboard up) unless
-// something inside already took it (an autoFocus field, a focused button); Tab stays inside; on close it goes back
-// to what had it before (the button that opened the dialog)
+// Focus goes to the dialog itself, not the first field (that would pop up the phone keyboard), unless something
+// inside took it already. Tab is trapped; on close focus returns to the opener.
 export function Modal({ variant = "sheet", onDismiss, canDismiss = true, labelledBy, children }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  // Taken on the first render, before a field inside can take the focus
+  // Read on the first render, before an autoFocus field inside takes the focus
   const [opener] = useState(() =>
     typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );

@@ -8,7 +8,7 @@ import { formatUah, groupByTitle, lineName } from "@/lib/prices";
 
 type Step = "service" | "club" | "group" | "checkout" | "sent";
 
-// What is being bought: a trainer service (with a club card if none), a club card alone, or a group pass
+// service: a trainer service, plus a club card if the member has none
 export type PurchaseMode = "service" | "card" | "group";
 
 const SERVICE_GROUPS: { type: AssignedType; title: string }[] = [
@@ -34,8 +34,7 @@ function Option({ item, selected, onSelect }: { item: CatalogItem; selected: boo
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase mt-5 mb-2";
 
-// Service → club card (only without a valid one) → summary with LiqPay or cash → «Запит надіслано».
-// mode "card" starts at the club card, mode "group" at the group passes
+// Service → club card (only without one) → checkout → sent. "card" / "group" modes start further in
 export function PurchaseFlow({
   data,
   mode = "service",

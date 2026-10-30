@@ -9,7 +9,7 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { UpdateMemberNoteDto } from './dto/update-member-note.dto';
 import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
 
-// No member is frozen unless a test says so
+// Nobody frozen by default
 jest.mock('../freezes/freeze.store', () => ({
   loadFreezes: jest.fn(),
   memberFrozenOn: jest.fn(),
@@ -147,7 +147,7 @@ describe('Admin members — client page', () => {
       { bookingId: 'b2', localDate: '2026-10-22', slotTime: '19:00', trainingType: 'group', status: null },
       { bookingId: 'b1', localDate: '2026-10-20', slotTime: '18:00', trainingType: 'personal', status: 'ABSENT' },
     ];
-    // the visibility check, then the visits
+    // Both the visibility check and the visits query read these rows
     const { db } = makeDb(rows);
     const visits = await makeService(db).getMemberVisits('trainer-1', 'm1');
     expect(visits).toEqual([

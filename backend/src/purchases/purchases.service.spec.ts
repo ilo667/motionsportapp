@@ -25,7 +25,7 @@ beforeEach(() => {
   (openFreeze as jest.Mock).mockResolvedValue(null);
 });
 
-// Booking is tested in group-booking.spec; the member lock (lockMember) stays real and reads the next result
+// Booking is tested in group-booking.spec; lockMember stays real and reads the next result
 jest.mock('../booking/group-booking', () => ({
   ...jest.requireActual('../booking/group-booking'),
   tryBookGroup: jest.fn(),
@@ -189,8 +189,7 @@ describe('Purchases — create', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  // The slot is checked before anything is written: a slot id that is not in the DB used to fail the purchase
-  // insert on the foreign key (500)
+  // Checked before any write: an unknown slot id would fail the insert on the foreign key (500)
   it('a slot that does not exist → 404, nothing bought', async () => {
     const { db, inserts } = makeDb([[GROUP], []]);
     await expect(
@@ -374,13 +373,11 @@ describe('Purchases — cancel', () => {
   it('cancels own pending purchase and its open LiqPay attempts', async () => {
     const { db, sets } = makeDb([[], [{ id: 'purchase-1' }]]);
     await makeService(db).svc.cancel('m1', 'purchase-1');
-    // Both stamped with the service clock (ClockService), not the machine's time
     expect(sets).toContainEqual(expect.objectContaining({ status: 'CANCELLED', decidedAt: NOW.toJSDate() }));
     expect(sets).toContainEqual(expect.objectContaining({ status: 'REPLACED', updatedAt: NOW.toJSDate() }));
   });
 
-  // Same lock order as the LiqPay paths (payment row, then purchase row), so a cancel and a callback at once
-  // wait for each other instead of deadlocking
+  // Same lock order as the LiqPay paths (payment, then purchase): no deadlock with a callback
   it('touches the payments before the purchase', async () => {
     const { db, updated } = makeDb([[], [{ id: 'purchase-1' }]]);
     await makeService(db).svc.cancel('m1', 'purchase-1');

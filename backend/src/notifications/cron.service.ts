@@ -12,7 +12,7 @@ import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store'
 import { getDefaultTrainerId } from '../schedule/default-trainer';
 import { trainingDayOn } from '../schedule/training-day.store';
 
-// The scheduled jobs behind /internal/cron/* (InternalCronController checks the secret and calls these)
+// Jobs behind /internal/cron/*; InternalCronController checks the secret
 @Injectable()
 export class CronService {
   constructor(
@@ -23,20 +23,17 @@ export class CronService {
     private readonly entitlements: EntitlementsService,
   ) {}
 
-  // «Записуйтесь»: a push to each trainer's clients once that trainer's booking opens
   async bookingOpen() {
     const now = this.clock.now();
     const today = now.toISODate()!;
 
-    // Find today's scheduled training day
     const day = await trainingDayOn(this.database.db, today);
 
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
     }
-    // Each trainer's clients get the push once that trainer's booking opens («Мій розклад»), and only until
-    // their first group training of the day starts. Runs every few minutes (cron-job.org); the dedupe key per
-    // trainer and day keeps it to one push
+    // Per trainer: from their booking opening until their first group training starts. Runs every 15 min
+    // (cron-job.org); the per-trainer-and-day dedupe key keeps it to one push
     const trainers = await this.groupTrainersToday(day.id);
     if (trainers.length === 0) {
       return { ok: true, skipped: 'no group trainings today' };
@@ -46,7 +43,7 @@ export class CronService {
     const sent: string[] = [];
     for (const trainerId of [...new Set(trainers.map((t) => t.trainerId))]) {
       const { bookingOpensAt: opensAt } = await loadTrainerSchedule(this.database.db, trainerId);
-      // The first group training that can be booked: one before the opening time (added in the calendar) can't
+      // A training before the opening time can't be booked, so it doesn't count
       const firstTime = trainers
         .filter((t) => t.trainerId === trainerId && t.slotTime > opensAt)
         .map((t) => t.slotTime)
@@ -55,7 +52,7 @@ export class CronService {
       await this.notifications.enqueueAndProcess('BOOKING_OPEN', `booking-open:${today}:${trainerId}`, {
         localDate: today,
         trainerIds: [trainerId],
-        // members without a trainer see the first trainer's group trainings
+        // Members without a trainer see the first trainer's group trainings
         includeUnassigned: trainerId === firstTrainerId,
       });
       sent.push(trainerId);
@@ -64,7 +61,6 @@ export class CronService {
     return { ok: true, localDate: today, trainerIds: sent };
   }
 
-  // The day's AI announcement, on days with group trainings
   async generateAnnouncement() {
     const nowAnn = this.clock.now();
     const todayAnn = nowAnn.toISODate()!;
@@ -74,7 +70,6 @@ export class CronService {
     if (!day || day.status !== 'SCHEDULED') {
       return { ok: true, skipped: 'no scheduled day today' };
     }
-    // The announcement is shown with group slots only
     if ((await this.groupTrainersToday(day.id)).length === 0) {
       return { ok: true, skipped: 'no group trainings today' };
     }
@@ -83,7 +78,7 @@ export class CronService {
     return { ok: true, localDate: todayAnn };
   }
 
-  // 22:00 (Kyiv, ± the DST hour): unmarked bookings and guests of trainings that are over get ✓
+  // 22:00 Kyiv (23:00 in summer): marks unmarked bookings and guests of finished trainings PRESENT
   async autoConfirmAttendance() {
     const now = this.clock.now();
     const today = now.toISODate()!;
@@ -111,8 +106,7 @@ export class CronService {
       .leftJoin(attendance, eq(attendance.bookingId, bookings.id))
       .where(and(eq(trainingSlots.trainingDayId, day.id), eq(bookings.status, 'ACTIVE'), isNull(attendance.bookingId)));
 
-    // Only trainings that are over (an hour after the start): Vercel runs crons in UTC, so this job comes at a
-    // different Kyiv hour in winter and summer, and must not mark a training that is still going on
+    // Only finished trainings: the UTC cron shifts by an hour with DST and must not mark one still going on
     const unmarkedBookings = unmarked.filter((b) => now >= slotOverAt(today, b.slotTime));
     const guestsMarked = await this.markGuests(day.id, today, now);
 
@@ -123,7 +117,7 @@ export class CronService {
     const markedAt = now.toJSDate();
     await this.database.db.transaction(async (tx) => {
       for (const booking of inLockOrder(unmarkedBookings)) {
-        // Marked in the name of the training's trainer; spends from the package like a ✓ by hand
+        // In the trainer's name; spends like a manual mark
         await tx
           .insert(attendance)
           .values({ bookingId: booking.id, status: 'PRESENT', markedAt, markedByAdminId: booking.trainerId })
@@ -135,7 +129,6 @@ export class CronService {
     return { ok: true, marked: unmarkedBookings.length, guestsMarked, slots: slots.length };
   }
 
-  // Guests on trainings that are over and still unmarked: ✓ like their hosts, in the trainer's name (nothing to spend)
   private async markGuests(dayId: string, today: string, now: ReturnType<ClockService['now']>) {
     const guests = await this.database.db
       .select({ id: bookingGuests.id, trainerId: trainingSlots.trainerId, slotTime: trainingSlots.slotTime })
@@ -161,7 +154,6 @@ export class CronService {
     return over.length;
   }
 
-  // Today's active group trainings: trainer and time
   private async groupTrainersToday(dayId: string) {
     return this.database.db
       .select({ trainerId: trainingSlots.trainerId, slotTime: trainingSlots.slotTime })

@@ -11,11 +11,9 @@ export type PurchaseView = {
   status: string;
   totalUah: number;
   createdAt: string;
-  // section: the price list section (club_card | assigned | group), so a club card line can say so
   lines: { section: string; title: string; optionLabel: string | null; amountUah: number }[];
 };
 
-// Purchases with their lines, in the order of `ids`
 export async function purchaseViews(db: Q, ids: string[]): Promise<PurchaseView[]> {
   if (ids.length === 0) return [];
   const rows = await db

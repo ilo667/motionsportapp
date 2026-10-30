@@ -3,8 +3,7 @@ import { useState } from "react";
 import { api, FreezeRequest } from "@/lib/api";
 import { ddmm } from "@/lib/dates";
 
-// Top of «Клієнти»: clients asking to freeze (from today, 30 days) or to unfreeze (from today). Freezing cancels
-// their trainings in those days, so «Підтвердити» asks once more
+// Approving a freeze cancels the member's bookings in those days, so it asks once more
 export function FreezeRequests({ requests, onDecided }: { requests: FreezeRequest[]; onDecided: () => void }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -39,7 +38,6 @@ export function FreezeRequests({ requests, onDecided }: { requests: FreezeReques
                 : `Просить розморозити (заморожено до ${ddmm(r.until)})`}
             </div>
             {confirmId === r.id ? (
-              // Same confirmation as «Скасувати мої тренування цього дня»: the action and «Ні» side by side
               <div className="rounded-lg border border-line bg-background p-4 space-y-3 mt-4">
                 <p className="text-body text-sm">
                   Заморозка до {ddmm(r.until)}. Записи на ці дні скасуються, а клубна карта й тренування не згорять:

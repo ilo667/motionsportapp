@@ -22,7 +22,7 @@ import { TYPES, weekdayOf } from "./slotForm";
 import { toAdminLogin } from "@/lib/adminAuth";
 import { kyivToday } from "@/lib/dates";
 
-// Short labels for calendar events — full names don't fit a day column
+// Full names don't fit a day column
 const TYPE_SHORT: Record<TrainingType, string> = {
   group: "Груп.",
   personal: "Перс.",
@@ -33,7 +33,7 @@ function hourOf(slotTime: string) {
   return parseInt(slotTime.slice(0, 2), 10);
 }
 
-// Clicking today or a future day opens "Додати тренування"; past days do nothing, so no pointer there
+// Past days aren't clickable, so no pointer there
 function clickableDayClass(info: { isPast: boolean }) {
   return info.isPast ? "" : "mg-clickable";
 }
@@ -42,22 +42,19 @@ function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
-// The modal open now: «Додати тренування» on a day (time prefilled from the week view), or a clicked training
 type OpenModal = { mode: "add"; date: string; time: string } | { mode: "edit"; slot: CalendarSlot };
 
 export default function CalendarPage() {
   const router = useRouter();
-  // FullCalendar renders in the browser only
   const mounted = useIsClient();
   const [slots, setSlots] = useState<CalendarSlot[]>([]);
   const [members, setMembers] = useState<AdminMember[]>([]);
-  // Months covering the visible range ("2026-10,2026-11"): a week can span two months
+  // e.g. "2026-10,2026-11"
   const [visibleMonths, setVisibleMonths] = useState("");
 
   const [modal, setModal] = useState<OpenModal | null>(null);
 
-  // A failed load (members, a month, the schedule): signed out → login; else say so, since an empty calendar
-  // would look like no trainings
+  // Say so: an empty calendar would look like no trainings
   const [loadError, setLoadError] = useState(false);
   const handleLoadError = useCallback(
     (err: unknown) => {
@@ -66,14 +63,13 @@ export default function CalendarPage() {
     [router],
   );
 
-  // «Розклад групових»: the opening time (a group training before it can't be booked, warned in the modal),
-  // which trainings repeat weekly (↻), and where «Щотижня» adds a time
+  // For the booking-opening warning, the ↻ marks and «Щотижня»
   const [schedule, setSchedule] = useState<TrainerSchedule | null>(null);
   useEffect(() => {
     api.getMySchedule().then(setSchedule).catch(handleLoadError);
   }, [handleLoadError]);
 
-  // A group training at a weekday and time of the schedule, created by itself while auto-creation is on
+  // Computed, not stored: matches a schedule time while auto-creation is on
   const repeatsWeekly = (s: CalendarSlot) =>
     s.trainingType === "group" &&
     !!schedule?.autoCreate &&
@@ -99,7 +95,7 @@ export default function CalendarPage() {
 
   const handleDatesSet = useCallback(
     (arg: DatesSetInfo) => {
-      // Every month touched by the visible range: a week can span 2 months, the month view 3 (with edge days)
+      // A week can span 2 months, the month view 3 (edge days)
       const lastVisible = new Date(arg.end.getTime() - 1); // end is exclusive
       const list: string[] = [];
       for (
@@ -122,7 +118,7 @@ export default function CalendarPage() {
     const start = `${s.localDate}T${s.slotTime}:00`;
     const end = new Date(new Date(start).getTime() + 60 * 60 * 1000);
     const colors = TYPE_COLORS[s.trainingType];
-    // Group: how full it is. Assigned: who has a package ("Спліт · Катя ✓, Оля")
+    // Group: seats taken. Assigned: members, ✓ = paid
     const detail =
       s.trainingType === "group"
         ? `${s.bookedCount}/${s.capacity}`
@@ -132,10 +128,10 @@ export default function CalendarPage() {
     return {
       id: s.slotId,
       title: `${repeatsWeekly(s) ? "↻ " : ""}${TYPE_SHORT[s.trainingType]} · ${detail}`,
-      // Timed events (1 h) so the week-with-hours view places them on their hour; the time is shown by FullCalendar
+      // 1 h timed events, so the week view places them on their hour
       start,
       end,
-      // v7 names (v6 backgroundColor/borderColor/textColor are ignored)
+      // v7 names; v6 backgroundColor/borderColor/textColor are silently ignored
       color: colors.bg,
       contrastColor: colors.text,
       extendedProps: { slot: s },
@@ -148,8 +144,7 @@ export default function CalendarPage() {
 
   const openEditModal = (slot: CalendarSlot) => {
     setModal({ mode: "edit", slot });
-    // The calendar was loaded earlier: a member may have cancelled or been marked since, so the modal shows the
-    // training as it is now (its cancellations are loaded fresh by the modal)
+    // Refresh: members may have cancelled or been marked since the calendar loaded
     fetchMonths(visibleMonths).then((data) => {
       const fresh = data?.find((s) => s.slotId === slot.slotId);
       if (fresh)
@@ -162,13 +157,12 @@ export default function CalendarPage() {
   };
 
   const handleDateClick = (arg: DateClickInfo) => {
-    // Month view gives "YYYY-MM-DD", week-with-hours gives "YYYY-MM-DDTHH:mm:ss+03:00" (prefills the time)
+    // Month view: "YYYY-MM-DD"; week view: "YYYY-MM-DDTHH:mm:ss+03:00", which prefills the time
     const date = arg.dateStr.slice(0, 10);
     if (date < kyivToday()) return;
     setModal({ mode: "add", date, time: arg.dateStr.slice(11, 16) });
   };
 
-  // A modal saved: the calendar reloads, the modal closes
   const done = async () => {
     await fetchMonths(visibleMonths);
     setModal(null);
@@ -199,8 +193,7 @@ export default function CalendarPage() {
         ))}
       </div>
 
-      {/* FullCalendar v7 has no stable fc-* class names — theme it only via palette variables.
-          The selector beats palette.css's [data-color-scheme=dark] (higher specificity). */}
+      {/* v7 has no stable fc-* classes: theme via palette variables. This selector outranks palette.css's dark one. */}
       <style>{`
         .mg-calendar [data-color-scheme] {
           --fc-classic-background: transparent;
@@ -250,7 +243,7 @@ export default function CalendarPage() {
             allDaySlot={false}
             eventDisplay="block"
             views={{
-              // "26 жовт. – 1 лист." instead of "жовт. 2026 р. – лист. 2026 р.", which pushed the view buttons to a new row
+              // Short title: the default (with years) pushed the view buttons to a new row
               timeGridWeek: { titleFormat: { day: "numeric", month: "short" } },
             }}
             eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}

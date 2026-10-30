@@ -5,13 +5,12 @@ import { api, StrayPayment } from "@/lib/api";
 import { kyivDateTime } from "@/lib/dates";
 import { formatUah, lineName } from "@/lib/prices";
 
-// Top of «Клієнти»: money that came after the purchase was cancelled or expired, so the client got nothing.
-// The trainer gives the purchase by hand or has the money refunded, then presses «Розібрано»
+// Money that came after its purchase ended; the trainer sorts it out by hand, then marks it handled
 export function StrayPayments() {
   const [items, setItems] = useState<StrayPayment[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  // Not loaded: the block shows that, since hiding it would hide money waiting to be sorted out
+  // Shown, not hidden: hiding would hide money waiting to be sorted out
   const [loadFailed, setLoadFailed] = useState(false);
 
   const load = useCallback(

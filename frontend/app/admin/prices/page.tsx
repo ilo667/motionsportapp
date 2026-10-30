@@ -111,7 +111,7 @@ export default function PricesPage() {
         err instanceof ApiError ? (err.body as { amountUah?: number; updatedBy?: string | null }) : undefined;
       setConfirm(null);
       if (statusOf(err) === 409 && body?.amountUah !== undefined) {
-        // Another trainer got there first: show their amount and let this trainer decide again
+        // Compare-and-set lost: show the other trainer's amount and let this one decide again
         setError(`Ціну щойно змінив ${body.updatedBy ?? "інший тренер"}: ${formatUah(body.amountUah)}.`);
         await load();
       } else {

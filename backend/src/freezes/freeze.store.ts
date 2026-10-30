@@ -6,8 +6,7 @@ import { frozenOn, isOpen } from './rules';
 type Db = DatabaseService['db'];
 type Q = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
-// Members' requested and approved freezes, newest first. A plain function (like getMemberTrainerId), so booking,
-// admin and entitlements code read it without a module cycle
+// REQUESTED and ACTIVE, newest first. A plain function to avoid a module cycle
 export async function loadFreezes(db: Q, memberIds: string[]) {
   if (memberIds.length === 0) return [];
   return db
@@ -31,7 +30,7 @@ export async function memberFrozenOn(db: Q, memberId: string, date: string) {
   return (await loadFreezes(db, [memberId])).some((f) => frozenOn(f, date));
 }
 
-// The freeze in the way of a new request, if any (one at a time)
+// One open freeze at a time
 export async function openFreeze(db: Q, memberId: string, today: string) {
   return (await loadFreezes(db, [memberId])).find((f) => isOpen(f, today)) ?? null;
 }

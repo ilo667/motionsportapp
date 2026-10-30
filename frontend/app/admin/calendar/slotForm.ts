@@ -3,22 +3,22 @@ import type { TrainingType } from "@/lib/api";
 import { errorText } from "@/lib/apiErrors";
 
 export const TYPES: TrainingType[] = ["group", "personal", "split"];
-// Member pickers per type: персональні exactly 1, спліт 1 required + 2 optional
+// Member pickers per type: personal exactly 1, split 1 required + 2 optional
 const MEMBER_FIELDS: Record<TrainingType, number> = { group: 0, personal: 1, split: 3 };
 export const TIME_RE = /^([01]\d|2[0-3]):(00|15|30|45)$/;
 export const FIELD_CLASS = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 
-// The backend's weekday of a date: 1 = Пн … 7 = Нд
+// Backend numbering: 1 = Mon … 7 = Sun
 export function weekdayOf(date: string) {
   return new Date(date + "T12:00:00").getDay() || 7;
 }
 
-// One entry per member picker of that type; "" = not chosen
+// "" = not chosen
 export function fieldsFor(type: TrainingType, ids: string[] = []) {
   return Array.from({ length: MEMBER_FIELDS[type] }, (_, i) => ids[i] ?? "");
 }
 
-// A modal's save: one request at a time, the error worded for a person; `onDone` reloads the calendar and closes
+// One request at a time; `onDone` reloads the calendar and closes the modal
 export function useSave(onDone: () => Promise<void>) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

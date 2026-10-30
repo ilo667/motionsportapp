@@ -15,14 +15,13 @@ const LINKS = [
   { href: "/admin/trainers", label: "Тренери" },
 ];
 
-// Trainer navigation in the header: the same burger on phone and desktop
+// Same burger on phone and desktop
 export function AdminMenu() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Close on a click outside or Escape
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: MouseEvent) => {
@@ -41,7 +40,7 @@ export function AdminMenu() {
 
   const logout = async () => {
     setOpen(false);
-    // Signing out goes on even if the request fails: api.logout() has cleared the local flag already
+    // Deliberately ignored: api.logout() has already cleared the local flag
     await api.logout().catch(() => {});
     router.push("/admin/login");
   };

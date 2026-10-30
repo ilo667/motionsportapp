@@ -77,7 +77,7 @@ describe('Trainer schedule rules', () => {
 });
 
 describe('Trainer schedule tables', () => {
-  // The DB itself refuses a time that is not 'HH:MM' on the 15-minute grid, whatever writes it
+  // The DB rejects off-grid times whatever writes them
   it('both time columns carry a format CHECK', () => {
     const checks = (table: Parameters<typeof getTableConfig>[0]) => getTableConfig(table).checks.map((c) => c.name);
     expect(checks(trainerScheduleTimes)).toContain('trainer_schedule_times_slot_time_check');

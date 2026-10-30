@@ -7,8 +7,7 @@ import { errorText } from "@/lib/apiErrors";
 import { Modal } from "@/components/ui/Modal";
 import { formatUah, lineName } from "@/lib/prices";
 
-// «Записатись» without a group pass: buy a single visit or a pass by LiqPay (booked once paid), or pay cash to the
-// trainer in the hall (booked right away, the trainer confirms the money)
+// Booking without a group pass: LiqPay books once paid; cash books at once and the trainer confirms the money
 export function GroupPassModal({
   slotId,
   slotTime,

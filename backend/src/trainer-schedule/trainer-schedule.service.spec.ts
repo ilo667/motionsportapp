@@ -10,7 +10,7 @@ import { LEGACY_DEFAULT, type TrainerSchedule } from './rules';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { trainerSchedules, trainerScheduleTimes } from '../database/schema';
 
-// Drizzle chain mock: each awaited read takes the next result; inserts / deletes are recorded with their table
+// Each awaited read takes the next result; inserts / deletes recorded with their table
 function makeDb(results: unknown[][]) {
   const queue = [...results];
   const writes: { op: string; table: unknown; values?: unknown }[] = [];
@@ -96,14 +96,12 @@ describe('TrainerScheduleService.save', () => {
   it('saves the settings and replaces the times in one transaction, then returns them', async () => {
     const { db, writes } = makeDb([[{ bookingOpensAt: '12:00', autoCreate: true }], SCHEDULE.times]);
     const svc = new TrainerScheduleService({ db } as any, schedule as any);
-    // the schedule as saved, plus what was put in the calendar
     expect(await svc.save('t2', SCHEDULE)).toEqual({
       ...SCHEDULE,
       added: 3,
       skipped: [{ date: '2026-10-27', slotTime: '10:00', reason: 'cancelled' }],
     });
     expect(db.transaction).toHaveBeenCalledTimes(1);
-    // the new trainings appear right away, not on the next schedule load
     expect(schedule.ensureGroupSlots).toHaveBeenCalledWith('t2', { force: true });
     expect(writes).toEqual([
       {
@@ -123,7 +121,6 @@ describe('TrainerScheduleService.save', () => {
     ]);
   });
 
-  // The schedule is committed; only adding the trainings failed (the daily run adds them later)
   it('adding the trainings failing after the save still reports the schedule as saved', async () => {
     const { db } = makeDb([[{ bookingOpensAt: '12:00', autoCreate: true }], SCHEDULE.times]);
     const failing = { ensureGroupSlots: jest.fn().mockRejectedValue(new Error('db down')) };

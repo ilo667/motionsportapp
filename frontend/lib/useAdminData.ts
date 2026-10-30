@@ -3,10 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toAdminLogin } from "@/lib/adminAuth";
 
-// One admin page's data: loaded on mount; signed out (401 / 403) goes to /admin/login, any other failure is kept in
-// `error` for the page to show. `reload()` refetches after a change and keeps the old data if it fails, so a page
-// tells «didn't load» (no data) from «couldn't refresh» (data and an error). `fetcher` must be stable: a function
-// defined outside the component, an `api.*` method, or a useCallback
+// 401 / 403 goes to /admin/login. reload() keeps the old data on failure: error without data = didn't load,
+// with data = couldn't refresh. `fetcher` must be stable (module function, api.* method or useCallback).
 export function useAdminData<T>(fetcher: () => Promise<T>) {
   const router = useRouter();
   const [data, setData] = useState<T | null>(null);

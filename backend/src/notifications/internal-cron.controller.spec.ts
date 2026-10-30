@@ -54,7 +54,7 @@ describe('InternalCronController — cron secret', () => {
 });
 
 describe('InternalCronController — routes', () => {
-  // Vercel Cron invokes with GET — a POST route answers 404 and the job silently never runs
+  // Vercel Cron calls GET; a POST route would 404 and the job would silently never run
   it.each(['bookingOpen', 'generateAnnouncement', 'autoConfirmAttendance', 'expirePayments'] as const)(
     '%s is a GET route',
     (handler) => {
@@ -105,7 +105,7 @@ describe('InternalCronController — 22:00 auto-confirm', () => {
     expect(entitlements.syncSpend.mock.calls.map((c: unknown[]) => c[1])).toEqual(['b1', 'b2']);
   });
 
-  // Same lock order as «Підтвердити всіх», so the two never deadlock
+  // Same lock order as the manual confirm-all, so the two never deadlock
   it('marks members in a fixed order (by member id, then booking id)', async () => {
     process.env.NODE_ENV = 'development';
     delete process.env.CRON_SECRET;
@@ -140,8 +140,7 @@ describe('InternalCronController — auto-confirm only marks trainings that are 
     process.env = { ...env };
   });
 
-  // Vercel runs crons in UTC: «0 20 * * *» is 22:00 in Kyiv in winter but 23:00 in summer, and the old 19 UTC was
-  // 21:00 in winter. Whatever the hour, a training still going on (or not started) is left alone
+  // UTC cron: the Kyiv hour shifts with DST. Whatever the hour, a training not over yet is left alone
   it('at 21:00 marks the 19:00 training (over at 20:00) but not 20:30', async () => {
     process.env.NODE_ENV = 'development';
     delete process.env.CRON_SECRET;
@@ -182,7 +181,7 @@ describe('InternalCronController — «Записуйтесь» at each trainer 
     mockLoadSchedule.mockImplementation((_db: unknown, id: string) =>
       Promise.resolve({ bookingOpensAt: id === 't1' ? '10:00' : '16:00', autoCreate: true, times: [] }),
     );
-    // reads: today's day, the active group trainings today (trainer + time), the first trainer
+    // Reads: today's day, today's active group trainings, the first trainer
     const reads: unknown[][] = [
       [{ id: 'day-1', status: 'SCHEDULED' }],
       times ?? [

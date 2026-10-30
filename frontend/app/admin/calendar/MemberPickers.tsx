@@ -3,7 +3,7 @@ import { FIELD_CLASS } from "./slotForm";
 
 type PickerMember = { id: string; displayName: string; memberCode?: string };
 
-// Who a personal / split training is for: one select per place, a member chosen once
+// One select per place; a member can be chosen once
 export function MemberPickers({
   type,
   memberIds,

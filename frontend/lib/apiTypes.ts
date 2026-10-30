@@ -1,4 +1,4 @@
-// What the backend answers (and takes): the types of lib/api.ts, imported from there
+// Request / response types of lib/api.ts
 
 export type TrainingType = "group" | "personal" | "split";
 
@@ -7,16 +7,15 @@ export interface AdminMember {
   memberCode: string;
   displayName: string;
   trainerNote: string | null;
-  trainerId: string | null; // null = not assigned (shown to every trainer under «Без тренера»)
+  trainerId: string | null; // null = unassigned, visible to every trainer
   createdAt: string;
-  recentCancellations: number; // member's own cancellations in the last 30 days (moves not counted)
-  // The card the client has: active until `until`, or waiting for «Активувати» until `until` (then it burns)
+  recentCancellations: number; // own cancellations, last 30 days, moves excluded
+  // active: valid until `until`; waiting: must be activated by `until` or it burns
   clubCard: { state: "waiting" | "active"; until: string } | null;
-  packagesLeft: { trainingType: TrainingType; left: number }[]; // usable packages only, types with trainings left
-  frozenUntil: string | null; // frozen today: the last frozen day
+  packagesLeft: { trainingType: TrainingType; left: number }[]; // usable packages only
+  frozenUntil: string | null; // last frozen day, if frozen today
 }
 
-// A training the client was booked on (up to today) and the trainer's mark
 export interface MemberVisit {
   bookingId: string;
   localDate: string;
@@ -30,11 +29,11 @@ export interface Trainer {
   username: string;
   createdAt: string;
   invitedBy: string | null; // null = added by the seed script
-  disabledAt: string | null; // null = works
+  disabledAt: string | null;
   disabledBy: string | null;
 }
 
-// An invite link still waiting to be used (any trainer's)
+// Unused invite link of any trainer
 export interface TrainerInvite {
   id: string;
   createdBy: string;
@@ -42,35 +41,34 @@ export interface TrainerInvite {
   expiresAt: string;
 }
 
-// Price list shared by all trainers (members see it without trainer names: PriceListItem); purchases copy its amounts
+// One price list for all trainers; purchases copy the amounts
 export type PriceSection = "club_card" | "assigned" | "group";
 
 export interface PriceItem {
   id: string;
   section: PriceSection;
   title: string;
-  optionLabel: string | null; // "3 місяці", "6 тренувань"; null for a single-option item
+  optionLabel: string | null; // null for a single-option item
   amountUah: number;
   updatedBy: string | null; // trainer username; null = never changed since the seed
   updatedAt: string | null;
 }
 
-// A trainer's regular group trainings («Розклад групових»): times per weekday (1 = Пн … 7 = Нд), one opening time for
-// booking on the training day, and whether they are created 3 weeks ahead by themselves
+// «Розклад групових»: weekday 1 = Mon … 7 = Sun; autoCreate adds the trainings 3 weeks ahead
 export interface TrainerSchedule {
   bookingOpensAt: string; // "HH:MM"
   autoCreate: boolean;
   times: { weekday: number; slotTime: string }[];
 }
 
-// A schedule training left out of the calendar on «Зберегти»: cancelled there, or the time is taken
+// A schedule training not added on save
 export interface SkippedTraining {
   date: string; // "YYYY-MM-DD"
   slotTime: string;
   reason: "cancelled" | "taken";
 }
 
-// One option of the public price list (no trainer names)
+// Member-facing: no trainer names
 export type PriceListItem = Omit<PriceItem, "updatedBy" | "updatedAt">;
 
 export interface PriceChange {
@@ -83,9 +81,8 @@ export interface PriceChange {
   changedAt: string;
 }
 
-// ── Purchases: club cards, trainer packages and group passes ────────────────
-// Nothing starts on payment: a card waits for the trainer's «Активувати з сьогодні», a package / group pass for its
-// first mark. Not activated within a month of the purchase, it burns
+// Purchases. Nothing starts on payment: a card waits for the trainer to activate it, a package for its first
+// attendance mark. Not activated within a month, it burns.
 
 export type PurchaseMethod = "LIQPAY" | "CASH";
 export type AssignedType = Exclude<TrainingType, "group">;
@@ -108,22 +105,20 @@ export interface CatalogItem {
 export type CardState = "waiting" | "active" | "expired" | "burned";
 export type PassState = CardState | "used";
 
-// Dates exist only from activation, so the types say which states have them: after a check of `state` TypeScript
-// knows the date is there (backend: cardState / passState in purchases/validity.ts). Dates are YYYY-MM-DD
+// Dates (YYYY-MM-DD) exist only once activated; narrowing on `state` proves it (backend: purchases/validity.ts)
 type NotActivated = { validFrom: null; validUntil: null };
 type Activated = { validFrom: string; validUntil: string };
 
-// The card a member has now (waiting or active); activateBy = the last day to activate a waiting card
+// Current card; activateBy = last day to activate a waiting one
 export type ClubCard = { id: string; label: string; activateBy: string } & (
   { state: "waiting"; validUntil: null } | { state: "active"; validUntil: string }
 );
 
-// A card on the client page: every state
 export type AdminClubCard = { id: string; label: string; activateBy: string; source: "purchase" | "manual" } & (
   ({ state: "waiting" | "burned" } & NotActivated) | ({ state: "active" | "expired" } & Activated)
 );
 
-// The first attendance mark activates a pass; a used one was always activated (spending activates)
+// The first attendance mark activates a package, so a used one is always activated
 export type TrainingPackage = {
   id: string;
   trainingType: TrainingType;
@@ -139,7 +134,7 @@ export type TrainingPackage = {
 );
 
 export interface PurchaseLine {
-  section?: PriceSection; // club_card → shown as «Клубна карта · …»
+  section?: PriceSection;
   title: string;
   optionLabel: string | null;
   amountUah: number;
@@ -154,13 +149,13 @@ export interface Purchase {
   lines: PurchaseLine[];
 }
 
-// Money that came after its purchase ended: nothing was given for it (trainer: «Гроші без покупки»)
+// Money that arrived after its purchase ended; handled by hand
 export interface StrayPayment {
   paymentId: string;
   memberId: string;
   displayName: string;
   amountUah: number;
-  liqpayPaymentId: string | null; // to find the payment for a refund
+  liqpayPaymentId: string | null; // to find it in the LiqPay cabinet for a refund
   paidAt: string;
   lines: PurchaseLine[];
 }
@@ -180,7 +175,7 @@ export interface MemberPurchases {
 export interface MyPurchases {
   catalog: { clubCards: CatalogItem[]; services: CatalogItem[]; groupPasses: CatalogItem[] };
   card: ClubCard | null;
-  // The latest card with its state: shows «згоріла» / «закінчилась» when there is no card any more
+  // Latest card in any state, to say it burned / expired when there is no current one
   lastCard:
     | ({ label: string; activateBy: string } & (
         { state: "waiting" | "burned"; validUntil: null } | { state: "active" | "expired"; validUntil: string }
@@ -188,10 +183,10 @@ export interface MyPurchases {
     | null;
   packages: TrainingPackage[];
   pending: Purchase | null;
-  canPayCash: boolean; // cash goes to the member's trainer
+  canPayCash: boolean; // only a member with a trainer
 }
 
-// «Заморозити абонемент»: until = the last frozen day (null while the trainer hasn't approved)
+// until = last frozen day; null until the trainer approves
 export interface MyFreeze {
   freeze:
     | ({ id: string } & (
@@ -202,7 +197,7 @@ export interface MyFreeze {
   canFreeze: boolean; // a card or trainings to freeze, and no open freeze
 }
 
-// A freeze or unfreeze waiting for the trainer. until: the last frozen day (for a request: if approved today)
+// until: last frozen day (for a pending freeze: if approved today)
 export interface FreezeRequest {
   id: string;
   memberId: string;
@@ -218,12 +213,12 @@ export interface MemberFreeze {
   status: "REQUESTED" | "ACTIVE" | "ENDED" | "REJECTED" | "CANCELLED";
   requestedAt: string;
   startedOn: string | null;
-  until: string | null; // the last frozen day
+  until: string | null; // last frozen day
   unfreezeRequested: boolean;
   decidedBy: string | null;
 }
 
-// «Статистика»: paid purchases of the trainer's clients by the month they were paid; load = people marked ✓
+// Revenue of the trainer's paid purchases, by month paid
 export interface Revenue {
   clubCards: number;
   personal: number;
@@ -235,28 +230,28 @@ export interface Revenue {
 export interface TrainerStats {
   revenue: { allTime: Revenue; months: (Revenue & { month: string })[] }; // months: "2026-10", newest first
   busiestDays: { localDate: string; present: number }[];
-  weekdays: { weekday: number; days: number; avgPresent: number }[]; // 1 = Пн … 7 = Нд, days the trainer trained
+  weekdays: { weekday: number; days: number; avgPresent: number }[]; // weekday 1 = Mon … 7 = Sun
 }
 
-// A booking the member cancelled or moved themselves, with the reason they wrote
+// The member's own cancellation or move, with their reason
 export interface Cancellation {
   bookingId: string;
   displayName: string;
   reason: string;
   cancelledAt: string | null;
   switchedToTime: string | null; // null = cancelled, otherwise moved to that time
-  // A late cancellation: FULL = the training was spent, HALF = spent and half a single training goes back
+  // Late-cancellation fee: FULL = spent; HALF = spent, half a single training refunded
   fee: { kind: "FULL" | "HALF"; waived: boolean; refundUah: number | null; refundDone: boolean } | null;
 }
 
-// What «Скасувати» would cost now: null = nothing; single = a single training (burns) rather than a pass
+// Fee if cancelled now (null = free); single = a single training rather than a pass
 export interface CancelFeePreview {
   fee: "FULL" | "HALF" | null;
   single: boolean;
   refundUah: number | null;
 }
 
-// Half of a single personal / split training to give back after a late cancellation (the trainer returns it)
+// Half refund of a late-cancelled single assigned training; the trainer pays it out
 export interface CancelRefund {
   id: string;
   memberId: string;
@@ -293,12 +288,12 @@ export interface SlotView {
   bookedCount: number;
   isMyBooking: boolean;
   isMyVacancyAlert?: boolean;
-  started?: boolean; // the training began: booking, cancelling and switching are over
-  myGuest?: { name: string } | null; // the guest the member brings (on their own booking only)
-  lateCancelled?: boolean; // the member cancelled it late and paid for it: no booking it again
+  started?: boolean; // no booking, cancelling or switching after the start
+  myGuest?: { name: string } | null;
+  lateCancelled?: boolean; // cancelled late: can't book it again
 }
 
-// Personal / split the trainer assigned to this member (any day, any time); paid, bookable until the start
+// Personal / split slot the trainer assigned this member to
 export interface AssignedSlotView {
   id: string;
   localDate: string;
@@ -307,22 +302,22 @@ export interface AssignedSlotView {
   capacity: number;
   bookedCount: number;
   isMyBooking: boolean;
-  spent: boolean; // already paid from a package (the trainer marked it)
-  packageLeft: number; // trainings left in the member's packages of this type (0 = none: «Оплатити»)
+  spent: boolean; // paid from a package (attendance marked)
+  packageLeft: number; // trainings left in usable packages of this type
   started: boolean;
 }
 
-// localDate null: no group training in the calendar ahead (assigned trainings may still be there)
+// localDate null: no group training ahead (assigned ones may still be listed)
 export interface ScheduleNext {
   localDate: string | null;
   status: string | null;
   bookingWindowOpen: boolean;
   bookingOpenAt: string | null;
   bookingCloseAt: string | null;
-  slots: SlotView[]; // group slots of the next group day
+  slots: SlotView[]; // group slots of that day
   assignedSlots?: AssignedSlotView[];
-  groupPassLeft: number; // group trainings the member's pass holds for that day; 0 → «Записатися» offers to buy
-  frozenUntil: string | null; // frozen (today or that day): the last frozen day, no «Записатись»
+  groupPassLeft: number; // 0 = booking offers to buy a group pass
+  frozenUntil: string | null; // last frozen day; no booking while frozen
   serverTime: string;
   announcement?: string | null;
 }
@@ -359,8 +354,8 @@ export interface AdminParticipant {
   bookingId: string;
   displayName: string;
   attendanceStatus: AttendanceStatus;
-  switchedFromTime: string | null; // moved here from that slot today
-  guestOf: string | null; // a guest: who brought them (bookingId is then the guest's id)
+  switchedFromTime: string | null; // moved here from that time
+  guestOf: string | null; // guest: the member's name; bookingId is then the guest's id
 }
 
 export interface AdminSlotView {
@@ -384,7 +379,6 @@ export interface AdminSchedule {
   serverTime: string;
 }
 
-// A past training day in the trainer's history; slots carry the same data as the today page
 export interface HistoryDay {
   localDate: string;
   status: "SCHEDULED" | "CANCELLED";
@@ -398,7 +392,6 @@ export interface CalendarSlot {
   trainingType: TrainingType;
   bookedCount: number;
   capacity: number;
-  // Assigned members, assigned slots only. booked: false = cancelled it; spent: paid from a package already;
-  // packageLeft: trainings of this type left
+  // Assigned slots only. booked false = cancelled; spent = paid from a package
   members: { id: string; displayName: string; booked: boolean; spent: boolean; packageLeft: number }[];
 }

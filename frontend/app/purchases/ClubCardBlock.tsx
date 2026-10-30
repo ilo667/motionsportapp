@@ -2,7 +2,6 @@ import { MyPurchases } from "@/lib/api";
 import { ddmm } from "@/lib/dates";
 import { Badge } from "@/components/ui/Badge";
 
-// The club card: what it is, a status badge, and one line on what happens next
 export function ClubCardBlock({ data }: { data: MyPurchases }) {
   const { card, lastCard } = data;
   const [badge, badgeText, label, hint] = card

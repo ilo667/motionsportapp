@@ -9,8 +9,6 @@ jest.mock('./liqpay.helper', () => ({
 }));
 const mockLiqpayStatus = liqpayStatus as jest.MockedFunction<typeof liqpayStatus>;
 
-// ── LiqPay helper ──────────────────────────────────────────────────────────
-
 describe('liqpay helper', () => {
   const privateKey = 'test_private_key';
   const params = { version: 3, action: 'pay', amount: 700, currency: 'UAH' };
@@ -58,11 +56,7 @@ describe('liqpay helper', () => {
   });
 });
 
-// ── PaymentService ─────────────────────────────────────────────────────────
-
-// `sets` records every update().set(...) payload so tests can assert resulting statuses
-// `writeResult(setPayload)` decides what an UPDATE … RETURNING returns (default: one affected row),
-// so tests can simulate a compare-and-set that lost the race (returns [])
+// `sets` records every update().set() payload. `writeResult` returning [] simulates a lost compare-and-set
 function makeDb(
   results: unknown[][] = [],
   writeResult: (set?: Record<string, unknown>) => unknown[] = () => [{ id: 'row' }],
@@ -107,7 +101,7 @@ function makeDb(
 
 beforeEach(() => mockLiqpayStatus.mockReset());
 
-// A purchase is PAID by a set with decidedAt; a payment is PAID by a set with liqpayPaymentId
+// Tells the purchase update (decidedAt) from the payment update (liqpayPaymentId)
 const purchasePaid = (v: Record<string, unknown>) => v.status === 'PAID' && 'decidedAt' in v;
 const paymentPaid = (v: Record<string, unknown>) => v.status === 'PAID' && 'liqpayPaymentId' in v;
 
@@ -121,7 +115,7 @@ function makeService(db: any) {
   return Object.assign(svc, { mockEntitlements: entitlements });
 }
 
-// checkoutPurchase reads: the purchase, its lines (for the description), then its PENDING payment
+// checkoutPurchase reads: purchase, lines, then the PENDING payment
 const PURCHASE = [{ id: 'purchase-1', status: 'PENDING', method: 'LIQPAY', totalUah: 3600 }];
 const LINES = [[{ title: 'Персональне', optionLabel: '8 тренувань' }]];
 
@@ -286,7 +280,7 @@ describe('PaymentService — getStatus', () => {
     expect(sets).toHaveLength(0);
   });
 
-  // Real responses from LiqPay sandbox test cards (see CLAUDE.md → LiqPay rules)
+  // Real LiqPay sandbox responses for these test cards
   it.each([
     ['limit', 'Limit is exceeded', '4000000000000002'],
     ['9859', 'Insufficient funds', '4000000000009995'],
@@ -428,7 +422,7 @@ describe('PaymentService — callback for a REPLACED attempt', () => {
     const { db, sets } = makeDb([[replaced], [{ status: 'PAID' }]]);
     const svc = makeService(db);
     await svc.handleCallback(...callback());
-    // Only the evidence is stored — no status changes, nothing activated
+    // Only the payload is stored: no status change, nothing activated
     expect(sets).toEqual([expect.objectContaining({ rawCallback: expect.objectContaining({ status: 'success' }) })]);
     expect(sets[0]).not.toHaveProperty('status');
     expect(svc.mockEntitlements.activate).not.toHaveBeenCalled();
@@ -462,7 +456,7 @@ describe('PaymentService — refund of a paid payment', () => {
 describe('PaymentService — money for a purchase that no longer awaits it', () => {
   it('success on a PENDING payment of a cancelled purchase: nothing activated, evidence saved, needs manual handling', async () => {
     const errorLog = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
-    // The payment CAS wins, but the purchase is no longer PENDING (member cancelled meanwhile)
+    // Payment CAS wins, but the member cancelled the purchase meanwhile
     const { db, sets } = makeDb(
       [[{ id: 'pay-1', purchaseId: 'purchase-1', status: 'PENDING' }], [{ status: 'PENDING' }]],
       (set) => (set && purchasePaid(set) ? [] : [{ id: 'row' }]),

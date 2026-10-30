@@ -37,7 +37,7 @@ export class AdminAttendanceController {
     return this.adminAttendanceService.updateBookingAttendance(bookingId, dto, user.id);
   }
 
-  // A guest a member brought to a group training: ✓ / ✗ for the count, nothing is spent
+  // Guest marks: count only, nothing spent
   @Patch('guests/:guestId/attendance')
   @HttpCode(HttpStatus.OK)
   updateGuestAttendance(
@@ -48,7 +48,7 @@ export class AdminAttendanceController {
     return this.adminAttendanceService.updateGuestAttendance(guestId, dto, user.id);
   }
 
-  // «Не списувати» on a late cancellation
+  // «Не списувати»: waives a late-cancellation fee
   @Post('bookings/:bookingId/waive-fee')
   @HttpCode(HttpStatus.OK)
   waiveCancelFee(@Param('bookingId', ParseUUIDPipe) bookingId: string, @CurrentUser() user: SessionUser) {

@@ -13,7 +13,7 @@ import { nextPollDelay } from "@/lib/schedulePoll";
 import { errorText } from "@/lib/apiErrors";
 import { ddmm, longDay } from "@/lib/dates";
 
-// Set on login, cleared on logout / 401. Without it the page shows the landing and skips the API call
+// No flag: show the landing without calling the API (avoids a 401 in the console)
 function readAuthFlag(): boolean {
   try {
     return localStorage.getItem("mg_authed") === "1";
@@ -25,9 +25,9 @@ function readAuthFlag(): boolean {
 export default function SchedulePage() {
   const router = useRouter();
   const [schedule, setSchedule] = useState<ScheduleNext | null>(null);
-  // null on the server and during hydration, then the browser's flag
+  // null on the server and during hydration
   const hasFlag = useSyncExternalStore<boolean | null>(noopSubscribe, readAuthFlag, () => null);
-  // Result of the first schedule fetch (false = session expired)
+  // false = session expired
   const [sessionOk, setAuthed] = useState<boolean | null>(null);
   const authed = hasFlag === false ? false : sessionOk;
   const [loading, setLoading] = useState(true);
@@ -44,14 +44,14 @@ export default function SchedulePage() {
     timerRef.current = null;
   }, []);
 
-  // Every refresh (poll, mutation) reschedules the next one from fresh data
+  // Every fetch, poll or mutation, reschedules the next poll
   const fetchSchedule = useCallback(async () => {
     let data: ScheduleNext | undefined;
     try {
       data = await api.getScheduleNext();
       setSchedule(data);
     } catch (err: unknown) {
-      // Signed in as a trainer: the schedule here is the members', the trainer's is in the panel
+      // 403 = a trainer's session
       if (statusOf(err) === 403) {
         router.replace("/admin");
         throw err;
@@ -68,7 +68,7 @@ export default function SchedulePage() {
     if (pollingRef.current) {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
-        // fetchSchedule shows its own errors; it rethrows only after redirecting or signing out, nothing left to do
+        // Deliberately empty: fetchSchedule rethrows only after redirecting or signing out
         fetchRef.current?.().catch(() => {});
       }, nextPollDelay(data));
     }
@@ -80,7 +80,7 @@ export default function SchedulePage() {
 
   const startPolling = useCallback(() => {
     pollingRef.current = true;
-    fetchSchedule().catch(() => {}); // handled inside fetchSchedule, as above
+    fetchSchedule().catch(() => {}); // deliberately empty, as above
   }, [fetchSchedule]);
 
   useEffect(() => {
@@ -93,7 +93,7 @@ export default function SchedulePage() {
         authedRef.current = true;
         setAuthed(true);
         setLoading(false);
-        // Signed in: this browser's pushes belong to this member again (logout switched them off)
+        // Logout switched this browser's push off on the server; turn it back on
         resyncExistingSubscription();
       })
       .catch(() => stopPolling());
@@ -121,7 +121,7 @@ export default function SchedulePage() {
   };
 
   const handleLogout = async () => {
-    // Signing out goes on even if the request fails: api.logout() has cleared the local flag already
+    // Deliberately ignored: api.logout() has already cleared the local flag
     await api.logout().catch(() => {});
     router.push("/login");
   };
@@ -176,7 +176,6 @@ export default function SchedulePage() {
   const closeAt = schedule?.bookingCloseAt ? new Date(schedule.bookingCloseAt) : null;
   const beforeWindow = now && openAt ? now < openAt : false;
   const afterWindow = now && closeAt ? now >= closeAt : false;
-  // The shown day falls in the member's freeze: no booking on it
   const frozenThatDay = !!schedule?.frozenUntil && !!schedule.localDate && schedule.localDate <= schedule.frozenUntil;
 
   return (

@@ -5,11 +5,10 @@ import { KY_ZONE } from '../schedule/training-types';
 
 const FALLBACK_TEXT = 'Записуйтесь на тренування! 💪 Чекаємо вас сьогодні.';
 const GEMINI_MODEL = 'gemini-3.5-flash-lite';
-// Bump when the instructions change (stored in ai_generations.prompt_version)
+// Bump when the instructions change (ai_generations.prompt_version)
 export const PROMPT_VERSION = 'v3';
 
-// Stable part of every request: who writes, the gym's weekly programme, and the format.
-// The model picks the topic from the weekday it gets in the prompt
+// Holds the weekly programme; the model picks the topic from the weekday in the prompt
 const SYSTEM_INSTRUCTION = `Ти тренер жіночого фітнес-залу. Пишеш короткі мотиваційні оголошення українською мовою, щоб запросити записатися на групове тренування.
 
 Тижнева програма групових тренувань:
@@ -28,7 +27,7 @@ const SYSTEM_INSTRUCTION = `Ти тренер жіночого фітнес-за
 - не називай зал
 - без довгого тире (—), став кому або крапку`;
 
-// The UI never shows a long dash (the members' texts don't use it); the model sometimes writes one anyway
+// The UI uses no long dash; the model sometimes writes one anyway
 export function withoutLongDash(text: string) {
   return text
     .replace(/\s*[—–]\s*/g, ', ')
@@ -56,7 +55,7 @@ export class AnnouncementGeneratorService {
     return this.genAI;
   }
 
-  // localDate gives the weekday (→ topic from the weekly programme); topic overrides it for that day
+  // localDate picks the topic by weekday; `topic` overrides it
   async generate(examples: string[], topic?: string | null, localDate?: string): Promise<GenerateResult> {
     const ai = this.ensureInit();
     if (!ai) {

@@ -15,23 +15,21 @@ import {
 } from '../database/schema';
 import { KY_ZONE } from '../schedule/training-types';
 
-// Busiest days shown
 const TOP_DAYS = 5;
 
 export type Revenue = { clubCards: number; personal: number; split: number; group: number; total: number };
 
 const emptyRevenue = (): Revenue => ({ clubCards: 0, personal: 0, split: 0, group: 0, total: 0 });
 
-// Which column of «Прибуток» a purchase line goes to: the price list section, and for trainer services the type
+// Revenue column: price list section, split by type for trainer services
 export function revenueKey(section: string, trainingType: string | null): keyof Omit<Revenue, 'total'> {
   if (section === 'club_card') return 'clubCards';
   if (section === 'group') return 'group';
   return trainingType === 'split' ? 'split' : 'personal';
 }
 
-// «Статистика»: the trainer's own numbers. Revenue = paid purchases of the trainer's clients (the trainer on the
-// purchase), by the month they were paid (Kyiv), at the amounts copied when bought. Load = people marked ✓ on the
-// trainer's trainings, guests included (they took seats)
+// Revenue: PAID purchases with this trainer, by Kyiv month paid, at the amounts copied at purchase.
+// Load: people marked present on the trainer's trainings, guests included
 @Injectable()
 export class StatsService {
   constructor(
@@ -47,7 +45,7 @@ export class StatsService {
   }
 
   private async revenue(trainerId: string) {
-    // Paid = decided_at (LiqPay success and cash «Отримано» both set it); created_at only for rows from before that
+    // decided_at is the payment moment; created_at only for old rows without it
     const month = sql<string>`to_char(coalesce(${purchases.decidedAt}, ${purchases.createdAt}) at time zone 'Europe/Kyiv', 'YYYY-MM')`;
     const rows = await this.database.db
       .select({
@@ -75,14 +73,13 @@ export class StatsService {
     }
     return {
       allTime,
-      // Newest first
       months: [...byMonth].sort(([a], [b]) => b.localeCompare(a)).map(([m, revenue]) => ({ month: m, ...revenue })),
     };
   }
 
   private async load(trainerId: string) {
     const today = this.clock.now().toISODate()!;
-    // Days that are over, as in «Історія»: today's trainings may not have happened yet
+    // Past days only: today's trainings may not have happened yet
     const mine = and(
       eq(trainingSlots.trainerId, trainerId),
       eq(trainingSlots.status, 'ACTIVE'),
@@ -111,7 +108,7 @@ export class StatsService {
         ),
       )
       .groupBy(trainingDays.localDate);
-    // Every day the trainer trained, so a day nobody came counts in the weekday average
+    // So a day nobody came counts as 0 in the weekday average
     const days = await this.database.db
       .selectDistinct({ localDate: trainingDays.localDate })
       .from(trainingSlots)
@@ -124,7 +121,7 @@ export class StatsService {
   }
 }
 
-// Top days by people marked ✓, and the average per weekday (1 = Пн … 7 = Нд) over the days the trainer trained
+// Weekday: 1 = Monday ... 7 = Sunday
 export function summarizeLoad(present: Map<string, number>) {
   const busiestDays = [...present]
     .filter(([, n]) => n > 0)

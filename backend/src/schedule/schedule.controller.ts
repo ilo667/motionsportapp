@@ -9,7 +9,7 @@ import type { SessionUser } from '../auth/session.guard';
 export class ScheduleController {
   constructor(private readonly scheduleService: ScheduleService) {}
 
-  // The member's home page; a trainer gets 403 and goes to their own panel
+  // A trainer's session gets 403
   @Get('next')
   @UseGuards(SessionGuard, MemberGuard)
   async getNext(@CurrentUser() user: SessionUser) {

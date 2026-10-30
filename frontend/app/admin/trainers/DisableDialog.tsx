@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 
 const FIELD = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 
-// «Вимкнути»: whom the trainer's clients go to, what happens, and the irreversible button
+// Irreversible: there is no re-enabling
 export function DisableDialog({
   trainer,
   targets,

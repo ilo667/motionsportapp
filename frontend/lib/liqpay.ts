@@ -2,7 +2,7 @@ import type { LiqPayCheckout } from "./api";
 
 const LIQPAY_URL = "https://www.liqpay.ua/api/3/checkout";
 
-// Hands the browser over to the LiqPay page (a form POST, as LiqPay expects)
+// LiqPay expects a form POST
 export function submitLiqPay({ data, signature }: LiqPayCheckout) {
   const form = document.createElement("form");
   form.method = "POST";

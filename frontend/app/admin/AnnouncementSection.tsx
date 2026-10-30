@@ -2,8 +2,7 @@
 import { useState } from "react";
 import { api, Announcement, AnnouncementExample } from "@/lib/api";
 
-// «Оголошення» of the day: the text (published or a draft), «Згенерувати AI», edit, publish / unpublish, and the
-// style examples the AI follows. `onMutate` runs a change, reloads the page and shows an error under the trainings
+// `onMutate` runs a change, reloads the page and shows any error under the trainings
 export function AnnouncementSection({
   date,
   announcement,
@@ -29,7 +28,6 @@ export function AnnouncementSection({
     <div className="border-t border-line pt-5 mt-5">
       <p className="text-muted text-xs mb-3 uppercase tracking-wide font-medium">Оголошення</p>
 
-      {/* Published status */}
       {announcement?.publishedAt ? (
         <div className="bg-teal/8 border border-teal/20 rounded-xl px-4 py-3 mb-4 text-sm text-body">
           <p className="font-medium text-teal mb-1 text-xs">✓ Опубліковано</p>
@@ -42,7 +40,6 @@ export function AnnouncementSection({
         </div>
       ) : null}
 
-      {/* Edit area */}
       {editingText !== null ? (
         <div className="mb-3 space-y-2">
           <textarea
@@ -74,7 +71,6 @@ export function AnnouncementSection({
         </div>
       ) : null}
 
-      {/* Actions */}
       <div className="-m-1 flex flex-wrap mb-4">
         <button
           type="button"
@@ -117,7 +113,6 @@ export function AnnouncementSection({
         )}
       </div>
 
-      {/* Examples */}
       <p className="text-muted text-xs mb-2 font-medium">Приклади стилю для AI</p>
       <div className="space-y-2 mb-3">
         {examples.map((ex) => (

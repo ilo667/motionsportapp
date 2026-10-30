@@ -7,7 +7,7 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { KY_ZONE } from '../schedule/training-types';
 import { lockMember } from '../booking/group-booking';
 
-// The member lock is tested in group-booking.spec; here only that it is taken, and when
+// lockMember is tested in group-booking.spec; here only that it is taken
 jest.mock('../booking/group-booking', () => ({
   ...jest.requireActual('../booking/group-booking'),
   lockMember: jest.fn().mockResolvedValue({ trainerId: 'trainer-1', displayName: 'Катя' }),
@@ -17,8 +17,7 @@ beforeEach(() => mockLockMember.mockClear());
 
 const NOW = DateTime.fromISO('2026-10-23T12:00:00', { zone: KY_ZONE });
 
-// Drizzle chain mock: reads take the next result from `results`; an UPDATE … RETURNING answers with
-// `updateResult()` so a test can make the compare-and-set lose
+// Drizzle chain mock: reads take the next result; `updateResult` returning [] loses the compare-and-set
 function makeDb(results: unknown[][], updateResult: () => unknown[] = () => [{ id: 'purchase-1' }]) {
   const queue = [...results];
   const sets: Record<string, unknown>[] = [];
@@ -156,7 +155,6 @@ describe('Trainer — client purchases', () => {
     const tx = { ...db };
     db.transaction = jest.fn((fn: (t: unknown) => unknown) => fn(tx));
     await svc.activateCard('trainer-1', 'm1', 'card-1');
-    // Under the member lock, as a freeze's approval takes it
     expect(mockLockMember).toHaveBeenCalledWith(tx, 'm1');
     expect(entitlements.activateCard).toHaveBeenCalledWith(tx, 'm1', 'card-1');
   });
@@ -213,7 +211,7 @@ describe('Trainer — client purchases', () => {
     expect(notifications.enqueueAndProcess).not.toHaveBeenCalled();
   });
 
-  // The member cancelled it (late, so a pass paid for it): «Відхилити» leaves that booking and its spend alone
+  // Late-cancelled by the member: rejecting the cash leaves the booking and its spend alone
   it('rejecting cash for a booking the member already cancelled deletes no mark or spend', async () => {
     let call = 0;
     const { db } = makeDb([], () => (call++ === 0 ? [{ id: 'purchase-1', bookingId: 'b1', slotId: 's1' }] : []));

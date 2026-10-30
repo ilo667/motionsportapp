@@ -25,24 +25,21 @@ import { frozenOn, plusDays } from '../freezes/rules';
 import { lateCancelledSlotIds } from '../booking/group-booking';
 import { passUsableOn } from '../purchases/validity';
 
-// An assigned training stays on the member's page until it ends (payment and cancel only until it starts)
+// An assigned slot stays visible until it ends; cancelling closes at the start
 const ASSIGNED_SHOWN_FOR_MINUTES = 60;
 
 type DayRow = typeof trainingDays.$inferSelect;
 
-// A schedule time left out of the calendar on a date: the training or the trainer's day there is cancelled, or the
-// time is taken (another training at that time, or a group within an hour). «Зберегти» lists them
+// cancelled = that training or the trainer's day is cancelled; taken = time occupied or a group within an hour
 export type SkippedTraining = { date: string; slotTime: string; reason: 'cancelled' | 'taken' };
 export type GroupSlotsResult = { added: number; skipped: SkippedTraining[] };
 
-// Group trainings are created this many days ahead
 const GROUP_HORIZON_DAYS = 21;
 
 @Injectable()
 export class ScheduleService {
   private readonly logger = new Logger(ScheduleService.name);
 
-  // Date on which this instance last created the group trainings of every trainer (see ensureGroupSlots)
   private groupSlotsEnsuredFor: string | null = null;
 
   constructor(
@@ -53,8 +50,7 @@ export class ScheduleService {
   ) {}
 
   async getNext(memberId?: string) {
-    // A failure here (LiqPay slow, a DB deadlock with a concurrent callback) must not break the schedule;
-    // the next load retries
+    // Must not break the schedule (slow LiqPay, deadlock with a callback); the next load retries
     await this.paymentService
       .expireStale()
       .catch((err: unknown) => this.logger.warn(`Expire stale payments failed: ${String(err)}`));
@@ -65,12 +61,12 @@ export class ScheduleService {
 
     const assignedSlots = memberId ? await this.getAssignedSlots(memberId, now) : [];
 
-    // Group trainings of the member's trainer only (the first trainer for members without one and for visitors)
+    // Only the member's trainer (the first trainer for unassigned members and visitors)
     const trainerId = await getMemberTrainerId(this.database.db, memberId);
     const targetDay = await this.nextGroupDay(trainerId, now);
     const frozenUntil = memberId ? await this.frozenUntil(memberId, today, targetDay) : null;
 
-    // No group day ahead (e.g. the trainer cancelled them): the member still gets their assigned trainings
+    // No group day ahead: still return the assigned slots
     if (!targetDay) {
       return {
         localDate: null,
@@ -87,8 +83,7 @@ export class ScheduleService {
       };
     }
 
-    // Booking opens at the trainer's time and closes, training by training, when each one starts: the day's window
-    // ends with the last one
+    // Each slot closes at its start, so the day's window ends with the last one
     const { bookingOpensAt: opensAt } = await loadTrainerSchedule(this.database.db, trainerId!);
     const openAt = bookingOpensAt(targetDay.localDate, opensAt);
     const closeAt = slotStartsAt(targetDay.localDate, targetDay.lastTime);
@@ -106,7 +101,7 @@ export class ScheduleService {
       bookingCloseAt: closeAt.toUTC().toISO(),
       slots,
       assignedSlots,
-      // Group trainings are paid: 0 → «Записатися» offers to buy a pass
+      // 0 = booking offers to buy a group pass
       groupPassLeft: memberId ? await this.entitlements.groupPassLeft(memberId, targetDay.localDate) : 0,
       frozenUntil,
       serverTime: now.toUTC().toISO(),
@@ -114,8 +109,7 @@ export class ScheduleService {
     };
   }
 
-  // "Наступне тренування": the next day with a group training of this trainer that has not started yet (days with
-  // only assigned trainings are skipped)
+  // First day with a group slot not started yet; days with only assigned slots are skipped
   private async nextGroupDay(trainerId: string | null, now: DateTime) {
     const upcoming = await this.withGroupSlots(
       trainerId,
@@ -129,7 +123,7 @@ export class ScheduleService {
     return upcoming.find((day) => now < slotStartsAt(day.localDate, day.lastTime));
   }
 
-  // Frozen today or on the shown day: «Записатись» gives way to «Абонемент заморожено до …» (the last frozen day)
+  // Last frozen day, if frozen today or on the shown day
   private async frozenUntil(memberId: string, today: string, targetDay: { localDate: string } | undefined) {
     const freeze = (await loadFreezes(this.database.db, [memberId])).find(
       (f) => frozenOn(f, today) || (!!targetDay && frozenOn(f, targetDay.localDate)),
@@ -137,7 +131,6 @@ export class ScheduleService {
     return freeze ? plusDays(freeze.endsOn!, -1) : null;
   }
 
-  // The day's group trainings of this trainer, as the member sees them (their booking, guest, alerts, late cancels)
   private async groupSlotViews(
     trainerId: string,
     day: { id: string; localDate: string },
@@ -172,16 +165,14 @@ export class ScheduleService {
       bookedCount: s.bookedCount,
       isMyBooking: s.id === mine?.bookedSlotId,
       isMyVacancyAlert: !!mine?.alertSlotIds.has(s.id),
-      // The guest the member brings to this training (only on their own booking)
       myGuest: s.id === mine?.bookedSlotId ? mine.guest : null,
-      // The member cancelled it late (and paid): no booking it again
+      // Cancelled late with a fee: can't be booked again
       lateCancelled: !!mine?.lateCancelled.has(s.id),
-      // Booking, cancelling and switching for this training are over
+      // Booking, cancelling and switching are closed
       started: now >= slotStartsAt(day.localDate, s.slotTime),
     }));
   }
 
-  // The day's announcement once the trainer published it (shown while booking is open)
   private async publishedAnnouncement(dayId: string) {
     const [ann] = await this.database.db
       .select({
@@ -194,8 +185,7 @@ export class ScheduleService {
     return ann?.publishedAt && ann.text ? ann.text : null;
   }
 
-  // The member on the day's group trainings: the one they are booked on (one a day) and their guest there, the ones
-  // they cancelled late, the ones they asked «Повідомити про місце» for
+  // The member's booking (at most one group booking a day), guest, late cancellations and vacancy alerts
   private async memberOnSlots(memberId: string, slotIds: string[]) {
     const none = { bookedSlotId: null, guest: null, lateCancelled: new Set<string>(), alertSlotIds: new Set<string>() };
     if (slotIds.length === 0) return none;
@@ -231,9 +221,8 @@ export class ScheduleService {
     };
   }
 
-  // Days with group slots of this trainer (any status: a cancelled group slot is still shown as "Скасовано"),
-  // each with the time of its last ACTIVE group slot (a cancelled last one must not keep the day "next"); a day
-  // whose group slots are all cancelled keeps its last one, so it still shows until then
+  // Days with this trainer's group slots (any status, cancelled ones are shown), each with its last ACTIVE time,
+  // so a cancelled last slot doesn't keep the day "next". All cancelled: the last one, so it shows until then
   private async withGroupSlots(trainerId: string | null, days: DayRow[]) {
     if (days.length === 0 || !trainerId) return [];
     const rows = await this.database.db
@@ -258,7 +247,6 @@ export class ScheduleService {
     });
   }
 
-  // Upcoming assigned trainings the trainer assigned to this member, on any day
   private async getAssignedSlots(memberId: string, now: DateTime) {
     const rows = await this.database.db
       .select({
@@ -291,7 +279,7 @@ export class ScheduleService {
     );
     if (visible.length === 0) return [];
 
-    // spentFrom: this booking was already paid from a package (the trainer marked it)
+    // spentFrom set = already marked and paid from a package
     const mine = await this.database.db
       .select({ slotId: bookings.slotId, spentFrom: packageSpends.packageId })
       .from(bookings)
@@ -307,8 +295,7 @@ export class ScheduleService {
         ),
       );
 
-    // Trainings left that can pay for this training: packages of its type usable on its date, as the spend picks
-    // them (a burned or expired one counts nothing). The card shows «Залишилось N» or «Оплатити»
+    // Same rule as the spend: only packages of that type usable on the training's date
     const packages = await this.entitlements.packagesOf(memberId);
     const leftFor = (type: string, date: string) =>
       packages
@@ -320,17 +307,14 @@ export class ScheduleService {
       isMyBooking: mine.some((b) => b.slotId === r.id),
       spent: mine.some((b) => b.slotId === r.id && !!b.spentFrom),
       packageLeft: leftFor(r.trainingType, r.localDate),
-      // Cancellation is allowed until the training starts
       started: now >= slotStartsAt(r.localDate, r.slotTime),
     }));
   }
 
-  // Group trainings of each trainer for the next 3 weeks, from their «Розклад групових» (the first trainer without one
-  // keeps Mon/Wed/Fri 19:00 and 20:00). Only adds: a time already taken (by any training, even a cancelled one) is
-  // left alone, a CANCELLED day is skipped, and so is a day where the trainer cancelled their own trainings (a
-  // cancelled group, none active), so the trainer's changes are never undone. Without `trainerId`: every trainer,
-  // once per day per instance (the schedule is polled every 5 s). `force`: a schedule was just saved
-  // Returns how many trainings were added and which schedule trainings were left out, and why: «Зберегти» lists them
+  // Creates each trainer's weekly group slots 3 weeks ahead. Only adds, never undoes a trainer's change:
+  // - a taken time (any slot, even cancelled), a CANCELLED day, a day the trainer cancelled are skipped
+  // - without trainerId: every trainer, once per day per instance (the schedule is polled every 5 s)
+  // - force: a schedule was just saved
   async ensureGroupSlots(trainerId?: string, opts: { force?: boolean } = {}): Promise<GroupSlotsResult> {
     const now = this.clock.now();
     const today = now.toISODate()!;
@@ -363,7 +347,7 @@ export class ScheduleService {
       if (timesOn(d.weekday).length > 0) dates.push(d.toISODate()!);
     }
     if (dates.length === 0) return none;
-    // The schedule's times on a date that are still ahead (today's past ones are not created: nobody could book)
+    // Today's past times are skipped: nobody could book them
     const aheadOn = (date: string) =>
       timesOn(DateTime.fromISO(date, { zone: KY_ZONE }).weekday).filter((t) => slotStartsAt(date, t) > now);
 
@@ -372,7 +356,7 @@ export class ScheduleService {
     const { toInsert, skipped } = planGroupSlots(dates, aheadOn, dayIdOf, own);
 
     const created = await this.insertGroupSlots(trainerId, toInsert);
-    // Not created = the conflict: another active training of theirs there (an assigned one) has the time
+    // Not created = conflict with another active slot of theirs (an assigned one) at that time
     for (const row of toInsert) {
       if (created.some((c) => c.trainingDayId === row.trainingDayId && c.slotTime === row.slotTime)) continue;
       skipped.push({ date: row.date, slotTime: row.slotTime, reason: 'taken' });
@@ -381,7 +365,7 @@ export class ScheduleService {
     return { added: created.length, skipped };
   }
 
-  // The SCHEDULED days on these dates (created when missing; a CANCELLED day stays cancelled): date → day id
+  // date -> SCHEDULED day id; creates missing days, a CANCELLED day stays cancelled
   private async scheduledDays(dates: string[]) {
     await this.database.db
       .insert(trainingDays)
@@ -395,7 +379,7 @@ export class ScheduleService {
     return new Map(days.map((d) => [d.localDate, d.id]));
   }
 
-  // This trainer's group trainings on those days, cancelled ones too
+  // Cancelled ones included
   private async ownGroupSlots(trainerId: string, dayIds: string[]): Promise<OwnGroupSlot[]> {
     if (dayIds.length === 0) return [];
     return this.database.db
@@ -414,7 +398,7 @@ export class ScheduleService {
       );
   }
 
-  // Inserts the planned group trainings; returns the ones created (a time taken meanwhile is left out)
+  // Returns only the rows created; a time taken meanwhile is left out
   private async insertGroupSlots(trainerId: string, toInsert: PlannedGroupSlot[]) {
     if (toInsert.length === 0) return [];
     return this.database.db
@@ -438,16 +422,15 @@ export class ScheduleService {
 type OwnGroupSlot = { trainingDayId: string; status: string; slotTime: string };
 type PlannedGroupSlot = { trainingDayId: string; slotTime: string; date: string };
 
-// Every schedule time still ahead on these dates: already there (an active group at that very time: nothing to add
-// or report), left out with a reason, or to be inserted. No database here: `own` = the trainer's group trainings
-// on those days, cancelled ones too
+// Pure: sorts each upcoming schedule time into already there, skipped (with a reason) or to insert.
+// `own` = the trainer's group slots on those days, cancelled ones included
 export function planGroupSlots(
   dates: string[],
   aheadOn: (date: string) => string[],
   dayIdOf: Map<string, string>,
   own: OwnGroupSlot[],
 ): { toInsert: PlannedGroupSlot[]; skipped: SkippedTraining[] } {
-  // The trainer cancelled their trainings that day (a cancelled group, none active): the day is not brought back
+  // A cancelled group and none active: the trainer cancelled the day, don't bring it back
   const cancelledByTrainer = (dayId: string) => {
     const slots = own.filter((s) => s.trainingDayId === dayId);
     return slots.some((s) => s.status === 'CANCELLED') && !slots.some((s) => s.status === 'ACTIVE');
@@ -472,12 +455,12 @@ export function planGroupSlots(
         continue;
       }
       if (ownAt(dayId, slotTime).some((o) => o.status === 'ACTIVE')) continue;
-      // The trainer cancelled the group training at that time: it is not brought back
+      // Cancelled at that time: don't bring it back
       if (ownAt(dayId, slotTime).length > 0) {
         skipped.push({ date, slotTime, reason: 'cancelled' });
         continue;
       }
-      // A changed time must not overlap a group training already created that day (an hour apart)
+      // Group slots must stay an hour apart from those already created
       if (overlapsActive(dayId, slotTime)) skipped.push({ date, slotTime, reason: 'taken' });
       else toInsert.push({ trainingDayId: dayId, slotTime, date });
     }

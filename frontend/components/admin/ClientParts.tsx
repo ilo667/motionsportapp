@@ -6,21 +6,20 @@ import { plural } from "@/lib/plural";
 import { ddmm, shortDay } from "@/lib/dates";
 import { Badge } from "@/components/ui/Badge";
 
-// Pieces of a client shared by the «Клієнти» list and the client page
+// Shared by the clients list and the client page
 
 const NOTE_MAX = 300;
-// Highlight clients who cancel often (count over the last 30 days)
+// Cancellations in 30 days from which a client is highlighted
 export const FREQUENT_CANCELLATIONS = 3;
 
-// Word forms for 1, 2–4 and 5+ trainings («1 персональне», «3 групові», «8 персональних»)
+// Plural forms for 1, 2-4, 5+
 const TYPE_FORMS: Record<AdminMember["packagesLeft"][number]["trainingType"], [string, string, string]> = {
   group: ["групове", "групові", "групових"],
   personal: ["персональне", "персональні", "персональних"],
   split: ["спліт", "спліт", "спліт"],
 };
 
-// Under the client's name, one badge per line: frozen («Заморожено до DD.MM»), the club card («Клубна карта
-// чекає активації»), then one per type of trainings left («8 персональних», «9 групових»)
+// Badges under the client's name: freeze, club card, trainings left per type
 export function PurchaseSummary({ m, className = "" }: { m: AdminMember; className?: string }) {
   const [text, cardTone] = !m.clubCard
     ? ["Без клубної карти", "none" as const]
@@ -48,14 +47,12 @@ export function PurchaseSummary({ m, className = "" }: { m: AdminMember; classNa
 
 export function trainingLabel(c: MemberCancellation) {
   const day = shortDay(c.localDate);
-  // A move reads «23 жовт. · 19:00 → 20:00»
   return c.switchedToTime ? `${day} · ${c.slotTime} → ${c.switchedToTime}` : `${day}, ${c.slotTime}`;
 }
 
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Latest cancellations and moves of one client, as two blocks: «Скасування» and «Переноси».
-// Cancellations over 30 days come from the server (the same number as the list page); moves are counted here
+// The 30-day cancellation count comes from the server (same as the list page); moves are counted here
 export function CancellationHistory({
   memberId,
   recentCancellations,
@@ -182,7 +179,6 @@ export function NoteCell({ member, onSaved }: { member: AdminMember; onSaved: (n
   );
 }
 
-// Under the client's name: hand the client to another trainer, or claim an unassigned one
 export function TrainerPicker({
   member,
   trainers,

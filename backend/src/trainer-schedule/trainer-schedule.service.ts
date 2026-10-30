@@ -20,7 +20,7 @@ export class TrainerScheduleService {
     return loadTrainerSchedule(this.database.db, trainerId);
   }
 
-  // The whole schedule at once: settings upserted, the week's times replaced
+  // Replaces the week's times as a whole
   async save(trainerId: string, schedule: TrainerSchedule) {
     const error = scheduleError(schedule);
     if (error) throw new BadRequestException(ruleError(error));
@@ -43,8 +43,7 @@ export class TrainerScheduleService {
       }
     });
     const saved = await loadTrainerSchedule(this.database.db, trainerId);
-    // The trainer sees the new trainings in the calendar at once, and how many were added or left out. The
-    // schedule is already committed: if adding fails, it is still saved (the next schedule load adds them)
+    // The schedule is already committed: if adding slots fails, the next schedule load adds them
     try {
       return { ...saved, ...(await this.schedule.ensureGroupSlots(trainerId, { force: true })) };
     } catch (err) {

@@ -8,7 +8,7 @@ import { freeSeats } from '../booking/group-booking';
 import { bookings, clubCards, freezeItems, freezes, packages } from '../database/schema';
 
 jest.mock('./freeze.store', () => ({ openFreeze: jest.fn() }));
-// Freeing seats is tested in group-booking.spec; here only the 19:00 on Wednesday was full
+// Tested in group-booking.spec; here only Wednesday 19:00 was full
 jest.mock('../booking/group-booking', () => ({
   ...jest.requireActual('../booking/group-booking'),
   freeSeats: jest.fn(),
@@ -26,8 +26,8 @@ const TODAY = '2026-10-26';
 
 type Write = { op: 'update' | 'insert'; table: unknown; set?: Record<string, unknown>; values?: unknown };
 
-// Drizzle mock: each awaited read takes the next of `reads`; a write with .returning() takes the next of `returns`.
-// Writes are recorded with their table, so tests can say what changed; reads' WHERE conditions in `wheres`
+// Reads take the next of `reads`, .returning() the next of `returns`. Writes recorded with their table;
+// WHERE conditions go to `wheres`
 function makeDb(reads: unknown[][], returns: unknown[][] = []) {
   let r = 0;
   let w = 0;
@@ -73,7 +73,7 @@ function makeDb(reads: unknown[][], returns: unknown[][] = []) {
       return writeLink(write);
     }),
   };
-  // The transaction: the same reads and writes, but its own object, so a test can tell a read inside it from one outside
+  // Own object, so a test can tell reads inside the transaction from outside
   db.tx = { ...db };
   db.transaction = jest.fn().mockImplementation(async (cb: (tx: any) => Promise<unknown>) => cb(db.tx));
   return { db, writes, wheres };
@@ -81,7 +81,7 @@ function makeDb(reads: unknown[][], returns: unknown[][] = []) {
 
 const render = (cond: SQL) => new PgDialect().sqlToQuery(cond);
 
-// The number a date shift adds: `valid_until + ${days}::int`
+// Days added by a date shift
 function shiftOf(set: Record<string, unknown>) {
   const chunks = (Object.values(set)[0] as { queryChunks: unknown[] }).queryChunks;
   return chunks.find((c) => typeof c === 'number');
@@ -193,13 +193,13 @@ describe('FreezesService — approve', () => {
     expect(Object.keys(pack.set!)).toEqual(['activateBy']);
     expect(shiftOf(pack.set!)).toBe(30);
 
-    // The 09:00 training today has started: it stays. The other two lose a seat each
+    // Today's 09:00 has started and stays; the other two are cancelled
     expect(writes.find((w) => w.table === bookings)!.set).toMatchObject({ status: 'CANCELLED' });
     expect(mockFreeSeats.mock.calls.map((c) => [c[1], c[2]])).toEqual([
       ['s-wed', 1],
       ['s-split', 1],
     ]);
-    // A seat freed in a full group training: «З'явилось місце»
+    // A seat freed in a full group slot: vacancy push
     const vacancy = notifications.enqueueAndProcess.mock.calls.filter((c) => c[0] === 'VACANCY');
     expect(vacancy).toEqual([
       ['VACANCY', 'vacancy:s-wed:b-full', expect.objectContaining({ slotId: 's-wed', excludeMemberId: 'm1' })],
@@ -240,7 +240,6 @@ describe('FreezesService — unfreeze', () => {
     const { svc, notifications } = makeService(db);
     await svc.approveUnfreeze('trainer-1', 'f1');
 
-    // Only an asked unfreeze of a freeze not over yet
     const { sql, params } = render(wheres[1]);
     expect(sql).toBe(
       '("freezes"."id" = $1 and ("freezes"."status" = $2 and "freezes"."unfreeze_requested_at" is not null and "freezes"."ends_on" > $3))',
@@ -294,7 +293,6 @@ describe('FreezesService — pending', () => {
       ],
     ]);
     const rows = await makeService(db).svc.pending('trainer-1');
-    // Freeze requests, and unfreezes asked while the freeze goes on
     const { sql, params } = render(wheres[0]);
     expect(sql).toContain(
       '("freezes"."status" = $2 or ("freezes"."status" = $3 and "freezes"."unfreeze_requested_at" is not null and "freezes"."ends_on" > $4))',

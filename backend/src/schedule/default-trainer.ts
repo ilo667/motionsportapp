@@ -7,14 +7,13 @@ import { apiError } from '../common/api-error';
 type Db = DatabaseService['db'];
 type Q = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
-// Owner of the default Mon/Wed/Fri group slots (created with no trainer signed in): the first trainer account
+// The first trainer account: owns LEGACY_DEFAULT and members without a trainer
 export async function getDefaultTrainerId(db: Q): Promise<string | null> {
   const [trainer] = await db.select({ id: admins.id }).from(admins).orderBy(asc(admins.createdAt)).limit(1);
   return trainer?.id ?? null;
 }
 
-// Whose group trainings a member sees and books: their trainer, or the first trainer while they have none
-// (also for a visitor who is not signed in)
+// Whose group slots a member sees and books; the first trainer for unassigned members and visitors
 export async function getMemberTrainerId(db: Q, memberId?: string): Promise<string | null> {
   if (memberId) {
     const [member] = await db
@@ -27,13 +26,12 @@ export async function getMemberTrainerId(db: Q, memberId?: string): Promise<stri
   return getDefaultTrainerId(db);
 }
 
-// The clients a trainer sees and manages in the admin: their own plus those with no trainer yet («Без тренера»).
-// Anyone else's client answers 404 like a missing one. A condition on `members`
+// Condition on `members`: own clients plus unassigned ones. Anyone else's client answers 404
 export function visibleTo(trainerId: string) {
   return or(eq(members.trainerId, trainerId), isNull(members.trainerId))!;
 }
 
-// A trainer who can still sign in and take clients (a disabled one answers 404 like a missing one)
+// A disabled trainer answers 404 like a missing one
 export async function enabledTrainer(db: Q, trainerId: string) {
   const [trainer] = await db
     .select({ id: admins.id })
@@ -43,7 +41,6 @@ export async function enabledTrainer(db: Q, trainerId: string) {
   return trainer ?? null;
 }
 
-// The trainer's own or unassigned client (visibleTo); anyone else's answers 404 like a missing one
 export async function requireVisibleMember(db: Q, trainerId: string, memberId: string) {
   const [member] = await db
     .select({ id: members.id })
@@ -53,8 +50,7 @@ export async function requireVisibleMember(db: Q, trainerId: string, memberId: s
   if (!member) throw new NotFoundException('Member not found');
 }
 
-// A training of this trainer with its date; another trainer's answers 404 like a missing one. lock: FOR UPDATE on
-// the slot row (not its day), inside a transaction
+// Another trainer's slot answers 404. lock: FOR UPDATE on the slot row only, not its day
 export async function requireOwnSlot(db: Q, trainerId: string, slotId: string, lock = false) {
   const query = db
     .select({ ...getTableColumns(trainingSlots), localDate: trainingDays.localDate })

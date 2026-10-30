@@ -3,7 +3,7 @@ import type { AssignedType } from "@/lib/api";
 
 const TYPES: AssignedType[] = ["personal", "split"];
 
-// ?type=personal|split: opened from «Оплатити» on a training card, the purchase flow starts with that type
+// ?type=personal|split starts the purchase flow with that type
 export default async function PurchasesPage({
   searchParams,
 }: {

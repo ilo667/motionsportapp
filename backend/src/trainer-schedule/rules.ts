@@ -2,8 +2,7 @@ import { DateTime } from 'luxon';
 import { KY_ZONE } from '../schedule/training-types';
 import { API_ERRORS } from '../common/api-error';
 
-// A trainer's regular group trainings («Мій розклад»): times per weekday (Luxon: 1 = Mon … 7 = Sun), one opening
-// time for booking on the training day, and whether they are created ahead by themselves
+// weekday as in Luxon: 1 = Mon ... 7 = Sun
 export type TrainerSchedule = {
   bookingOpensAt: string; // 'HH:MM'
   autoCreate: boolean;
@@ -11,13 +10,13 @@ export type TrainerSchedule = {
 };
 
 export const GROUP_EARLIEST = '06:00';
-// The 22:00 cron marks the whole day, so a group training has to be over by then
+// The 22:00 cron marks the whole day, so the last group must be over by then
 export const GROUP_LATEST = '21:00';
-// A group training lasts an hour: two of one trainer on a day can't overlap
+// A group training lasts an hour; one trainer's groups can't overlap
 export const GROUP_MIN_GAP_MINUTES = 60;
 export const DEFAULT_OPENS_AT = '14:00';
 
-// What the first trainer had before schedules existed: Mon/Wed/Fri 19:00 and 20:00, booking from 14:00
+// The first trainer's schedule before schedules were saved, so nothing changed for their clients
 export const LEGACY_DEFAULT: TrainerSchedule = {
   bookingOpensAt: DEFAULT_OPENS_AT,
   autoCreate: true,
@@ -27,7 +26,7 @@ export const LEGACY_DEFAULT: TrainerSchedule = {
 const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
 const onGrid = (time: string) => /^\d{2}:\d{2}$/.test(time) && minutes(time) % 15 === 0 && minutes(time) < 24 * 60;
 
-// One group training time against the others of that day (the schedule page and the calendar)
+// Shared by the schedule page and the calendar
 export function groupTimeError(slotTime: string, sameDayTimes: string[]): string | null {
   if (!onGrid(slotTime)) return API_ERRORS.TIME_GRID;
   if (slotTime < GROUP_EARLIEST || slotTime > GROUP_LATEST) return API_ERRORS.GROUP_HOURS;
@@ -52,7 +51,7 @@ export function scheduleError(s: TrainerSchedule): string | null {
   return null;
 }
 
-// Booking for a group training opens on its day at the trainer's time (Kyiv)
+// Kyiv time on the training day
 export function bookingOpensAt(localDate: string, opensAt: string): DateTime {
   return DateTime.fromISO(`${localDate}T${opensAt}:00`, { zone: KY_ZONE });
 }

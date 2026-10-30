@@ -20,8 +20,7 @@ export function PageLayout({ children, variant = "centered", className, action, 
     );
   }
 
-  // Room under the last block of a long page, plus the iPhone home indicator in the installed app.
-  // Centered pages don't need it (and it would push their content off center)
+  // Bottom room incl. the iPhone home indicator; not on centered pages, where it would push content off center
   if (variant === "top") {
     return (
       <div className="flex flex-col flex-1 pb-[calc(3rem+env(safe-area-inset-bottom))]">

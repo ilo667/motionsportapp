@@ -1,6 +1,4 @@
-// Environment variables are checked once, before Nest starts (main.ts and api/index.ts): a missing or broken one
-// stops the start with a list of what is wrong, instead of failing later at the first query, payment or cron run.
-// The full list with comments is in backend/.env.example
+// Checked before Nest starts, so a bad env fails fast with a list of problems. Full list: backend/.env.example
 
 type Env = Record<string, string | undefined>;
 
@@ -13,7 +11,7 @@ const isUrl = (value: string) => {
   }
 };
 
-// A feature that needs several variables works with all of them or none (then it is off); a part is a mistake
+// All of a feature's variables or none (feature off); a partial set is an error
 function wholeGroup(env: Env, feature: string, names: string[]): string[] {
   const missing = names.filter((name) => !env[name]);
   if (missing.length === 0 || missing.length === names.length) return [];
@@ -28,7 +26,7 @@ export function envProblems(env: Env): string[] {
     else if (!isUrl(env[name])) problems.push(`${name} is not a URL`);
   }
 
-  // Vercel Cron and cron-job.org call /internal/cron/* with it; without it every run answers 403
+  // Without it every cron run answers 403
   if (env.NODE_ENV === 'production' && !env.CRON_SECRET)
     problems.push('CRON_SECRET is missing (required in production)');
 

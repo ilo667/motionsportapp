@@ -36,7 +36,7 @@ describe('ruleError', () => {
   });
 });
 
-// What the frontend really receives: the JSON body of the answer
+// The JSON body the frontend actually receives
 describe('an error with a code over HTTP', () => {
   let app: INestApplication;
   let baseUrl: string;

@@ -14,7 +14,7 @@ jest.mock('./group-booking', () => ({
 }));
 // No late cancellation unless a test says so
 beforeEach(() => (lateCancelledSlotIds as jest.Mock).mockResolvedValue(new Set()));
-// Freeing seats is tested in group-booking.spec; here it says whether the training was full
+// Tested in group-booking.spec; here it only says whether the slot was full
 beforeEach(() => (freeSeats as jest.Mock).mockResolvedValue(false));
 
 // No member is frozen unless a test says so
@@ -39,8 +39,7 @@ function kyivAt(hour: number, minute = 0): DateTime {
   return DateTime.fromObject({ year: 2026, month: 10, day: 20, hour, minute }, { zone: KY_ZONE });
 }
 
-// Proxy-based drizzle mock: each `await` on a read chain consumes the next result.
-// Write chains resolve to `writeResult()` (what UPDATE … RETURNING gives back); `.set()` payloads go to `sets`
+// Each awaited read consumes the next result; writes resolve to writeResult(); .set() payloads go to `sets`
 function makeDb(results: unknown[][] = [], writeResult: () => unknown = () => undefined) {
   let idx = 0;
   const next = () => results[idx++] ?? [];
@@ -90,23 +89,21 @@ const validSlot = {
   trainerId: 'trainer-1',
 };
 
-// getMemberTrainerId(): the member's trainer (members book only their trainer's group slots)
+// getMemberTrainerId() read
 const MEMBER_TRAINER = [{ trainerId: 'trainer-1' }];
 
-// book()/switchSlot() lock the member row first (one read inside the transaction)
+// lockMember() read inside the transaction
 const MEMBER = [{ id: 'member-1' }];
 
-// book() reads the slot with its day's date and status in one query
 const slotOnDay = { ...validSlot, localDate: TODAY, dayStatus: 'SCHEDULED' };
 
-// groupPassLeft: group trainings the member's pass still holds for that day (booking needs one)
 function makeService(db: any, now: DateTime, groupPassLeft = 1, payer: unknown = null) {
   const mockClock = { now: () => now };
   const mockNotifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
   const mockVacancyAlerts = { unsubscribe: jest.fn().mockResolvedValue(undefined) };
   const mockEntitlements = {
     groupPassLeft: jest.fn().mockResolvedValue(groupPassLeft),
-    // Nothing pays for the training unless a test says so (then a late cancellation costs nothing)
+    // Nothing pays unless a test says so, so cancelling is free
     payerFor: jest.fn().mockResolvedValue(payer),
     syncSpend: jest.fn().mockResolvedValue(undefined),
   };
@@ -134,7 +131,7 @@ describe('BookingService — booking window', () => {
   });
 
   it('does not throw at exactly 14:00', async () => {
-    // Window is open — error must come from inside the transaction (slot already locked), not window validation
+    // Window is open: the error must come from the locked slot inside the transaction
     const lockedSlot = { ...validSlot, bookedCount: 8, capacity: 8 };
     const { db } = makeDb([[slotOnDay], MEMBER_TRAINER, MEMBER, [lockedSlot]]);
     const service = makeService(db, kyivAt(14, 0));
@@ -258,7 +255,6 @@ describe('BookingService — cancel', () => {
     await expect(service.cancel('member-1', 'slot-p', 'reason')).rejects.toThrow('already started');
   });
 
-  // A booked no-show loses the training, so a group booking can't be dropped once its training started
   it('a group booking can be cancelled until its training starts, not after', async () => {
     const groupSlot = { bookedCount: 3, capacity: 8, slotTime: '20:00', trainingType: 'group' };
     const late = makeDb([[{ ...booking, slotId: 'slot-1', ...groupSlot, localDate: TODAY }]]);
@@ -410,19 +406,18 @@ describe('BookingService — trainer push with the reason', () => {
       'member-cancelled:booking-1',
       expect.objectContaining({ displayName: 'Іра', slotTime: '19:00', switchedToTime: '20:00' }),
     );
-    // waited for this slot → no vacancy push about the slot they now hold
+    // No vacancy push about the slot they now hold
     expect((service as any).vacancyAlerts.unsubscribe).toHaveBeenCalledWith('member-1', 'slot-2');
   });
 });
 
-// The number of seats a counter update moves: `booked_count - ${seats}`
+// Seats moved by a counter update
 function seatsIn(set: Record<string, unknown>) {
   const chunks = (set.bookedCount as { queryChunks: unknown[] }).queryChunks;
   return chunks.find((c) => typeof c === 'number');
 }
 
 describe('BookingService — guests', () => {
-  // groupSlotOf: the slot with its date
   const GROUP_SLOT = [{ slotTime: '19:00', trainingType: 'group', trainerId: 'trainer-1', localDate: TODAY }];
   const BOOKING = [{ id: 'booking-1' }];
   const at15 = kyivAt(15);

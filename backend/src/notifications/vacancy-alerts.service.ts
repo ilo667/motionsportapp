@@ -24,8 +24,7 @@ export class VacancyAlertsService {
       .where(and(eq(vacancyAlerts.memberId, memberId), eq(vacancyAlerts.slotId, slotId)));
   }
 
-  // Who to tell a seat is free: members waiting for this slot, except those already booked on it (whichever way
-  // they booked) and the member who just freed it
+  // Excludes members already booked on the slot and the one who freed the seat
   async findActiveSubscribersBySlot(slotId: string, excludeMemberId?: string) {
     const rows = await this.database.db
       .select({ memberId: vacancyAlerts.memberId, bookingId: bookings.id })

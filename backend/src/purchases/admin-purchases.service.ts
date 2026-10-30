@@ -24,14 +24,11 @@ import { requireVisibleMember, visibleTo } from '../schedule/default-trainer';
 import { purchaseViews } from './purchase-views';
 import { apiError } from '../common/api-error';
 
-// Latest purchases shown on a client's page
 const MEMBER_PURCHASES_LIMIT = 20;
 
 type Db = DatabaseService['db'];
 type Q = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
-// The trainer's side of purchases: cash requests of own clients («Отримано» / «Відхилити»), «Гроші без покупки»,
-// «Повернути гроші», a client's club cards, packages and purchase history
 @Injectable()
 export class AdminPurchasesService {
   constructor(
@@ -41,7 +38,6 @@ export class AdminPurchasesService {
     private readonly notifications: NotificationService,
   ) {}
 
-  // Cash requests waiting for this trainer, oldest first
   async pendingCash(trainerId: string) {
     const rows = await this.database.db
       .select({ id: purchases.id, memberId: purchases.memberId, displayName: members.displayName })
@@ -59,8 +55,7 @@ export class AdminPurchasesService {
     });
   }
 
-  // Money that LiqPay took after its purchase had ended (cancelled, expired or paid by another attempt): nothing was
-  // given for it. Shown to the member's trainer (or every trainer for a client without one) until «Розібрано»
+  // «Гроші без покупки»: LiqPay took money after the purchase ended, nothing was given for it
   async strayPayments(trainerId: string) {
     const rows = await this.database.db
       .select({
@@ -88,7 +83,7 @@ export class AdminPurchasesService {
     }));
   }
 
-  // «Розібрано»: compare-and-set, so two trainers can't both handle it
+  // «Розібрано». Compare-and-set: two trainers can't both handle it
   async markPaymentHandled(trainerId: string, paymentId: string) {
     const [payment] = await this.database.db
       .select({ handledAt: payments.handledAt })
@@ -108,7 +103,6 @@ export class AdminPurchasesService {
     return { ok: true };
   }
 
-  // «Оплату отримано»: only the member's trainer, only a cash request still awaiting payment
   async confirmCash(trainerId: string, purchaseId: string) {
     await this.database.db.transaction(async (tx) => {
       await this.decideCash(tx, trainerId, purchaseId, 'PAID');
@@ -117,8 +111,7 @@ export class AdminPurchasesService {
     return { ok: true };
   }
 
-  // The member never paid. Cash for a group training booked the seat at once: that booking goes too (no pay,
-  // no seat), with any mark on it. A system cancellation, so no reason is shown as the member's
+  // A cash group pass booked its slot at once: cancel that booking and its mark (system cancellation)
   async rejectCash(trainerId: string, purchaseId: string) {
     const freed = await this.database.db.transaction(async (tx) => {
       const { bookingId } = await this.decideCash(tx, trainerId, purchaseId, 'REJECTED');
@@ -128,16 +121,15 @@ export class AdminPurchasesService {
         .set({ status: 'CANCELLED', cancelledAt: this.clock.now().toJSDate() })
         .where(and(eq(bookings.id, bookingId), eq(bookings.status, 'ACTIVE')))
         .returning({ slotId: bookings.slotId, memberId: bookings.memberId });
-      // The member already cancelled it: a late cancellation keeps what it spent (booking/cancel-fee.ts)
+      // Already cancelled by the member: a late-cancellation fee keeps its spend
       if (!cancelled) return null;
       await tx.delete(packageSpends).where(eq(packageSpends.bookingId, bookingId));
       await tx.delete(attendance).where(eq(attendance.bookingId, bookingId));
-      // Their guest goes with the booking
       const seats = 1 + (await cancelGuests(tx, [bookingId], this.clock.now().toJSDate())).size;
       return (await freeSeats(tx, cancelled.slotId, seats)) ? { bookingId, ...cancelled } : null;
     });
 
-    // A seat freed in a full group training: «З'явилось місце» to those waiting, as when a member cancels
+    // Freed a seat in a full group training: vacancy alert, as on a member cancel
     if (freed) {
       const [slot] = await this.database.db
         .select({ slotTime: trainingSlots.slotTime, localDate: trainingDays.localDate })
@@ -157,8 +149,7 @@ export class AdminPurchasesService {
     return { ok: true };
   }
 
-  // «Повернути гроші»: half of a single personal / split training, after a member cancelled it 2–24 hours before
-  // (booking/cancel-fee.ts). Own and unassigned clients, oldest first. The trainer returns the money themselves
+  // «Повернути гроші»: half refunds for late cancellations (booking/cancel-fee.ts). Paid out by hand
   async pendingCancelRefunds(trainerId: string) {
     const rows = await this.database.db
       .select({
@@ -183,7 +174,7 @@ export class AdminPurchasesService {
     return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
   }
 
-  // «Повернено». Compare-and-set; another trainer's client answers 404, already handled 409
+  // «Повернено». Compare-and-set
   async markCancelRefundDone(trainerId: string, refundId: string) {
     const [refund] = await this.database.db
       .select({ memberId: cancelRefunds.memberId })
@@ -201,8 +192,7 @@ export class AdminPurchasesService {
     return { ok: true };
   }
 
-  // Compare-and-set, so a double tap can't confirm (and activate) twice. Another trainer's request
-  // or a LiqPay purchase answers 404 like a missing one
+  // Compare-and-set: a double tap can't activate twice. Another trainer's or a LiqPay purchase: 404
   private async decideCash(tx: Q, trainerId: string, purchaseId: string, status: 'PAID' | 'REJECTED') {
     const mine = and(eq(purchases.id, purchaseId), eq(purchases.trainerId, trainerId), eq(purchases.method, 'CASH'));
     const [decided] = await tx
@@ -216,7 +206,6 @@ export class AdminPurchasesService {
     throw new ConflictException('Purchase was already decided');
   }
 
-  // A client's page: cards, packages and purchase history
   async memberPurchases(trainerId: string, memberId: string) {
     await requireVisibleMember(this.database.db, trainerId, memberId);
     const cards = await this.database.db
@@ -255,26 +244,23 @@ export class AdminPurchasesService {
     };
   }
 
-  // «+ Додати клубну карту з рецепції»: a card bought at the reception, waiting or (activate) active from today
+  // «+ Додати клубну карту з рецепції»
   async addCard(trainerId: string, memberId: string, priceItemId: string, activate: boolean) {
     await requireVisibleMember(this.database.db, trainerId, memberId);
     await this.database.db.transaction(async (tx) => {
-      // The member lock: a second «Додати» at once waits and then finds this card; a freeze approved meanwhile too
+      // Serialises with a concurrent add (finds this card) and a freeze approval
       await lockMember(tx, memberId);
       await this.rejectFrozen(tx, memberId);
-      // One club card at a time: a new one only once the current card has ended or burned
       if (await this.entitlements.usableCard(memberId, tx)) throw new ConflictException(apiError('CLUB_CARD_EXISTS'));
       await this.entitlements.addManualCard(tx, memberId, trainerId, priceItemId, activate);
     });
     return { ok: true };
   }
 
-  // «Активувати з сьогодні»
   async activateCard(trainerId: string, memberId: string, cardId: string) {
     await requireVisibleMember(this.database.db, trainerId, memberId);
     await this.database.db.transaction(async (tx) => {
-      // Under the member lock, as a freeze's approval: the card is either started first (and its dates pushed by the
-      // freeze) or refused as frozen
+      // Serialises with freeze approval: started first (then pushed by the freeze) or refused as frozen
       await lockMember(tx, memberId);
       await this.rejectFrozen(tx, memberId);
       await this.entitlements.activateCard(tx, memberId, cardId);
@@ -282,7 +268,7 @@ export class AdminPurchasesService {
     return { ok: true };
   }
 
-  // A card added or started during a freeze would miss the pushed dates: after the unfreeze
+  // A card added or started mid-freeze would miss the pushed dates
   private async rejectFrozen(db: Q, memberId: string) {
     if (await memberFrozenOn(db, memberId, this.clock.now().toISODate()!)) {
       throw new ConflictException(apiError('MEMBER_FROZEN'));
@@ -290,7 +276,7 @@ export class AdminPurchasesService {
   }
 }
 
-// LiqPay said success, but the payment was never applied (PaymentService.needsManualHandling)
+// LiqPay success that was never applied (PaymentService.needsManualHandling)
 function strayPayment() {
   return and(ne(payments.status, 'PAID'), sql`${payments.rawCallback}->>'status' in ('success', 'sandbox')`);
 }

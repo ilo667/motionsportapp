@@ -1,6 +1,6 @@
 import { IsUUID } from 'class-validator';
 
-// Whom the disabled trainer's clients go to
+// Receives the disabled trainer's clients
 export class DisableTrainerDto {
   @IsUUID('all')
   transferToId: string;

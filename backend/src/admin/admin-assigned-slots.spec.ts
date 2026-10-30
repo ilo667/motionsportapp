@@ -14,13 +14,13 @@ import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store'
 import { loadFreezes, memberFrozenOn, openFreeze } from '../freezes/freeze.store';
 import { visibleTo } from '../schedule/default-trainer';
 
-// No guests unless a test says so (the drizzle mocks here don't answer UPDATE … RETURNING)
+// No guests by default (these mocks don't answer UPDATE ... RETURNING)
 jest.mock('../booking/group-booking', () => ({
   ...jest.requireActual('../booking/group-booking'),
   cancelGuests: jest.fn().mockResolvedValue(new Set()),
 }));
 
-// No member is frozen unless a test says so
+// Nobody frozen by default
 jest.mock('../freezes/freeze.store', () => ({
   loadFreezes: jest.fn(),
   memberFrozenOn: jest.fn(),
@@ -41,8 +41,7 @@ const M2 = '22222222-2222-4222-8222-222222222222';
 const M3 = '33333333-3333-4333-8333-333333333333';
 const M4 = '44444444-4444-4444-8444-444444444444';
 
-// Reads consume `reads` in order. Writes resolve to `writeResult()` (what INSERT … RETURNING gives back);
-// every .values() / .set() payload is recorded
+// Reads consume `reads` in order; writes resolve to writeResult(); .values() / .set() payloads are recorded
 function makeDb(reads: unknown[][] = [], writeResult: () => unknown[] = () => [{ id: 'slot-new' }]) {
   let idx = 0;
   const values: unknown[] = [];
@@ -82,12 +81,10 @@ function makeDb(reads: unknown[][] = [], writeResult: () => unknown[] = () => [{
 const TRAINER = 'trainer-1';
 const now = DateTime.fromObject({ year: 2026, month: 10, day: 20, hour: 12 }, { zone: 'Europe/Kyiv' });
 
-// Adding / changing trainings
 function makeService(db: any) {
   return new AdminSlotsService({ db } as any, {} as any, { now: () => now });
 }
 
-// The calendar (who is booked, paid from a package)
 function makeViews(db: any, entitlements: any = {}) {
   return new AdminScheduleService({ db } as any, { now: () => now }, entitlements);
 }
@@ -149,7 +146,7 @@ describe('Assigned slots — createAssignedSlot', () => {
       { slotId: 'slot-new', memberId: M1 },
       { slotId: 'slot-new', memberId: M2 },
     ]);
-    // Assigning is booking: both are on the training right away, nothing to pay per training
+    // Assigning is booking
     expect(values).toContainEqual([
       { memberId: M1, slotId: 'slot-new', status: 'ACTIVE' },
       { memberId: M2, slotId: 'slot-new', status: 'ACTIVE' },
@@ -205,7 +202,7 @@ describe('Assigned slots — createAssignedSlot', () => {
   });
 
   it('returns 409 when another active training is at that time (nothing re-used)', async () => {
-    // ensureDay returns the day, the slot upsert's WHERE status = CANCELLED matches nothing
+    // ensureDay returns the day; the slot insert returns nothing (conflict)
     let call = 0;
     const { db } = makeDb([[{ id: M1 }]], () => (call++ === 0 ? [{ id: 'day-1' }] : []));
     await expect(
@@ -219,10 +216,9 @@ describe('Assigned slots — createAssignedSlot', () => {
 });
 
 describe('Assigned slots — updateSlotMembers', () => {
-  // requireOwnSlot reads the slot with its date
   const split = { id: 'slot-1', trainingType: 'split', status: 'ACTIVE', trainerId: TRAINER, localDate: '2026-10-21' };
 
-  // Reads: the slot, the members check, who is on the slot now, their active bookings with marks
+  // Reads: slot, members check, members on the slot, active bookings with marks
   const onSlot = (...ids: string[]) => ids.map((memberId) => ({ memberId }));
 
   it('cannot remove a member whose attendance is already marked', async () => {
@@ -285,7 +281,7 @@ describe('Assigned slots — updateSlotMembers', () => {
     expect(sets).not.toContainEqual(expect.objectContaining({ capacity: expect.anything() }));
   });
 
-  // The date comes with the slot (requireOwnSlot): a freeze on another day doesn't stop it
+  // Uses the slot's date: a freeze on another day doesn't block
   it('a member frozen on the training day cannot be added to it', async () => {
     (loadFreezes as jest.Mock).mockResolvedValue([
       { id: 'f1', memberId: M2, status: 'ACTIVE', startedOn: '2026-10-21', endsOn: '2026-10-22' },
@@ -307,7 +303,7 @@ describe('Attendance spends from the package', () => {
       const { db, values } = makeDb([[{ id: 'b1' }]]);
       await makeAttendance(db, entitlements).updateBookingAttendance('b1', { status }, TRAINER);
       expect(entitlements.syncSpend).toHaveBeenCalledWith(db, 'b1');
-      // ✓ / ✗ saved as chosen; «—» saves no mark (the row is deleted)
+      // UNMARKED deletes the row instead of saving one
       if (status === 'UNMARKED') expect(values).toEqual([]);
       else expect(values).toEqual([expect.objectContaining({ bookingId: 'b1', status, markedByAdminId: TRAINER })]);
     }
@@ -327,8 +323,7 @@ describe('Attendance spends from the package', () => {
     expect(values).toEqual(['b1', 'b2'].map((bookingId) => expect.objectContaining({ bookingId, status: 'PRESENT' })));
   });
 
-  // Packages are locked member by member; the same order everywhere means two batches (this and the 22:00
-  // cron) wait for each other instead of deadlocking and rolling back the whole batch
+  // Same lock order as the 22:00 cron, so two batches wait instead of deadlocking
   it('«Підтвердити всіх» marks members in a fixed order (by member id)', async () => {
     const entitlements = { syncSpend: jest.fn() };
     const { db } = makeDb([
@@ -464,7 +459,7 @@ describe('Calendar — assigned slot members', () => {
     const entitlements = { summaries: jest.fn().mockResolvedValue(summaries) };
     const result = await makeViews(db, entitlements).getCalendar(TRAINER, '2026-10');
     expect(result.find((s) => s.slotId === 'g1')?.members).toEqual([]);
-    // Оля's training was already spent from a package (now empty): paid all the same. Іра cancelled
+    // M2 already spent (package now empty) still counts as paid; M3 cancelled
     expect(result.find((s) => s.slotId === 'p1')?.members).toEqual([
       { id: M1, displayName: 'Катя', booked: true, spent: false, packageLeft: 5 },
       { id: M2, displayName: 'Оля', booked: true, spent: true, packageLeft: 0 },
@@ -502,7 +497,7 @@ describe('Cancellation reasons for the trainer', () => {
   ];
 
   it('calendar modal: cancelled and moved, with reason and time', async () => {
-    // the slot, who is booked on it now (nobody), then the cancellations
+    // Reads: slot, members booked now (none), cancellations
     const { db } = makeDb([[{ id: 's1', trainerId: TRAINER }], [], rows]);
     await expect(makeViews(db).getSlotCancellations(TRAINER, 's1')).resolves.toEqual([
       {
@@ -525,7 +520,7 @@ describe('Cancellation reasons for the trainer', () => {
   });
 
   it('client history: adds the training date and time', async () => {
-    // visibility check (own or unassigned client), then the history
+    // Reads: visibility check, history
     const { db } = makeDb([[{ id: M1 }], [rows[0]]]);
     const [entry] = await makeMembers(db).getMemberCancellations('trainer-1', M1);
     expect(entry).toEqual(expect.objectContaining({ localDate: '2026-10-22', slotTime: '19:00', reason: 'Захворіла' }));
@@ -623,7 +618,7 @@ describe('History of past trainings', () => {
         { bookingId: 'b1', slotId: 's1', memberId: M1, displayName: 'Катя', attendanceStatus: 'PRESENT' },
         { bookingId: 'b2', slotId: 's1', memberId: M2, displayName: 'Ліза', attendanceStatus: null },
       ],
-      // Катя brought a guest
+      // Guest of b1
       [{ id: 'g1', bookingId: 'b1', name: 'Марія', attendance: null }],
       [
         {
@@ -683,10 +678,10 @@ describe('History of past trainings', () => {
     const { db } = makeDb([fifteen, []]);
     const { days, nextBefore } = await makeViews(db).getHistory(TRAINER);
     expect(days).toHaveLength(14);
-    expect(nextBefore).toBe('2026-10-07'); // the oldest day on this page
+    expect(nextBefore).toBe('2026-10-07'); // oldest day on the page
   });
 
-  // Reads in order from `reads`; every where condition is kept, as SQL
+  // Records every where condition as SQL
   function recordingDb(reads: unknown[][]) {
     const wheres: { sql: string; params: unknown[] }[] = [];
     let idx = 0;
@@ -721,7 +716,7 @@ describe('History of past trainings', () => {
     db.select = jest.fn(() => ({ from: () => ({ where }) }));
     await makeViews(db).getHistory(TRAINER, '2026-12-31');
     const cond = new PgDialect().sqlToQuery((where.mock.calls[0] as unknown[])[0] as any);
-    expect(cond.params).toContain('2026-10-20'); // today in the test clock, not the cursor
+    expect(cond.params).toContain('2026-10-20'); // test clock's today, not the cursor
   });
 });
 
@@ -779,7 +774,7 @@ describe('Cancelling a training gives the trainings back', () => {
     expect(deleted).toEqual(expect.arrayContaining([packageSpends, attendance]));
   });
 
-  // The member cancelled late first: that spend and its fee stay (only «Не списувати» forgives it)
+  // A prior late cancellation keeps its spend and fee; only a waiver forgives it
   it("leaves a member's late cancellation as it was: spends go back only from active bookings", async () => {
     const { db, sets } = makeDb([[mySlot], [{ memberId: M1 }], [mySlot]]);
     const svc = new AdminSlotsService({ db } as any, notifications as any, { now: () => now });
@@ -792,7 +787,7 @@ describe('Cancelling a training gives the trainings back', () => {
 
   it('tells the members who were booked, with the training date', async () => {
     const notify = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
-    // Reads: the slot with its date, the slot lock, the active bookings, the slot after the update
+    // Reads: slot with date, slot lock, active bookings, slot after update
     const { db } = makeDb([[mySlot], [], [{ id: 'b1', slotId: 's1', memberId: M1 }], [mySlot]]);
     const svc = new AdminSlotsService({ db } as any, notify as any, { now: () => now });
     await svc.updateSlot(TRAINER, 's1', { status: 'CANCELLED' });
@@ -829,7 +824,7 @@ describe('Each trainer sees and changes only own trainings', () => {
   });
 
   it("marking attendance on another trainer's training answers 404", async () => {
-    const { db } = makeDb([[]]); // booking joined with a slot of this trainer: nothing
+    const { db } = makeDb([[]]); // no booking on this trainer's slots
     await expect(makeAttendance(db).updateBookingAttendance('b1', { status: 'PRESENT' }, TRAINER)).rejects.toThrow(
       NotFoundException,
     );
@@ -864,7 +859,7 @@ describe("Trainer's today page — the booking window of the trainer's own sched
       { id: 'p', slotTime: '18:00', trainingType: 'personal', status: 'ACTIVE', capacity: 1, bookedCount: 1 },
     ];
     const { db } = makeDb([[day], own]);
-    const result = await makeViews(db).getSchedule(TRAINER); // 12:00: the 10:00 group is over, 18:00 ahead
+    const result = await makeViews(db).getSchedule(TRAINER); // at 12:00
     expect(mockLoadSchedule).toHaveBeenCalledWith(db, TRAINER);
     expect(result).toMatchObject({
       localDate: '2026-10-20',

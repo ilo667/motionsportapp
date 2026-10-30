@@ -20,11 +20,9 @@ import { bookingOpensAt } from '../trainer-schedule/rules';
 import { GROUP_TYPE, KY_ZONE, isAssignedType, slotStartsAt } from '../schedule/training-types';
 import { markOf, memberCancellations, toCancellationView } from './admin-views';
 
-// Training days per history page («Показати ще» loads the next page)
 const HISTORY_PAGE_DAYS = 14;
 
-// The trainer's trainings as they see them: today page, history, calendar, who cancelled. Adding, changing and
-// cancelling trainings is AdminSlotsService, marks are AdminAttendanceService
+// Read side of the trainer's trainings: today page, history, calendar, cancellations
 @Injectable()
 export class AdminScheduleService {
   constructor(
@@ -33,7 +31,6 @@ export class AdminScheduleService {
     private readonly entitlements: EntitlementsService,
   ) {}
 
-  // The trainer's next training day with their own slots
   async getSchedule(adminId: string) {
     const now = this.clock.now();
     const today = now.toISODate()!;
@@ -45,7 +42,7 @@ export class AdminScheduleService {
       .orderBy(trainingDays.localDate)
       .limit(30);
 
-    // Today stays on the page until midnight (marks after the last training); then the next day with trainings
+    // Today stays until midnight so late marks are possible
     const targetDay =
       upcoming.find((day) => now < DateTime.fromISO(day.localDate, { zone: KY_ZONE }).endOf('day')) ?? upcoming[0];
 
@@ -57,8 +54,7 @@ export class AdminScheduleService {
       .where(and(eq(trainingSlots.trainingDayId, targetDay.id), eq(trainingSlots.trainerId, adminId)))
       .orderBy(trainingSlots.slotTime);
 
-    // Booking for the trainer's group trainings: from their opening time until the last one starts (a day with
-    // no group training: until midnight)
+    // Window: trainer's opening time to the last group start (no group training: midnight)
     const { bookingOpensAt: opensAt } = await loadTrainerSchedule(this.database.db, adminId);
     const openAt = bookingOpensAt(targetDay.localDate, opensAt);
     const lastGroup = slots.filter((s) => s.trainingType === GROUP_TYPE).at(-1);
@@ -78,8 +74,7 @@ export class AdminScheduleService {
     };
   }
 
-  // Past training days, newest first, for the trainer's history (attendance stays editable there).
-  // Cursor pagination: pass the last returned localDate as `before` to get older days
+  // Past days, newest first. Cursor: pass the last localDate as `before`
   async getHistory(adminId: string, before?: string) {
     const today = this.clock.now().toISODate()!;
     const cursor = before && before < today ? before : today;
@@ -120,13 +115,12 @@ export class AdminScheduleService {
     };
   }
 
-  // Days with at least one slot of this trainer. Raw, fully qualified SQL (see the drizzle note in CLAUDE.md)
+  // Table names explicit: drizzle drops them in a single-table select
   private hasSlotsOf(adminId: string) {
     return sql`exists (select 1 from training_slots ts where ts.training_day_id = "training_days"."id" and ts.trainer_id = ${adminId})`;
   }
 
-  // Slot cards for the today page and history: participants with attendance, who moved in
-  // ("з 19:00"), and who cancelled or moved away with their reason
+  // Today page and history: participants with marks, who moved in, who cancelled or moved away
   private async buildSlotViews(slots: (typeof trainingSlots.$inferSelect)[]) {
     const slotIds = slots.map((s) => s.id);
     if (slotIds.length === 0) return [];
@@ -145,7 +139,6 @@ export class AdminScheduleService {
       .where(and(inArray(bookings.slotId, slotIds), eq(bookings.status, 'ACTIVE')))
       .orderBy(bookings.createdAt);
 
-    // Guests of these bookings, each listed right under the member who brought them
     const guestRows = participantRows.length
       ? await this.database.db
           .select({
@@ -166,7 +159,7 @@ export class AdminScheduleService {
           )
       : [];
 
-    // Cancelled from these slots, and moved here from another slot
+    // Cancelled from these slots or moved into them
     const cancellations = await memberCancellations(
       this.database.db,
       or(inArray(bookings.slotId, slotIds), inArray(bookings.switchedToSlotId, slotIds))!,
@@ -191,7 +184,7 @@ export class AdminScheduleService {
               cancellations.find((c) => c.switchedToSlotId === s.id && c.memberId === p.memberId)?.slotTime ?? null,
             guestOf: null as string | null,
           };
-          // A guest: bookingId is the guest's own id, marked through PATCH /admin/guests/:id/attendance
+          // Guest row right after its member; bookingId is the guest id (PATCH /admin/guests/:id/attendance)
           const guest = guestRows.find((g) => g.bookingId === p.bookingId);
           return guest
             ? [
@@ -206,7 +199,7 @@ export class AdminScheduleService {
               ]
             : [member];
         }),
-      // Someone who moved away and came back is a participant again, not one who cancelled
+      // Moved away and back: a participant, not a cancellation
       cancellations: cancellations
         .filter(
           (c) => c.slotId === s.id && !participantRows.some((p) => p.slotId === s.id && p.memberId === c.memberId),
@@ -215,7 +208,6 @@ export class AdminScheduleService {
     }));
   }
 
-  // Only this trainer's trainings (trainers work in parallel in different halls)
   async getCalendar(adminId: string, month: string) {
     const start = `${month}-01`;
     const [year, m] = month.split('-').map(Number);
@@ -256,8 +248,7 @@ export class AdminScheduleService {
             .where(inArray(slotMembers.slotId, assignedIds))
             .orderBy(slotMembers.createdAt)
         : [];
-    // Per member: still booked, and how many trainings of that type are left in their packages
-    // (the trainer cancels a training nobody paid for)
+    // Per member: still booked, already spent, trainings left of that type
     const booked =
       assignedIds.length > 0
         ? await this.database.db
@@ -281,17 +272,16 @@ export class AdminScheduleService {
           id,
           displayName,
           booked: booked.some((b) => b.slotId === r.slotId && b.memberId === id),
-          // Already paid from a package (marked): «оплачено» even if the package is empty now
+          // Spent counts as paid even if the package is empty now
           spent: booked.some((b) => b.slotId === r.slotId && b.memberId === id && !!b.spentFrom),
           packageLeft: summaries.get(id)?.packagesLeft.find((p) => p.trainingType === r.trainingType)?.left ?? 0,
         })),
     }));
   }
 
-  // Calendar modal: who cancelled or moved away from this slot and why
   async getSlotCancellations(adminId: string, slotId: string) {
     await requireOwnSlot(this.database.db, adminId, slotId);
-    // Members booked on it again (moved away and came back) are not shown as having cancelled
+    // Moved away and back: not a cancellation
     const booked = await this.database.db
       .select({ memberId: bookings.memberId })
       .from(bookings)

@@ -3,9 +3,8 @@ import { PaymentService } from '../payment/payment.service';
 import { safeEqual } from '../auth/token';
 import { CronService } from './cron.service';
 
-// Vercel Cron invokes paths with GET and sends `Authorization: Bearer $CRON_SECRET`.
-// Manual run: curl -H "Authorization: Bearer $CRON_SECRET" https://<backend>/internal/cron/<job>
-// The jobs themselves live in CronService; here only the secret is checked
+// Vercel Cron calls with GET and `Authorization: Bearer $CRON_SECRET`; routes must be @Get.
+// Only checks the secret; the jobs are in CronService
 @Controller('internal')
 export class InternalCronController {
   constructor(
@@ -40,7 +39,7 @@ export class InternalCronController {
   private verifyCronSecret(auth: string | undefined) {
     const cronSecret = process.env.CRON_SECRET;
     if (!cronSecret) {
-      // Locally there is no Vercel Cron, allow manual runs; in production a missing secret means misconfiguration
+      // Allow manual runs locally; in production a missing secret is a misconfiguration
       if (process.env.NODE_ENV === 'production') throw new ForbiddenException('CRON_SECRET is not configured');
       return;
     }

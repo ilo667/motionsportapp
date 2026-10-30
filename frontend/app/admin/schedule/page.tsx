@@ -7,7 +7,7 @@ import { errorText } from "@/lib/apiErrors";
 import { trainingsCount } from "@/lib/plural";
 import { useAdminData } from "@/lib/useAdminData";
 
-// Weekdays as the backend counts them (1 = Пн … 7 = Нд)
+// Backend numbering: 1 = Mon … 7 = Sun
 const WEEKDAYS = [
   { n: 1, short: "Пн" },
   { n: 2, short: "Вт" },
@@ -27,9 +27,8 @@ const SKIP_REASONS: Record<SkippedTraining["reason"], string> = {
   taken: "час зайнятий іншим тренуванням",
 };
 
-// After «Зберегти»: what went into the calendar, and the trainings left out, one line per date and reason
-// («вт 27.10 о 15:00 і 17:00 (скасовано в календарі)»). No counts: the trainings could not be added right now
-// (they appear on the next schedule load)
+// Skipped trainings: one line per date and reason. No counts from the server: nothing was added now
+// (the trainings appear on the next schedule load)
 function savedText(autoCreate: boolean, added?: number, skipped?: SkippedTraining[]) {
   if (!autoCreate || added === undefined || skipped === undefined) return { text: "Збережено", skipped: [] };
   if (added === 0 && skipped.length === 0) return { text: "Збережено. Усі тренування вже в календарі", skipped: [] };
@@ -46,28 +45,27 @@ function savedText(autoCreate: boolean, added?: number, skipped?: SkippedTrainin
   };
 }
 
-// «15:00», «15:00 і 17:00», «10:00, 15:00 і 17:00»
+// "10:00, 15:00 і 17:00"
 function listTimes(times: string[]) {
   return times.length > 1 ? `${times.slice(0, -1).join(", ")} і ${times[times.length - 1]}` : times[0];
 }
 
-// «вт 27.10»
+// "вт 27.10"
 function shortDate(date: string) {
   const d = new Date(date + "T12:00:00");
   const weekday = d.toLocaleDateString("uk-UA", { weekday: "short" });
   return `${weekday} ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-// «Розклад групових»: the trainer's regular group trainings, created 3 weeks ahead by themselves
 export default function GroupSchedulePage() {
   const { data: schedule, setData: setSchedule, error: fetchError } = useAdminData(api.getMySchedule);
   const loadError = fetchError != null;
-  // The weekday whose «+ час» field is open, and what is typed there
+  // Weekday whose «+ час» field is open
   const [adding, setAdding] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  // What the last save put in the calendar; null until saved (or after an edit)
+  // Result of the last save; cleared on edit
   const [saved, setSaved] = useState<{ text: string; skipped: string[] } | null>(null);
 
   const change = (next: TrainerSchedule) => {

@@ -5,7 +5,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { TrainerScheduleService } from './trainer-schedule.service';
 import { SaveScheduleDto } from './dto/save-schedule.dto';
 
-// «Мій розклад»: the signed-in trainer's own regular group trainings
+// The signed-in trainer's own weekly group schedule
 @Controller('admin/my-schedule')
 @UseGuards(SessionGuard, AdminGuard)
 export class TrainerScheduleController {

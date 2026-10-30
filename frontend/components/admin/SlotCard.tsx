@@ -14,7 +14,7 @@ interface SlotCardProps {
 export function SlotCard({ slot, onMutate }: SlotCardProps) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const isGroup = slot.trainingType === "group";
-  // "мало учасників" is about group trainings; assigned ones are for 1–3 assigned people
+  // The low-attendance warning is for group trainings only
   const belowMin = isGroup && slot.status === "ACTIVE" && slot.bookedCount < 3;
   const allPresent = slot.participants.length > 0 && slot.participants.every((p) => p.attendanceStatus === "PRESENT");
 
@@ -50,7 +50,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                     {p.switchedFromTime && <span className="ml-2 text-xs text-warn">з {p.switchedFromTime}</span>}
                     {p.guestOf && <Badge className="ml-2">гість</Badge>}
                   </span>
-                  {/* Editable after "Підтвердити всіх" too: the trainer can fix a mistake */}
+                  {/* Stays editable after «Підтвердити всіх» to fix mistakes */}
                   <AttendanceButton
                     status={p.attendanceStatus}
                     name={p.displayName}

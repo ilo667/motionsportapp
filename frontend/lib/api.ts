@@ -35,14 +35,14 @@ import type {
   TrainingType,
 } from "./apiTypes";
 
-// The response types live in apiTypes.ts; import them from here, with `api`
+// Callers import the types from here, together with `api`
 export type * from "./apiTypes";
 
 const BASE = "/api";
 
 type Ok = { ok: boolean };
 
-// A non-2xx answer: the backend's message (errorText words it for a person), the HTTP status and the whole body
+// A non-2xx answer; show it to people through errorText, never the raw message
 export class ApiError extends Error {
   status: number;
   body: Record<string, unknown>;
@@ -54,12 +54,11 @@ export class ApiError extends Error {
   }
 }
 
-// The HTTP status of a failed call; undefined for anything else (no connection)
+// undefined when there was no HTTP answer (network failure)
 export function statusOf(err: unknown): number | undefined {
   return err instanceof ApiError ? err.status : undefined;
 }
 
-// A JSON body goes with its Content-Type; a request without one sends neither
 async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -70,9 +69,7 @@ async function request<T>(path: string, method = "GET", body?: unknown): Promise
     const body = await res.json().catch(() => ({}));
     throw new ApiError(body.message ?? res.statusText, res.status, body);
   }
-  // NestJS sends an empty body for a null result (e.g. a trainer with no upcoming trainings).
-  // The response is trusted, not checked at run time: apiTypes.ts describes the backend's answers, and both sides
-  // live in this repo and change together, so a runtime schema (zod) would be a second copy of every type
+  // NestJS sends an empty body for null. No runtime schema: both sides live in this repo and change together.
   const text = await res.text();
   return (text ? JSON.parse(text) : null) as T;
 }
@@ -83,8 +80,7 @@ const put = <T = Ok>(path: string, body?: unknown) => request<T>(path, "PUT", bo
 const patch = <T = Ok>(path: string, body?: unknown) => request<T>(path, "PATCH", body);
 const del = <T = Ok>(path: string, body?: unknown) => request<T>(path, "DELETE", body);
 
-// This browser's push subscription, if any. getRegistration(), not serviceWorker.ready: ready never
-// resolves when no service worker is registered
+// getRegistration(), not serviceWorker.ready: ready never resolves without a registered worker
 async function currentPushEndpoint(): Promise<string | null> {
   try {
     if (!("serviceWorker" in navigator)) return null;
@@ -95,7 +91,7 @@ async function currentPushEndpoint(): Promise<string | null> {
   }
 }
 
-// Natural order for names: "Member 2" before "Member 10", Ukrainian alphabet (є, і, ї in place)
+// Numeric ("2" before "10"), Ukrainian alphabet order
 const nameCollator = new Intl.Collator("uk", { numeric: true, sensitivity: "base" });
 
 export const api = {
@@ -105,16 +101,14 @@ export const api = {
 
   login: (memberCode: string, pin: string) => post<LoginResponse>("/auth/member/login", { memberCode, pin }),
 
-  // Clears the mg_authed flag for every logout (member and trainer), even if the request fails,
-  // so `/` doesn't call the API with a dead session (401 in the console).
-  // Logged out = no pushes: this browser's subscription is switched off on the server first, while the
-  // session still says whose it is. The browser keeps it, so signing in again turns pushes back on
+  // Clears mg_authed even if the request fails, so `/` won't call the API with a dead session.
+  // Unsubscribes push on the server first, while the session still says whose it is; the browser keeps it.
   logout: async () => {
     try {
       localStorage.removeItem("mg_authed");
     } catch {}
     const endpoint = await currentPushEndpoint();
-    // Best effort: a failed unsubscribe must not stop the logout
+    // Best effort: must not block the logout
     if (endpoint) await api.unsubscribePush(endpoint).catch(() => {});
     return post("/auth/logout");
   },
@@ -126,7 +120,7 @@ export const api = {
 
   book: (slotId: string) => post("/bookings", { slotId }),
 
-  // A free guest on the member's group booking (one per booking; takes a seat)
+  // One free guest per booking; takes a seat
   addGuest: (slotId: string, name: string) => post("/bookings/guest", { slotId, name }),
 
   removeGuest: (slotId: string) => del("/bookings/guest", { slotId }),
@@ -154,13 +148,12 @@ export const api = {
 
   revokeTrainerInvite: (id: string) => del(`/admin/trainer-invites/${id}`),
 
-  // Clients (and cash requests waiting) go to `transferToId`; trainings not over yet are cancelled
+  // Clients and pending cash purchases move to transferToId; trainings not over yet are cancelled
   disableTrainer: (id: string, transferToId: string) =>
     post<{ movedClients: number; cancelledTrainings: number }>(`/admin/trainers/${id}/disable`, { transferToId }),
 
   getAdminSchedule: () => get<AdminSchedule | null>("/admin/schedule"),
 
-  // Newest first; pass the returned nextBefore to load older days
   getHistory: (before?: string) =>
     get<{ days: HistoryDay[]; nextBefore: string | null }>(`/admin/history${before ? `?before=${before}` : ""}`),
 
@@ -168,13 +161,13 @@ export const api = {
 
   cancelTrainingDay: (date: string) => put(`/admin/training-days/${date}`, { status: "CANCELLED" }),
 
-  // Continue paying a pending LiqPay purchase. { status: "PAID" } — a previous attempt already succeeded
+  // { status: "PAID" }: a previous attempt already succeeded
   checkoutPurchase: (purchaseId: string) =>
     post<LiqPayCheckout | { status: "PAID" }>("/payments/checkout", { purchaseId }),
 
   getPurchases: () => get<MyPurchases>("/purchases"),
 
-  // «Заморозити абонемент»: the member asks, the trainer approves (the same for «Розморозити»)
+  // The member asks, the trainer approves (freeze and early unfreeze)
   getMyFreeze: () => get<MyFreeze>("/freezes"),
   requestFreeze: () => post("/freezes"),
   cancelFreezeRequest: () => post("/freezes/cancel"),
@@ -182,7 +175,6 @@ export const api = {
 
   getStats: () => get<TrainerStats>("/admin/stats"),
 
-  // Late cancellations: «Не списувати», and the half refunds the trainer returns
   waiveCancelFee: (bookingId: string) => post(`/admin/bookings/${bookingId}/waive-fee`),
   getPendingCancelRefunds: () => get<CancelRefund[]>("/admin/cancel-refunds/pending"),
   markCancelRefundDone: (id: string) => post(`/admin/cancel-refunds/${id}/done`),
@@ -194,7 +186,6 @@ export const api = {
     ),
   getMemberFreezes: (memberId: string) => get<MemberFreeze[]>(`/admin/members/${memberId}/freezes`),
 
-  // Trainer: cash requests of own clients, a client's cards / packages / purchases
   getPendingCash: () => get<CashRequest[]>("/admin/purchases/pending"),
 
   confirmCash: (purchaseId: string) => post(`/admin/purchases/${purchaseId}/confirm`),
@@ -213,7 +204,7 @@ export const api = {
   activateClubCard: (memberId: string, cardId: string) =>
     post(`/admin/members/${memberId}/club-cards/${cardId}/activate`),
 
-  // slotId: a group pass bought from «Записатися» (cash: booked at once; LiqPay: booked once paid)
+  // slotId: group pass bought while booking; cash books at once, LiqPay once paid
   createPurchase: (priceItemIds: string[], method: PurchaseMethod, slotId?: string) =>
     post<{ purchaseId: string; checkout?: LiqPayCheckout | { status: "PAID" } }>("/purchases", {
       priceItemIds,
@@ -251,16 +242,14 @@ export const api = {
 
   getPrices: () => get<{ items: PriceItem[]; changes: PriceChange[] }>("/admin/prices"),
 
-  // 409 when another trainer changed it meanwhile: error.body has the current amountUah and updatedBy
+  // Compare-and-set: 409 body carries the current amountUah and updatedBy
   updatePrice: (id: string, amountUah: number, expectedAmountUah: number) =>
     patch<{ id: string; amountUah: number }>(`/admin/prices/${id}`, { amountUah, expectedAmountUah }),
 
   getCalendar: (month: string) => get<CalendarSlot[]>(`/admin/calendar?month=${month}`),
 
-  // «Розклад групових»: the signed-in trainer's regular group trainings
   getMySchedule: () => get<TrainerSchedule>("/admin/my-schedule"),
 
-  // Saved, plus what was put in the calendar: trainings added, and the ones left out with a reason
   saveMySchedule: (schedule: TrainerSchedule) =>
     put<TrainerSchedule & { added?: number; skipped?: SkippedTraining[] }>("/admin/my-schedule", schedule),
 
@@ -277,7 +266,7 @@ export const api = {
   updateAttendance: (bookingId: string, status: AttendanceStatus) =>
     patch(`/admin/bookings/${bookingId}/attendance`, { status }),
 
-  // A participant's mark: a member's booking, or a guest (nothing is spent for a guest)
+  // A guest's mark spends nothing
   updateParticipantAttendance: (p: { bookingId: string; guestOf: string | null }, status: AttendanceStatus) =>
     patch(`/admin/${p.guestOf ? "guests" : "bookings"}/${p.bookingId}/attendance`, { status }),
 

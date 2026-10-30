@@ -35,7 +35,7 @@ import { apiError } from '../common/api-error';
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-// The unique index on active bookings (bookings_member_slot_active_idx) answers a race the per-day check missed
+// A unique violation on bookings_member_slot_active_idx = a race the per-day check missed
 async function oneBookingPerDay<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
@@ -60,7 +60,6 @@ export class BookingService {
   ) {}
 
   async book(memberId: string, slotId: string) {
-    // The slot with its day: date and status
     const [slot] = await this.database.db
       .select({
         status: trainingSlots.status,
@@ -77,9 +76,9 @@ export class BookingService {
 
     if (!slot) throw new NotFoundException(apiError('SLOT_NOT_FOUND'));
     if (slot.status !== 'ACTIVE') throw new ConflictException(apiError('SLOT_CANCELLED'));
-    // Assigned trainings are booked by the trainer (assigning is booking), never by the member
+    // Assigned slots are booked by the trainer assigning members, never by the member
     if (slot.trainingType !== GROUP_TYPE) throw new BadRequestException('This slot requires payment');
-    // Members book only their own trainer's group trainings
+    // Another trainer's slot answers 404, like a missing one
     if (slot.trainerId !== (await getMemberTrainerId(this.database.db, memberId)))
       throw new NotFoundException(apiError('SLOT_NOT_FOUND'));
 
@@ -89,7 +88,6 @@ export class BookingService {
     if (await memberFrozenOn(this.database.db, memberId, slot.localDate)) {
       throw new ConflictException(apiError('MEMBERSHIP_FROZEN'));
     }
-    // Group trainings are paid: a pass usable that day with a training left (else «Записатися» offers to buy one)
     if ((await this.entitlements.groupPassLeft(memberId, slot.localDate)) === 0) {
       throw new ConflictException(apiError('GROUP_PASS_REQUIRED'));
     }
@@ -97,10 +95,10 @@ export class BookingService {
     await oneBookingPerDay(() =>
       this.database.db.transaction(async (tx) => {
         await lockMember(tx, memberId);
-        // Again under the member lock: a freeze approved at this moment cancels bookings under the same lock
+        // Recheck under the lock: freeze approval cancels bookings under the same lock
         if (await memberFrozenOn(tx, memberId, slot.localDate))
           throw new ConflictException(apiError('MEMBERSHIP_FROZEN'));
-        // Cancelled this training late (and paid for it): not booked again
+        // A late-cancelled slot would be spent twice
         if ((await lateCancelledSlotIds(tx, memberId, [slotId])).size > 0) {
           throw new ConflictException(apiError('CANCELLED_LATE'));
         }
@@ -119,16 +117,16 @@ export class BookingService {
       }),
     );
 
-    // Booked the slot they were waiting for: no "seat free" push about their own slot
+    // No vacancy push about a slot they now hold
     await this.vacancyAlerts.unsubscribe(memberId, slotId);
 
     return { ok: true };
   }
 
-  // A member can hold a group booking and several assigned ones, so the slot says which one to cancel
+  // By slot, not booking: a member can hold a group booking and several assigned ones a day
   async cancel(memberId: string, slotId: string, reason: string) {
     const booking = await this.bookingOnSlot(memberId, slotId);
-    // Group or assigned: only until the training starts (a booked no-show loses the training)
+    // After the start a booked no-show loses the training
     this.validateBeforeStart(booking.localDate, booking.slotTime);
 
     const wasFull = await this.database.db.transaction(async (tx) => {
@@ -137,9 +135,8 @@ export class BookingService {
         .update(bookings)
         .set({ status: 'CANCELLED', cancelledAt: now, cancellationReason: reason })
         .where(and(eq(bookings.id, booking.id), eq(bookings.status, 'ACTIVE')));
-      // Late: the training is spent from what pays for it, maybe half a single training's price back
       await this.chargeLateCancel(tx, booking.id, memberId, booking.trainingType, booking.localDate, booking.slotTime);
-      // Their guest goes too: two seats free
+      // The guest goes with the booking
       const seats = 1 + (await cancelGuests(tx, [booking.id], now)).size;
       return freeSeats(tx, slotId, seats);
     });
@@ -165,7 +162,7 @@ export class BookingService {
     return { ok: true };
   }
 
-  // Moves the member's group booking to the other group slot of the same day
+  // Moves the member's group booking to another group slot the same day
   async switchSlot(memberId: string, newSlotId: string, reason: string) {
     const [target] = await this.database.db
       .select({
@@ -194,7 +191,7 @@ export class BookingService {
     const localDate = target.localDate;
     const oldSlotId = current.slotId;
 
-    // Both trainings must not have started: the one they move to (its booking window), and the one they leave
+    // Neither the target nor the slot being left may have started
     await this.validateBookingWindow(localDate, target.slotTime, target.trainerId);
     this.validateBeforeStart(localDate, current.slotTime);
 
@@ -212,7 +209,7 @@ export class BookingService {
         }
 
         const newSlot = slot1.id === newSlotId ? slot1 : slot2;
-        // A guest moves along: the new training needs a seat for them too
+        // The guest moves too and needs a seat
         const guest = await this.activeGuest(tx, current.id);
         const seats = guest ? 2 : 1;
 
@@ -244,7 +241,6 @@ export class BookingService {
       }),
     );
 
-    // Usually they came here from a vacancy push; stop alerts for the slot they now hold
     await this.vacancyAlerts.unsubscribe(memberId, newSlotId);
 
     if (wasFull) {
@@ -263,8 +259,7 @@ export class BookingService {
     return { ok: true };
   }
 
-  // What cancelling this booking now would cost, for the warning in «Скасувати» (the cancel itself decides again,
-  // from what it actually spends). refundUah: half of a single training given back
+  // Warning before cancelling; cancel() decides again from what it actually spends
   async cancelFeePreview(
     memberId: string,
     slotId: string,
@@ -279,15 +274,14 @@ export class BookingService {
     const fee = cancelFee(row.trainingType, msBefore, payer?.total ?? null);
     return {
       fee,
-      // A single training (burns) rather than a pass (loses one)
+      // A single training burns; a pass loses one
       single: payer?.total === 1,
       refundUah: fee === 'HALF' && payer ? halfBack(payer.amountUah) : null,
     };
   }
 
-  // A member's own cancellation that came late (booking/cancel-fee.ts): the booking keeps its fee, the training is
-  // spent like a mark (syncSpend), and for HALF a refund of half the single training waits for the trainer.
-  // Decided from what was actually spent, so a race with another spend can't charge what nothing paid for
+  // Spends the training like a mark; HALF also records a refund. The final fee is decided from what was actually
+  // spent, so a race with another spend can't charge for something nothing paid for
   private async chargeLateCancel(
     tx: Tx,
     bookingId: string,
@@ -321,8 +315,7 @@ export class BookingService {
     }
   }
 
-  // «+ Гість»: a member booked on a group training brings one guest, free, a name only. The guest takes a seat;
-  // added and removed only while booking is open for that training (from the trainer's opening to its start)
+  // One free guest per group booking; takes a seat. Only while booking is open for that slot
   async addGuest(memberId: string, slotId: string, name: string) {
     const guestName = name.trim();
     if (!guestName) throw new BadRequestException('Guest name required');
@@ -357,7 +350,6 @@ export class BookingService {
       return freeSeats(tx, slotId, 1);
     });
 
-    // A seat freed in a full group training: «З'явилось місце» to those waiting
     if (wasFull) {
       const key = `vacancy:${slotId}:guest:${this.clock.now().toMillis()}`;
       await this.notifyVacancy(slotId, key, slot.slotTime, slot.localDate, memberId);
@@ -365,7 +357,7 @@ export class BookingService {
     return { ok: true };
   }
 
-  // A group slot of the member's trainer with its date (guests come only to group trainings)
+  // Guests come only to group slots
   private async groupSlotOf(slotId: string) {
     const [slot] = await this.database.db
       .select({
@@ -391,7 +383,6 @@ export class BookingService {
     return booking ?? null;
   }
 
-  // The member's active booking on this slot with the training's time, type, trainer and date (cancel, its warning)
   private async bookingOnSlot(memberId: string, slotId: string) {
     const [row] = await this.database.db
       .select({
@@ -419,13 +410,13 @@ export class BookingService {
     return guest ?? null;
   }
 
-  // The slot row under FOR UPDATE: seats are counted and taken under this lock
+  // Seats are counted and taken under this row lock
   private async lockSlot(tx: Tx, slotId: string) {
     const [slot] = await tx.select().from(trainingSlots).where(eq(trainingSlots.id, slotId)).for('update').limit(1);
     return slot ?? null;
   }
 
-  // «З'явилось місце» to those waiting for this slot, except the member who freed the seat
+  // Skips the member who freed the seat
   private async notifyVacancy(
     slotId: string,
     dedupeKey: string,
@@ -436,7 +427,7 @@ export class BookingService {
     await this.notifications.enqueueAndProcess('VACANCY', dedupeKey, { slotId, slotTime, localDate, excludeMemberId });
   }
 
-  // Push to the trainer whose training it is, with the member's reason. A failed push must not fail the member's action
+  // A failed push must not fail the member's action
   private async notifyTrainer(
     bookingId: string,
     memberId: string,
@@ -465,7 +456,6 @@ export class BookingService {
     }
   }
 
-  // Cancelling, switching away and removing a guest: only until the training starts
   private validateBeforeStart(localDate: string, slotTime: string) {
     const now = this.clock.now();
     if (now >= slotStartsAt(localDate, slotTime)) throw new BadRequestException(apiError('TRAINING_STARTED'));

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "@/lib/api";
 import { DEFAULT_ERROR, ERROR_TEXT, errorText } from "@/lib/apiErrors";
 
-// What lib/api.ts throws for an error with a code: the backend's English message and the body { code, message }
+// As lib/api.ts throws it: body { code, message }
 const coded = (code: string, message = "English text") => new ApiError(message, 409, { code, message });
 
 describe("errorText", () => {
@@ -44,7 +44,7 @@ describe("errorText", () => {
   });
 });
 
-// The two projects live in one repo: every code the backend can send has a text here, and nothing here is stale
+// Every backend code has a text here, and nothing here is stale
 describe("error codes match the backend", () => {
   const catalog = readFileSync(resolve(__dirname, "../../backend/src/common/api-error.ts"), "utf8");
   const backendCodes = [...catalog.matchAll(/^\s+([A-Z_]+): '/gm)].map((m) => m[1]).sort();

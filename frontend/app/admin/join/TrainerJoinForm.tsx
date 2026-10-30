@@ -8,10 +8,9 @@ import { PageLayout } from "@/components/ui/PageLayout";
 const FIELD = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 const MIN_PASSWORD = 10;
 
-// A new trainer signs up through a one-time invite link («Тренери» → «Запросити тренера»)
 export function TrainerJoinForm({ token }: { token: string }) {
   const router = useRouter();
-  // null while the link is being checked
+  // null while checking the link
   const [valid, setValid] = useState<boolean | null>(token ? null : false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

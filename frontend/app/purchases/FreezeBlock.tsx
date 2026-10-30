@@ -5,8 +5,7 @@ import { errorText } from "@/lib/apiErrors";
 import { ddmm } from "@/lib/dates";
 import { Badge } from "@/components/ui/Badge";
 
-// «Мій абонемент»: ask the trainer to freeze everything (club card and trainings) for up to 30 days, take the
-// request back, or ask to unfreeze. Nothing changes until the trainer approves
+// Freezes the club card and all packages, up to 30 days; nothing changes until the trainer approves
 export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: () => Promise<unknown> }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);

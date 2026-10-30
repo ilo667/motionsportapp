@@ -8,8 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { MemberPickers } from "./MemberPickers";
 import { FIELD_CLASS, TIME_RE, TYPES, fieldsFor, useSave, weekdayOf } from "./slotForm";
 
-// «Додати тренування» on a clicked day: групові (a time, this day only or weekly) or персональні / спліт (a time and
-// members). Another training that day: click the day again
+// Adds one training on the clicked day; click the day again for another
 export function AddSlotModal({
   date,
   initialTime,
@@ -29,12 +28,12 @@ export function AddSlotModal({
 }) {
   const [selectedType, setSelectedType] = useState<TrainingType>("group");
   const [time, setTime] = useState(initialTime);
-  // Group trainings only: «Лише цього дня» or «Щотижня» (adds the time to the schedule)
+  // Group only: true also adds the time to the weekly schedule
   const [weekly, setWeekly] = useState(false);
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const { saving, setSaving, error, setError, run } = useSave(onDone);
 
-  // A group training before the trainer's booking opens can't be booked: warned under the time
+  // A group training before booking opens can't be booked: warned under the time
   const opensAt = schedule?.bookingOpensAt ?? "";
   const assigned = selectedType !== "group";
 
@@ -61,8 +60,8 @@ export function AddSlotModal({
     );
   };
 
-  // «Щотижня»: the time goes into «Розклад групових» first (its rules checked there, nothing saved on an error),
-  // which adds the trainings 3 weeks ahead; then this date itself, which can be further ahead or a cancelled day
+  // Schedule first (its rules apply, nothing saved on an error; adds 3 weeks ahead), then this date itself,
+  // which may be further ahead or a cancelled day
   const addWeekly = async () => {
     if (!schedule) return setError("Розклад не завантажився. Оновіть сторінку.");
     const weekday = weekdayOf(date);
@@ -131,7 +130,7 @@ export function AddSlotModal({
           step={900}
           value={time}
           onChange={(e) => setTime(e.target.value)}
-          // iOS Safari gives a time input its own min width and ignores w-full without these
+          // iOS Safari ignores w-full on a time input without these
           className={`${FIELD_CLASS} block min-w-0 appearance-none [color-scheme:dark] [&::-webkit-date-and-time-value]:text-left`}
         />
         {!assigned && opensAt && TIME_RE.test(time) && time <= opensAt && (

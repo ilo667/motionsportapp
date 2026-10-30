@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 import type { PriceListItem, PriceSection } from "@/lib/api";
 import { formatUah, groupByTitle } from "@/lib/prices";
 
-// The gym's price list as the trainer («Ціни» in the admin) and clients (/prices) see it: sections, then each
-// title with its options. The admin page passes `renderOption` to make prices editable
+// Shared by the admin and member price pages; the admin passes `renderOption` to make prices editable
 
 const SECTIONS: { key: PriceSection; title: string; note?: string }[] = [
   { key: "club_card", title: "Клубні карти" },
@@ -44,7 +43,7 @@ export function PriceList<T extends PriceListItem>({
                   ) : (
                     <ReadOnlyOption key={item.id} item={item} />
                   );
-                // One price with no option («Разове відвідування»): the title and the price on one line
+                // A single option without a label: title and price on one line
                 const single = group.items.length === 1 && !group.items[0].optionLabel;
                 return single ? (
                   <div key={group.title} className="py-3 border-b border-line flex items-center space-x-3">

@@ -24,8 +24,7 @@ beforeEach(() => mockTryBook.mockReset());
 
 const NOW = DateTime.fromISO('2026-10-23T12:00:00', { zone: KY_ZONE });
 
-// Drizzle chain mock: each awaited query takes the next result from `results`.
-// Inserts and deletes are recorded with the table they hit
+// Drizzle chain mock: each awaited query takes the next result; inserts and deletes are recorded
 function makeDb(results: unknown[][]) {
   const queue = [...results];
   const inserts: { table: unknown; values: unknown }[] = [];
@@ -95,7 +94,6 @@ const line = (over: Record<string, unknown>) => ({
   ...over,
 });
 
-// The purchase was made on 2026-10-23 (Kyiv)
 const BOUGHT = new Date('2026-10-23T09:00:00Z');
 
 describe('Entitlements — buying', () => {
@@ -183,7 +181,7 @@ describe('Entitlements — group pass bought from «Записатися»', () 
     createdAt: BOUGHT,
   });
 
-  // Reads: the lines, the package insert (the mock's writes take a result too), the purchase
+  // Reads: lines, the package insert (mock writes take a result too), the purchase
   it('once paid, books the remembered slot and keeps the booking on the purchase', async () => {
     mockTryBook.mockResolvedValueOnce({ ok: true, bookingId: 'b1' });
     const { db, updates } = makeDb([[groupLine], [], [{ memberId: 'm1', slotId: 'slot-1', bookingId: null }]]);
@@ -237,8 +235,7 @@ describe('Entitlements — spends', () => {
     ...over,
   });
 
-  // Reads: the booking, then the member's packages of that type locked (no counts: a count in the locking
-  // statement would use a snapshot from before the lock wait), then the spends counted in a fresh statement
+  // Reads: booking, locked packages (no count: stale snapshot), then spends counted in a fresh statement
   it('a mark spends from the oldest usable package that has trainings left', async () => {
     const { db, inserts } = makeDb([
       [booking({})],
@@ -265,8 +262,7 @@ describe('Entitlements — spends', () => {
     expect(updates).toEqual([]);
   });
 
-  // A fix in «Історія» on a training from before the freeze: the package was waiting when the freeze started,
-  // so its month skips the frozen days too, and an early unfreeze will move it back
+  // Mark edited on a training before the freeze: validity also skips the frozen days
   it('activated from a date before a freeze: the month also skips the frozen days', async () => {
     (loadFreezes as jest.Mock).mockResolvedValue([
       { id: 'f1', status: 'ACTIVE', startedOn: '2026-10-26', endsOn: '2026-11-25' },
@@ -363,7 +359,6 @@ describe('Entitlements — club card activation', () => {
     await makeService(db).activateCard(db, 'm1', 'c1');
     expect(updates).toHaveLength(1);
     expect(updates[0].table).toBe(clubCards);
-    // valid_until is computed in SQL from duration_months; valid_from is today
     expect(updates[0].set).toMatchObject({ validFrom: '2026-10-23' });
   });
 

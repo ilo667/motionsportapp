@@ -22,8 +22,8 @@ export function liqpayVerify(privateKey: string, data: string, signature: string
 
 const LIQPAY_API_URL = 'https://www.liqpay.ua/api/request';
 
-// Server-to-server status check: https://www.liqpay.ua/uk/doc/api/information/status_payment
-// Throws on network error / timeout — callers must treat that as "unknown", not as failure.
+// https://www.liqpay.ua/uk/doc/api/information/status_payment
+// Throws on network error / timeout: callers treat that as unknown, never as failure
 export async function liqpayStatus(
   publicKey: string,
   privateKey: string,

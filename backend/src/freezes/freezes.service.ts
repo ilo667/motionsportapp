@@ -29,18 +29,15 @@ import { apiError } from '../common/api-error';
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-// Freezes shown on a client's page
 const MEMBER_FREEZES_LIMIT = 10;
 
-// An active freeze whose member asked to unfreeze, not over yet
+// Active, not over, and the member asked to unfreeze
 const unfreezeAsked = (today: string) =>
   and(eq(freezes.status, 'ACTIVE'), sql`${freezes.unfreezeRequestedAt} is not null`, sql`${freezes.endsOn} > ${today}`);
 
 type FreezeState = 'requested' | 'active' | 'unfreeze_requested';
 
-// «Заморозити абонемент»: the member asks, a trainer approves; the same for «Розморозити». Everything the member
-// has (club card, packages, waiting or active) stops for the frozen days: approving pushes its dates 30 days
-// ahead at once, an early unfreeze moves them back by the days left (rules.ts, schema `freezes`)
+// The member asks, a trainer approves (freeze and early unfreeze alike). Date rules: schema `freezes`, rules.ts
 @Injectable()
 export class FreezesService {
   constructor(
@@ -54,7 +51,6 @@ export class FreezesService {
     return this.clock.now().toISODate()!;
   }
 
-  // The member's open freeze for «Мій абонемент» (null = none), and whether there is anything to freeze
   async forMember(memberId: string) {
     const open = await openFreeze(this.database.db, memberId, this.today());
     return {
@@ -70,7 +66,6 @@ export class FreezesService {
     };
   }
 
-  // A card or a package with trainings left, waiting or active
   private async hasSomethingToFreeze(memberId: string, db: Db | Tx = this.database.db) {
     if (await this.entitlements.usableCard(memberId, db)) return true;
     const packs = await this.entitlements.packagesOf(memberId, db);
@@ -81,7 +76,7 @@ export class FreezesService {
     const { freezeId, trainerId, displayName } = await this.database.db.transaction(async (tx) => {
       const member = await this.lockMember(tx, memberId);
       if (await openFreeze(tx, memberId, this.today())) throw new ConflictException(apiError('FREEZE_REQUESTED'));
-      // A purchase paid during the freeze would start after its dates were pushed: finish it first
+      // A purchase paid mid-freeze would miss the date push: finish it first
       const [pending] = await tx
         .select({ id: purchases.id })
         .from(purchases)
@@ -103,7 +98,6 @@ export class FreezesService {
     return { ok: true };
   }
 
-  // Only while the trainer hasn't decided
   async cancelRequest(memberId: string) {
     const [done] = await this.database.db
       .update(freezes)
@@ -143,7 +137,6 @@ export class FreezesService {
     return { ok: true };
   }
 
-  // Requests of the trainer's own and unassigned clients, oldest first
   async pending(trainerId: string) {
     const today = this.today();
     const rows = await this.database.db
@@ -168,14 +161,13 @@ export class FreezesService {
       kind: r.status === 'REQUESTED' ? ('freeze' as const) : ('unfreeze' as const),
       requestedAt: (r.status === 'REQUESTED' ? r.requestedAt : r.unfreezeRequestedAt!).toISOString(),
       startedOn: r.startedOn,
-      // Last frozen day; a request approved now would freeze until FREEZE_DAYS from today
+      // Last frozen day; for a request, as if approved today
       until: plusDays(r.status === 'REQUESTED' ? plusDays(today, FREEZE_DAYS) : r.endsOn!, -1),
     }));
   }
 
-  // From today for 30 days. One transaction: the freeze, the pushed dates, and the member's trainings in that time
-  // cancelled (system cancellations, no reason). The member row lock makes a booking at that moment wait and then
-  // find the member frozen
+  // One transaction: freeze, pushed dates, bookings in the period cancelled. Under the member lock, so a
+  // concurrent booking waits and then finds the member frozen
   async approve(trainerId: string, freezeId: string) {
     const today = this.today();
     const now = this.clock.now();
@@ -199,7 +191,7 @@ export class FreezesService {
       await this.pushDates(tx, freezeId, done.memberId, today, FREEZE_DAYS);
 
       const freed = await this.cancelBookingsAhead(tx, done.memberId, today, endsOn, now);
-      // No «З'явилось місце» while frozen
+      // No vacancy alerts while frozen
       await tx.update(vacancyAlerts).set({ active: false }).where(eq(vacancyAlerts.memberId, done.memberId));
       return { memberId: done.memberId, freed };
     });
@@ -236,7 +228,7 @@ export class FreezesService {
     return { ok: true };
   }
 
-  // Ends today: the dates pushed ahead go back by the days that were left
+  // Ends today; pushed dates move back by the days left
   async approveUnfreeze(trainerId: string, freezeId: string) {
     const today = this.today();
     const now = this.clock.now().toJSDate();
@@ -265,7 +257,7 @@ export class FreezesService {
     return { ok: true };
   }
 
-  // The freeze goes on; the member may ask again
+  // The freeze goes on; clearing the request lets the member ask again
   async rejectUnfreeze(trainerId: string, freezeId: string) {
     const now = this.clock.now().toJSDate();
     const memberId = await this.database.db.transaction(async (tx) => {
@@ -288,7 +280,6 @@ export class FreezesService {
     return { ok: true };
   }
 
-  // A client's page: latest freezes with who decided
   async memberHistory(trainerId: string, memberId: string) {
     await requireVisibleMember(this.database.db, trainerId, memberId);
     const today = this.today();
@@ -309,19 +300,19 @@ export class FreezesService {
       .limit(MEMBER_FREEZES_LIMIT);
     return rows.map((r) => ({
       id: r.id,
-      // ACTIVE splits by date: going on, or over
+      // "Over" is computed, not stored
       status: r.status === 'ACTIVE' ? (today < r.endsOn! ? 'ACTIVE' : 'ENDED') : r.status,
       requestedAt: r.requestedAt.toISOString(),
       startedOn: r.startedOn,
-      // Last frozen day (none for a request never approved)
+      // Last frozen day
       until: r.endsOn ? plusDays(r.endsOn, -1) : null,
       unfreezeRequested: !!r.unfreezeRequestedAt,
       decidedBy: r.decidedBy,
     }));
   }
 
-  // The member's trainings not started yet, before the freeze ends: cancelled (system cancellations, no reason) with
-  // their guests, seats freed. Slots locked as BookingService does. Returns those that were full (for «З'явилось місце»)
+  // System-cancels (no reason) bookings not started before endsOn, with guests. Slots locked as BookingService does.
+  // Returns the ones whose slot was full, for vacancy pushes
   private async cancelBookingsAhead(tx: Tx, memberId: string, today: string, endsOn: string, now: DateTime) {
     const toCancel = await tx
       .select({
@@ -350,7 +341,6 @@ export class FreezesService {
       .update(bookings)
       .set({ status: 'CANCELLED', cancelledAt: at })
       .where(and(inArray(bookings.id, ids), eq(bookings.status, 'ACTIVE')));
-    // Guests go with the bookings: one more seat each
     const withGuest = await cancelGuests(tx, ids, at);
     const freed: typeof ahead = [];
     for (const b of ahead) {
@@ -359,8 +349,8 @@ export class FreezesService {
     return freed;
   }
 
-  // Every card and package the member has on `from` (waiting or active, trainings left) gets its date pushed
-  // `days` ahead: valid_until when active, activate_by when waiting. Remembered in freeze_items for an early unfreeze
+  // Pushes valid_until (active) or activate_by (waiting) of every card and package; recorded in freeze_items
+  // so an early unfreeze can move them back
   private async pushDates(tx: Tx, freezeId: string, memberId: string, from: string, days: number) {
     const cards = await tx
       .select({
@@ -402,7 +392,7 @@ export class FreezesService {
     await this.moveDates(tx, freezeId, days);
   }
 
-  // Moves every date the freeze pushed by `days` (negative = back)
+  // Negative days = back
   private async moveDates(tx: Tx, freezeId: string, days: number) {
     if (days === 0) return;
     const items = await tx
@@ -432,7 +422,7 @@ export class FreezesService {
     }
   }
 
-  // «FREEZE_DECIDED» to the member: a freeze or an early unfreeze approved or not (until: the last frozen day)
+  // until = last frozen day
   private notifyDecided(
     dedupeKey: string,
     payload: { memberId: string; kind: 'freeze' | 'unfreeze'; approved: boolean; until?: string },
@@ -440,7 +430,7 @@ export class FreezesService {
     return this.notifications.enqueueAndProcess('FREEZE_DECIDED', dedupeKey, payload);
   }
 
-  // Own clients' and unassigned clients' freezes; anyone else's answers 404 like a missing one
+  // Own and unassigned clients only; anyone else's answers 404
   private async visibleFreeze(tx: Tx, trainerId: string, freezeId: string) {
     const [row] = await tx
       .select({ memberId: freezes.memberId })
@@ -452,7 +442,7 @@ export class FreezesService {
     return row;
   }
 
-  // The member lock shared with bookings and purchases (lockMember): a freeze and a booking never interleave
+  // Shared with bookings and purchases, so a freeze and a booking never interleave
   private async lockMember(tx: Tx, memberId: string) {
     const member = await lockMember(tx, memberId);
     if (!member) throw new NotFoundException('Member not found');

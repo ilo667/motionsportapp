@@ -26,9 +26,7 @@ type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 type Q = Db | Tx;
 
-// The order a batch of marks («Підтвердити всіх», the 22:00 cron) goes through its bookings. syncSpend locks the
-// member's packages, so two batches over the same members must take them in the same order: otherwise each holds
-// a member the other waits for, Postgres breaks the deadlock and rolls back a whole batch
+// Batch marks lock members' packages (syncSpend); a fixed order stops two batches deadlocking
 export function inLockOrder<T extends { id: string; memberId: string }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => a.memberId.localeCompare(b.memberId) || a.id.localeCompare(b.id));
 }
@@ -55,13 +53,12 @@ export type UsableCard = {
   activateBy: string;
 };
 
-// Trainings already spent from a package. Fully qualified: drizzle drops table names in single-table selects
+// Fully qualified: drizzle drops table names in single-table selects
 export const USED = sql<number>`(select count(*)::int from package_spends ps where ps.package_id = "packages"."id")`;
 
 const cardLabel = (title: string, optionLabel: string | null) => (optionLabel ? `${title} · ${optionLabel}` : title);
 
-// The card a member has: the active one that lasts longest, else the waiting one that burns first.
-// Burned and expired cards don't count
+// Active card lasting longest, else the waiting one that burns first; burned / expired ignored
 function pickCard<T extends { activateBy: string; validFrom: string | null; validUntil: string | null }>(
   cards: T[],
   today: string,
@@ -92,9 +89,8 @@ const PASS_DATES = {
   validUntil: packages.validUntil,
 };
 
-// What a member has paid for: club cards (access to the gym) and packages (trainer services, group passes).
-// Nothing starts on payment: a card waits for the trainer's «Активувати з сьогодні», a package for its first mark;
-// not activated within a month of the purchase, it burns (validity.ts)
+// Club cards and packages. Nothing starts on payment: a card waits for trainer activation, a package
+// for its first attendance mark; not activated within a month, it burns (validity.ts)
 @Injectable()
 export class EntitlementsService {
   private readonly logger = new Logger(EntitlementsService.name);
@@ -108,8 +104,7 @@ export class EntitlementsService {
     return this.clock.now().toISODate()!;
   }
 
-  // A paid purchase turns into a club card and / or a package. Called in the transaction that marks it PAID.
-  // A group pass bought from «Записатися» then books its slot (LiqPay) and pays for that booking
+  // Runs in the transaction that marks the purchase PAID. A group pass bought for a slot also books it
   async activate(tx: Tx, purchaseId: string) {
     const lines = await tx
       .select({
@@ -129,7 +124,7 @@ export class EntitlementsService {
       .where(eq(purchaseItems.purchaseId, purchaseId));
 
     for (const line of lines) {
-      // The day it was bought, not the day the payment was confirmed
+      // Day of purchase, not of payment confirmation
       const purchasedOn = DateTime.fromJSDate(line.createdAt, { zone: KY_ZONE }).toISODate()!;
       if (line.section === 'club_card') {
         await tx.insert(clubCards).values({
@@ -162,7 +157,7 @@ export class EntitlementsService {
     if (!purchase?.slotId) return;
     let bookingId = purchase.bookingId;
     if (!bookingId) {
-      // Paid by LiqPay: book now. Can't (window closed, slot full) → the pass stays, never fail the payment
+      // LiqPay: book now. If that fails the pass stays; never fail the payment
       const booked = await tryBookGroup(tx, this.clock.now(), purchase.memberId, purchase.slotId);
       if (!booked.ok) {
         this.logger.log(`Purchase ${purchaseId}: paid, not booked (${booked.reason})`);
@@ -171,11 +166,11 @@ export class EntitlementsService {
       bookingId = booked.bookingId;
       await tx.update(purchases).set({ bookingId }).where(eq(purchases.id, purchaseId));
     }
-    // Already marked (cash confirmed after the training): spend from this pass now
+    // Cash confirmed after the training was already marked
     await this.syncSpend(tx, bookingId);
   }
 
-  // The card the member has now, waiting or active (a waiting card counts when buying a trainer service)
+  // Waiting or active; a waiting card is enough to buy a trainer service
   async usableCard(memberId: string, db: Q = this.database.db): Promise<UsableCard | null> {
     const cards = await db.select(CARD_COLUMNS).from(clubCards).where(eq(clubCards.memberId, memberId));
     const card = pickCard(cards, this.today());
@@ -184,7 +179,7 @@ export class EntitlementsService {
       : null;
   }
 
-  // Oldest first, the order trainings are spent in
+  // Oldest first: spend order
   async packagesOf(memberId: string, db: Q = this.database.db): Promise<PackageView[]> {
     const rows = await db
       .select({
@@ -210,8 +205,6 @@ export class EntitlementsService {
     }));
   }
 
-  // Clients list: per member, the card (waiting until / active until) and trainings left by type, counting only
-  // packages that can still be used
   async summaries(memberIds: string[], db: Q = this.database.db) {
     const result = new Map<
       string,
@@ -259,7 +252,6 @@ export class EntitlementsService {
     return result;
   }
 
-  // Group trainings the member's passes can still pay for on that date (booking a group training needs one)
   async groupPassLeft(memberId: string, date: string, db: Q = this.database.db) {
     const rows = await db
       .select({ total: packages.total, used: USED, ...PASS_DATES })
@@ -268,10 +260,8 @@ export class EntitlementsService {
     return rows.filter((p) => passUsableOn(p, date)).reduce((sum, p) => sum + Math.max(p.total - p.used, 0), 0);
   }
 
-  // Keeps the packages in step with the attendance mark of one booking: any mark (✓ or ✗) spends one training
-  // from a package of that type usable on the training's date: the one bought for this booking first (cash for a
-  // group training), then the oldest. The first spend activates the package from that date. «—» gives the
-  // training back to the package it came from; the activation stays. No package left: nothing is spent, no debt
+  // Any mark (present or absent) spends one training (see payerFor); the first spend activates the package.
+  // Clearing the mark returns it to the same package, activation stays. No package left: no spend, no debt
   async syncSpend(tx: Tx, bookingId: string) {
     const [booking] = await tx
       .select({
@@ -293,14 +283,14 @@ export class EntitlementsService {
       .limit(1);
     if (!booking || !PASS_TYPES.includes(booking.trainingType)) return;
 
-    // A mark spends; so does a late cancellation by the member, unless the trainer waived it (booking/cancel-fee.ts)
+    // A late-cancellation fee spends too, unless waived (booking/cancel-fee.ts)
     const lateCancel = booking.status === 'CANCELLED' && !!booking.cancelFee && !booking.feeWaivedAt;
     if (!booking.marked && !lateCancel) {
       if (booking.spentFrom) await tx.delete(packageSpends).where(eq(packageSpends.bookingId, bookingId));
       return;
     }
     if (booking.spentFrom) return;
-    // Nothing is spent on a frozen day (the freeze cancels those bookings; this is for any left over)
+    // Freeze cancels those bookings; this catches any left over
     const memberFreezes = await loadFreezes(tx, [booking.memberId]);
     if (memberFreezes.some((f) => frozenOn(f, booking.localDate))) return;
 
@@ -309,8 +299,8 @@ export class EntitlementsService {
 
     await tx.insert(packageSpends).values({ bookingId, packageId: from.id }).onConflictDoNothing();
     if (!from.activatedOn) {
-      // Activated by a mark from before a freeze (a fix in «Історія»): it was waiting when the freeze started, so
-      // its month also skips the frozen days, and an early unfreeze moves it back like the rest
+      // Mark dated before a freeze (edited in history): the package was waiting then, so its validity also
+      // skips the frozen days and is recorded for an early unfreeze
       let validUntil = validUntilFor(booking.localDate, from.durationMonths);
       const later = memberFreezes.filter((f) => f.status === 'ACTIVE' && f.startedOn! >= booking.localDate);
       for (const f of later) {
@@ -325,12 +315,9 @@ export class EntitlementsService {
     }
   }
 
-  // What pays for this booking's training: the package bought for it first (cash for a group training), else the
-  // oldest one of that type usable on the training's date with trainings left. Null = nothing does.
-  // lock = for a spend: lock first, count after, so a mark waiting on the lock sees the other mark's spend (a count
-  // inside the locking statement would use that statement's snapshot, taken before the wait, and both could take
-  // the last training; the second statement gets a fresh snapshot, READ COMMITTED). Only the packages are locked
-  // (`of`), not the joined purchase: payments lock the purchase before the packages, the other order deadlocks
+  // The package bought for this booking, else the oldest usable one with trainings left; null if none.
+  // lock: lock first, count in a second statement (fresh READ COMMITTED snapshot), else two marks can both
+  // take the last training. Lock packages only: payments lock purchase then packages, the reverse deadlocks
   async payerFor(
     q: Q,
     booking: { memberId: string; trainingType: string; localDate: string },
@@ -344,7 +331,7 @@ export class EntitlementsService {
         durationMonths: packages.durationMonths,
         ...PASS_DATES,
         forBooking: sql<boolean>`coalesce(${purchases.bookingId} = ${bookingId}, false)`,
-        // What the package cost when bought, and the purchase (a late cancellation of a single training gives half back)
+        // For the half refund on a late-cancelled single training
         amountUah: purchaseItems.amountUah,
         purchaseId: purchases.id,
       })
@@ -371,8 +358,7 @@ export class EntitlementsService {
     return usable.find((p) => p.forBooking) ?? usable[0] ?? null;
   }
 
-  // «Активувати з сьогодні»: a waiting card starts today for its months. Compare-and-set, so a burned or already
-  // active card is left alone
+  // «Активувати з сьогодні». Compare-and-set: burned or active cards are left alone
   async activateCard(db: Q, memberId: string, cardId: string) {
     const today = this.today();
     const mine = and(eq(clubCards.id, cardId), eq(clubCards.memberId, memberId));
@@ -380,7 +366,7 @@ export class EntitlementsService {
       .update(clubCards)
       .set({
         validFrom: today,
-        // Same month arithmetic as validity.ts: Postgres also clamps to the month's last day
+        // Matches validity.ts: Postgres also clamps to the month's last day
         validUntil: sql`(${today}::date + make_interval(months => ${clubCards.durationMonths}))::date`,
       })
       .where(and(mine, isNull(clubCards.validFrom), gte(clubCards.activateBy, today)))
@@ -391,7 +377,7 @@ export class EntitlementsService {
     throw new ConflictException('Card cannot be activated');
   }
 
-  // A card bought at the reception: the trainer adds it, waiting for activation or active from today
+  // Card bought at the reception, added by the trainer
   async addManualCard(db: Q, memberId: string, trainerId: string, priceItemId: string, activateNow: boolean) {
     const [item] = await db
       .select({

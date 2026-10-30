@@ -4,11 +4,11 @@ import Link from "next/link";
 import { api, PaymentStatus } from "@/lib/api";
 import { PageLayout } from "@/components/ui/PageLayout";
 
-// Backend asks LiqPay on each call while PENDING, so a few short retries cover a late callback
+// The backend asks LiqPay on each call while PENDING, so a few retries cover a late callback
 const POLL_INTERVAL_MS = 2000;
 const MAX_ATTEMPTS = 5;
 
-// REJECTED: LiqPay declined an attempt (try_again) but the order is still open, so the purchase still awaits payment
+// REJECTED: LiqPay said try_again; the order stays open for a retry
 type ResultState = PaymentStatus | "UNKNOWN" | "REJECTED";
 
 const REJECT_REASONS: Record<string, string> = {
@@ -66,7 +66,7 @@ export function PaymentResult({ orderId }: { orderId?: string }) {
   const [state, setState] = useState<ResultState | null>(orderId ? null : "UNKNOWN");
   const [errCode, setErrCode] = useState<string>();
   const [expiresAt, setExpiresAt] = useState<string>();
-  // A group pass bought from «Записатись»: whether the training got booked once paid
+  // Group pass bought while booking: did the training get booked
   const [booked, setBooked] = useState<boolean>();
 
   useEffect(() => {

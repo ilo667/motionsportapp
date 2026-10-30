@@ -8,10 +8,10 @@ import { liqpaySign, liqpayEncode, liqpayDecode, liqpayVerify, liqpayStatus } fr
 
 const SUCCESS_STATUSES = ['success', 'sandbox'];
 const FAILED_STATUSES = ['failure', 'error', 'reversed'];
-// Stale PENDING payments handled per expireStale() run; the rest wait for the next schedule load
+// Per expireStale() run; the rest wait for the next schedule load
 const EXPIRE_BATCH = 10;
 
-// REPLACED: superseded by a newer attempt for the same purchase (member pressed "Оплатити" again)
+// REPLACED: superseded by a newer checkout attempt for the same purchase
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'REPLACED';
 
 const LOGGED_LIQPAY_FIELDS = [
@@ -34,11 +34,10 @@ function newOrderId(purchaseId: string) {
   return `mg-${Date.now()}-${purchaseId.substring(0, 8)}`;
 }
 
-// The success transition reached a purchase that no longer awaits payment (cancelled meanwhile):
-// the whole transaction is rolled back and the money is handled by hand
+// Success hit a purchase no longer PENDING: roll back, money goes to manual handling
 class PurchaseNotAwaitingPayment extends Error {}
 
-// An unpaid purchase lasts 15 minutes; LiqPay gets the same deadline (expired_date), so both end together
+// Also sent to LiqPay as expired_date, so both sides close the order together
 const PAYMENT_EXPIRY_MS = 15 * 60 * 1000;
 
 @Injectable()
@@ -58,8 +57,7 @@ export class PaymentService {
     return process.env.LIQPAY_PRIVATE_KEY ?? '';
   }
 
-  // LiqPay checkout for the member's own PENDING LiqPay purchase. The amount is the purchase total, fixed when it
-  // was made. Pressing "Оплатити" again continues the same purchase with a new order id
+  // Amount is the purchase total fixed at purchase time. A retry continues the purchase with a new order id
   async checkoutPurchase(purchaseId: string, memberId: string) {
     if (!this.publicKey || !this.privateKey) {
       throw new BadRequestException('Payment is not configured');
@@ -98,9 +96,8 @@ export class PaymentService {
     return this.buildCheckout(orderId, purchase.totalUah, description);
   }
 
-  // Returns a fresh order id for the purchase's PENDING payment, 'PAID' if LiqPay says the previous attempt
-  // actually succeeded, 'FAILED' if it failed (the purchase is over), or null when there is nothing to resume.
-  // 'PAID' / 'FAILED' are already strings; kept in the type to document the special values
+  // New order id replacing the PENDING payment, 'PAID' / 'FAILED' if LiqPay already settled the previous
+  // attempt, null if nothing to resume. The literals are redundant in the type, kept as documentation
   // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
   private async resumePendingCheckout(purchaseId: string, amount: number): Promise<string | 'PAID' | 'FAILED' | null> {
     const [pending] = await this.database.db
@@ -121,7 +118,7 @@ export class PaymentService {
       }
     }
 
-    // LiqPay may refuse to reuse an order_id that already had an attempt, so issue a new one for the same purchase
+    // LiqPay may refuse an order_id that already had an attempt
     const orderId = newOrderId(purchaseId);
     await this.database.db.transaction(async (tx) => {
       const replaced = await tx
@@ -148,8 +145,7 @@ export class PaymentService {
       order_id: orderId,
       server_url: process.env.LIQPAY_SERVER_URL ?? '',
       result_url: `${process.env.FRONTEND_URL ?? ''}/payment/return?order=${orderId}`,
-      // LiqPay closes the order at the same moment our expiry ends the purchase,
-      // so an old LiqPay tab can't be paid after it is gone. Format: UTC "YYYY-MM-DD HH:mm:ss"
+      // So an old LiqPay tab can't be paid after our expiry. UTC "YYYY-MM-DD HH:mm:ss"
       expired_date: new Date(this.clock.now().toMillis() + PAYMENT_EXPIRY_MS)
         .toISOString()
         .replace('T', ' ')
@@ -185,14 +181,14 @@ export class PaymentService {
       `LiqPay callback: order=${orderId} ignored as PENDING handler — payment is already ${payment.status}`,
     );
     if (SUCCESS_STATUSES.includes(decoded.status as string) && payment.status !== 'PAID') {
-      // Member paid in an old LiqPay tab after pressing "Оплатити" again — still valid while the purchase awaits payment
+      // Paid in an old tab after a retry: still valid while the purchase is PENDING
       if (payment.status === 'REPLACED' && (await this.isAwaitingPayment(payment.purchaseId))) {
         await this.applyLiqpayStatus(payment, decoded);
       } else {
         await this.needsManualHandling(payment, decoded);
       }
     }
-    // Refunded after it was paid: no refunds in the app yet, so only the payload is kept (the purchase stays)
+    // Refund: not handled in the app yet, keep the payload and leave the purchase as is
     if (decoded.status === 'reversed' && payment.status === 'PAID') {
       this.logger.warn(
         `LiqPay callback: order=${orderId} was refunded (reversed) — purchase left as is, needs manual handling`,
@@ -205,11 +201,8 @@ export class PaymentService {
     return { ok: true };
   }
 
-  // Used by /payment/return. Asks LiqPay directly while still PENDING, so the page
-  // shows the real result even if the callback is late or lost.
-  // errCode is set when LiqPay rejected an attempt but the order is still open (status=try_again);
-  // expiresAt — when a still PENDING purchase will expire; booked — for a group pass bought from «Записатися»,
-  // whether the slot got booked once paid
+  // For /payment/return. While PENDING asks LiqPay directly, since the callback may be late or lost.
+  // errCode: declined attempt on a still open order (try_again). booked: group pass bought for a slot
   async getStatus(
     orderId: string,
     memberId: string,
@@ -251,7 +244,7 @@ export class PaymentService {
         : undefined;
     this.logger.log(`Status check: order=${orderId} → ${status}${errCode ? ` errCode=${errCode}` : ''}`);
     if (status === 'PAID' && payment.slotId) {
-      // Paid just now: the booking was made in the same transaction
+      // Booked in the same transaction as the payment
       const [after] = await this.database.db
         .select({ bookingId: purchases.bookingId })
         .from(purchases)
@@ -271,19 +264,18 @@ export class PaymentService {
       .where(and(eq(payments.status, 'PENDING'), lt(payments.createdAt, cutoff)))
       .limit(EXPIRE_BATCH);
 
-    // In parallel: runs on every schedule load, so a slow LiqPay costs one timeout, not one per payment
+    // Parallel: runs on every schedule load, so a slow LiqPay costs one timeout, not one per payment
     const results = await Promise.all(stale.map((p) => this.expireOne(p)));
     const expired = results.filter(Boolean).length;
     return { expired };
   }
 
-  // true when this call cancelled the payment
   private async expireOne(p: { id: string; purchaseId: string; orderId: string }): Promise<boolean> {
-    // Reconcile before cancelling — the callback may have been lost while the member actually paid
+    // The callback may have been lost while the member actually paid
     const remote = await this.fetchLiqpayStatus(p.orderId);
     if (!remote) {
       this.logger.warn(`Expire: order=${p.orderId} skipped — LiqPay unreachable, retry next run`);
-      return false; // retry next run rather than cancel a possibly paid purchase
+      return false; // never cancel a possibly paid purchase
     }
     if (remote.result === 'ok' && SUCCESS_STATUSES.includes(remote.status as string)) {
       this.logger.warn(`Expire: order=${p.orderId} was actually paid (lost callback) → PAID`);
@@ -298,10 +290,8 @@ export class PaymentService {
     return false;
   }
 
-  // Single place that maps a LiqPay status onto our payment + purchase.
-  // Non-final statuses (processing, *_verify, …) leave the payment PENDING.
-  // Every transition is compare-and-set (UPDATE … WHERE status = expected RETURNING): concurrent requests
-  // (callback retries, several clients triggering expireStale at once) can't apply the same transition twice.
+  // The only place mapping a LiqPay status onto payment + purchase. Non-final statuses stay PENDING.
+  // Compare-and-set transitions: callback retries and concurrent expireStale runs apply each once
   private async applyLiqpayStatus(
     payment: { id: string; purchaseId: string },
     liqpay: Record<string, unknown>,
@@ -310,13 +300,13 @@ export class PaymentService {
     const status = liqpay.status as string;
 
     if (SUCCESS_STATUSES.includes(status)) {
-      // LiqPay sends payment_id as a number
+      // payment_id comes as a number
       // eslint-disable-next-line @typescript-eslint/no-base-to-string
       const liqpayPaymentId = liqpay.payment_id ? String(liqpay.payment_id) : null;
       let claimed: boolean;
       try {
         claimed = await this.database.db.transaction(async (tx) => {
-          // REPLACED is allowed: the member may pay an old LiqPay tab (caller checks the purchase still awaits payment)
+          // REPLACED: an old tab paid; the caller checked the purchase is still PENDING
           const [won] = await tx
             .update(payments)
             .set({ status: 'PAID', liqpayPaymentId, rawCallback: liqpay, updatedAt: this.clock.now().toJSDate() })
@@ -330,7 +320,7 @@ export class PaymentService {
             .returning({ id: purchases.id });
           if (!paid) throw new PurchaseNotAwaitingPayment();
           await this.entitlements.activate(tx, purchaseId);
-          // Other open attempts for this purchase must not expire it later
+          // So other open attempts can't expire it later
           await tx
             .update(payments)
             .set({ status: 'REPLACED', updatedAt: this.clock.now().toJSDate() })
@@ -354,7 +344,6 @@ export class PaymentService {
     return 'PENDING';
   }
 
-  // Someone else already moved the payment on — report what it is now
   private async currentStatus(paymentId: string): Promise<PaymentStatus> {
     const [row] = await this.database.db
       .select({ status: payments.status })
@@ -373,13 +362,12 @@ export class PaymentService {
     return purchase?.status === 'PENDING';
   }
 
-  // Money arrived for a payment we can no longer apply (purchase cancelled / expired / already paid)
+  // Money for a payment we can no longer apply (purchase cancelled, expired or already paid)
   private async needsManualHandling(payment: { id: string; status: string }, liqpay: Record<string, unknown>) {
     this.logger.error(
       `LiqPay: order=${String(liqpay.order_id)} paid after it was ${payment.status} — needs manual handling`,
     );
-    // Keep the evidence (payment_id for a refund) in the DB — runtime logs expire in ~30 min.
-    // Status stays as is; find these with: status <> 'PAID' AND raw_callback->>'status' IN ('success','sandbox')
+    // Kept in the DB (payment_id for a refund): Vercel logs last ~30 min. Status is left unchanged
     await this.saveRawCallback(payment.id, liqpay);
   }
 
@@ -390,8 +378,7 @@ export class PaymentService {
       .where(eq(payments.id, paymentId));
   }
 
-  // Returns false when the payment was no longer PENDING (another request got there first) — then nothing changes.
-  // The purchase ends only if it still awaited payment, so it can't be ended twice.
+  // false: payment no longer PENDING, nothing changed. Purchase also compare-and-set
   private async cancelPayment(
     payment: { id: string; purchaseId: string },
     status: 'FAILED' | 'EXPIRED',
@@ -424,8 +411,7 @@ export class PaymentService {
     }
   }
 
-  // Safe subset of a LiqPay payload (no names/phones/card masks) + the list of all keys,
-  // so undocumented statuses and fields show up in logs
+  // Safe fields only (no names, phones, card masks) plus all keys, so undocumented fields show in logs
   private describe(liqpay: Record<string, unknown>) {
     const fields = LOGGED_LIQPAY_FIELDS.filter((key) => liqpay[key] != null)
       .map((key) => `${key}=${String(liqpay[key] as string)}`)

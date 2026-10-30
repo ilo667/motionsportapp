@@ -4,7 +4,6 @@ import { SessionGuard, SessionUser } from '../auth/session.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
-// Trainer side: freeze and unfreeze requests of own and unassigned clients
 @Controller('admin')
 @UseGuards(SessionGuard, AdminGuard)
 export class AdminFreezesController {

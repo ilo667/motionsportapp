@@ -5,7 +5,6 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AddClubCardDto } from './dto/add-club-card.dto';
 
-// Trainer side of purchases: cash requests of own clients, a client's cards and packages
 @Controller('admin')
 @UseGuards(SessionGuard, AdminGuard)
 export class AdminPurchasesController {

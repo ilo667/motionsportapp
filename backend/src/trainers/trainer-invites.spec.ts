@@ -16,7 +16,7 @@ import { KY_ZONE } from '../schedule/training-types';
 const NOW = DateTime.fromISO('2026-10-24T12:00:00', { zone: KY_ZONE });
 const TOKEN = 'a'.repeat(64);
 
-// Drizzle chain mock: each awaited query takes the next result from `results`; set/values payloads are recorded
+// Drizzle chain mock: each awaited query takes the next result; set/values payloads are recorded
 function makeDb(results: unknown[][]) {
   const queue = [...results];
   const sets: Record<string, unknown>[] = [];

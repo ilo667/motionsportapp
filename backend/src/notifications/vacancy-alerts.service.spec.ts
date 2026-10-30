@@ -1,6 +1,6 @@
 import { VacancyAlertsService } from './vacancy-alerts.service';
 
-// One read: the slot's active alerts, each with the member's active booking on that slot (null if none)
+// One read: the slot's active alerts, each with the member's active booking there (or null)
 function makeService(rows: unknown[]) {
   const chain: any = { then: (resolve: (v: unknown) => void) => resolve(rows) };
   for (const m of ['from', 'leftJoin', 'where']) chain[m] = jest.fn(() => chain);

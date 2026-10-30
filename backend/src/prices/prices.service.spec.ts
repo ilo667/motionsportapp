@@ -14,7 +14,7 @@ import { KY_ZONE, ASSIGNED_TYPES } from '../schedule/training-types';
 
 const NOW = DateTime.fromISO('2026-10-23T12:00:00', { zone: KY_ZONE });
 
-// Drizzle chain mock: each awaited query takes the next result from `results`; set/values payloads are recorded
+// Drizzle chain mock: each awaited query takes the next result; set/values payloads are recorded
 function makeDb(results: unknown[][]) {
   const queue = [...results];
   const sets: Record<string, unknown>[] = [];
@@ -60,7 +60,7 @@ describe('Prices', () => {
   });
 
   it('answers 409 with the current amount when another trainer changed it meanwhile', async () => {
-    // compare-and-set updates nothing, then the current row is read
+    // Lost compare-and-set, then the current row is read
     const { db, inserts } = makeDb([[], [{ amountUah: 700, updatedBy: 'demo' }]]);
     const err = await makeService(db)
       .updatePrice('trainer-1', 'p1', { amountUah: 650, expectedAmountUah: 600 })
@@ -109,7 +109,6 @@ describe('Prices', () => {
     expect(await validate(plainToInstance(UpdatePriceDto, { amountUah: 100_000, expectedAmountUah: 600 }))).toEqual([]);
   });
 
-  // Client «Ціни» page: amounts only, never who changed them
   it('the client price list has no trainer names or change times', async () => {
     const row = { id: 'p1', section: 'group', title: 'Разове відвідування', optionLabel: null, amountUah: 250 };
     const { db } = makeDb([[row]]);
@@ -142,7 +141,6 @@ describe('Prices', () => {
     }
   });
 
-  // What a purchase gives: a club card lasts durationMonths (0 = that day only), a trainer package holds trainingCount
   it('seed price list: everything has a duration; trainer services and group passes a type and a count', () => {
     for (const p of DEFAULT_PRICE_LIST) {
       if (p.section === 'club_card') {

@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-// Short drops (lift, Wi-Fi → mobile) shouldn't flash the strip
+// Short drops (Wi-Fi → mobile) shouldn't flash the strip
 const SHOW_AFTER_MS = 5_000;
 
-// 0 = online; every disconnect gets a new number, so the delay restarts for each one
+// 0 = online; each disconnect gets a new number, so the delay restarts
 let offlineEpisode = 0;
 let episodeCounter = 0;
 let initialized = false;
@@ -34,7 +34,7 @@ function subscribe(onChange: () => void) {
   };
 }
 
-// Sticky strip on every page after 5 s without connection; hides as soon as it's back. Server render assumes online
+// Server render assumes online
 export function OfflineBanner() {
   const episode = useSyncExternalStore(subscribe, getSnapshot, () => 0);
   const [shownEpisode, setShownEpisode] = useState(0);

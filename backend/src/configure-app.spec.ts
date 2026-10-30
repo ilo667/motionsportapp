@@ -10,7 +10,7 @@ class PingController {
   }
 }
 
-// A real HTTP round trip: main.ts and api/index.ts both go through configureApp, so this is what Vercel serves
+// Real HTTP round trip; both entrypoints use configureApp, so this is what Vercel serves
 describe('configureApp — security headers', () => {
   let app: INestApplication;
   let baseUrl: string;

@@ -18,14 +18,13 @@ const TITLES: Record<AttendanceStatus, string> = {
   UNMARKED: "без відмітки",
 };
 
-// — → ✓ → ✗ → —
+// Cycle: unmarked → present → absent → unmarked
 export function nextAttendance(current: AttendanceStatus): AttendanceStatus {
   if (current === "UNMARKED") return "PRESENT";
   if (current === "PRESENT") return "ABSENT";
   return "UNMARKED";
 }
 
-// Round attendance toggle used on the today page and in history; always editable
 export function AttendanceButton({
   status,
   name,

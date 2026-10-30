@@ -6,7 +6,7 @@ import { noopSubscribe } from "@/lib/clientStore";
 
 type Support = "pending" | "unsupported" | "denied" | "available";
 
-// Whether this browser can do push at all; "pending" on the server and during hydration
+// "pending" on the server and during hydration
 function readSupport(): Support {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "unsupported";
   if (Notification.permission === "denied") return "denied";
@@ -15,7 +15,7 @@ function readSupport(): Support {
 
 export function PushSubscribeButton() {
   const support = useSyncExternalStore<Support>(noopSubscribe, readSupport, () => "pending");
-  // null = still checking the browser's current subscription, or a request is in flight
+  // null = checking, or a request in flight
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -23,8 +23,7 @@ export function PushSubscribeButton() {
     navigator.serviceWorker.ready
       .then(async (reg) => {
         const existing = await reg.pushManager.getSubscription();
-        // Keep the server in sync for the current role (same browser may have subscribed as the other one)
-        // Best effort on load: if it fails, the button still offers to subscribe
+        // Re-register for the current role. Deliberately ignored on failure: the button still offers to subscribe
         if (existing) syncSubscription(existing).catch(() => {});
         setSubscribed(!!existing);
       })
@@ -55,7 +54,7 @@ export function PushSubscribeButton() {
     }
   };
 
-  // Permission can be refused in the prompt: hide the button like an already-denied browser
+  // Refused in the prompt: hide like an already-denied browser
   if (support !== "available" || subscribed === null) return null;
   if (typeof Notification !== "undefined" && Notification.permission === "denied") return null;
 

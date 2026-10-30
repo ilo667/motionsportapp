@@ -5,7 +5,7 @@ import { api, statusOf } from "@/lib/api";
 const FIELD = "input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none";
 const MIN_PASSWORD = 10;
 
-// «Змінити пароль»: the signed-in trainer's own; their other sessions end
+// Own password only; the trainer's other sessions are revoked
 export function PasswordSection() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");

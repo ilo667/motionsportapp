@@ -18,7 +18,7 @@ export default function ForgotPage() {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async (text: string) => {
-    // No clipboard (an old browser, a page not on https): no «Скопійовано», the code stays on screen to copy by hand
+    // No clipboard (old browser, no https): the code stays on screen to copy by hand
     const ok = await navigator.clipboard.writeText(text).then(
       () => true,
       () => false,

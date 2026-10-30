@@ -4,7 +4,7 @@ import { api, Purchase } from "@/lib/api";
 import { submitLiqPay } from "@/lib/liqpay";
 import { formatUah, lineName } from "@/lib/prices";
 
-// The purchase that awaits payment: what is in it, «Оплатити» (LiqPay) and «Скасувати». `onChanged` reloads the page
+// `onChanged` reloads the page
 export function PendingPurchase({ pending, onChanged }: { pending: Purchase; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

@@ -6,7 +6,6 @@ import { MemberGuard } from '../common/guards/member.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UpdatePriceDto } from './dto/update-price.dto';
 
-// One price list for all trainers
 @Controller('admin/prices')
 @UseGuards(SessionGuard, AdminGuard)
 export class PricesController {
@@ -23,7 +22,7 @@ export class PricesController {
   }
 }
 
-// The same list for signed-in clients (the «Ціни» page): amounts only
+// Member view: amounts only
 @Controller('prices')
 @UseGuards(SessionGuard, MemberGuard)
 export class MemberPricesController {

@@ -10,7 +10,6 @@ import { CancelRefunds } from "./CancelRefunds";
 import { FREQUENT_CANCELLATIONS, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
 import { useAdminData } from "@/lib/useAdminData";
 
-// The list, the trainers to reassign to, who is signed in, and the requests on top
 const loadClientsPage = () =>
   Promise.all([
     api.getMembers(),
@@ -29,8 +28,7 @@ const loadClientsPage = () =>
   }));
 
 export default function ClientsPage() {
-  // After a cash, freeze or refund decision `reload` refreshes the requests and the summaries; if that fails the
-  // page keeps the old lists and says they are stale
+  // reload after a decision; on failure the old lists stay, marked stale
   const { data, setData, error, reload } = useAdminData(loadClientsPage);
   const loadError = error != null && !data;
   const reloadError = error != null && !!data;
@@ -44,7 +42,6 @@ export default function ClientsPage() {
   const updateNote = (id: string, trainerNote: string | null) =>
     setMembers((list) => list.map((m) => (m.id === id ? { ...m, trainerNote } : m)));
 
-  // Given to another trainer: the client leaves this trainer's list
   const updateTrainer = (id: string, trainerId: string) =>
     setMembers((list) =>
       trainerId === myId ? list.map((m) => (m.id === id ? { ...m, trainerId } : m)) : list.filter((m) => m.id !== id),
@@ -68,7 +65,6 @@ export default function ClientsPage() {
         {rows.map((m) => (
           <tr key={m.id} className="align-top border-b border-line">
             <td className="py-3 pr-3">
-              {/* Short here; everything else on the client's page */}
               <Link href={`/admin/clients/${m.id}`} className="text-heading hover:text-accent transition-colors">
                 {m.displayName} <span className="text-subtle">›</span>
               </Link>

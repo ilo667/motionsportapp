@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-// Colors from the brand: active / waiting or frozen / ended or cancelled / nothing (grey)
+// ok = active, warn = waiting or frozen, danger = ended or cancelled, none = grey
 const TONE = {
   ok: "text-accent bg-teal/10 border-teal/30",
   warn: "text-warn bg-warn-bg border-warn-line",
@@ -9,9 +9,9 @@ const TONE = {
 };
 
 const SIZE = {
-  // A card's / package's state, «Заморожено до …», badges under a client's name
+  // States: card, package, freeze
   status: "font-semibold px-2.5 py-1",
-  // Next to a name or time: «гість», «скасовано», «на 20:00», «повернути 300 ₴»
+  // Small tags next to a name or time
   tag: "px-2 py-0.5",
 };
 

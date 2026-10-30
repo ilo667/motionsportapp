@@ -64,9 +64,9 @@ const slots = [
   { id: 'slot-1', slotTime: '19:00', status: 'ACTIVE', capacity: 8, bookedCount: 5 },
   { id: 'slot-2', slotTime: '20:00', status: 'ACTIVE', capacity: 8, bookedCount: 3 },
 ];
-// getMemberTrainerId(): a visitor / member without a trainer → the first trainer
+// getMemberTrainerId() for a visitor: the first trainer
 const TRAINER = [{ id: 'trainer-1' }];
-// withGroupSlots(): the trainer's group slots on the listed days (time and status)
+// withGroupSlots() read
 const HAS_GROUP = [
   { dayId: 'day-1', slotTime: '19:00', status: 'ACTIVE' },
   { dayId: 'day-1', slotTime: '20:00', status: 'ACTIVE' },
@@ -83,14 +83,14 @@ function makeService(db: any, now: DateTime, packages: unknown[] = [], groupPass
   };
   const service = new ScheduleService({ db } as any, mockClock, mockPaymentService as any, mockEntitlements as any);
   mockLoadSchedule.mockResolvedValue({ bookingOpensAt: '14:00', autoCreate: true, times: [] });
-  // Group trainings created from the trainer schedules are tested separately
+  // Tested separately below
   jest.spyOn(service, 'ensureGroupSlots').mockResolvedValue({ added: 0, skipped: [] });
   return service;
 }
 
 describe('ScheduleService — group pass', () => {
   it('tells the member how many group trainings their pass has for that day', async () => {
-    // No assigned trainings, then the usual group-day reads (the member's booking, alerts, announcement)
+    // No assigned slots, then the usual group-day reads
     const { db } = makeDb([[], [{ trainerId: 'trainer-1' }], [trainingDay], HAS_GROUP, slots, [], [], []]);
     const result = await makeService(db, kyivAt(15), [], 7).getNext('member-1');
     expect(result.groupPassLeft).toBe(7);
@@ -148,7 +148,7 @@ describe('ScheduleService — announcement visibility', () => {
   });
 
   it('hides announcement once the last group training started', async () => {
-    // After 20:00 today's group trainings have all started and nothing later is in the calendar: no group day
+    // After 20:00 all of today's groups have started and nothing later exists
     const { db } = makeDb([TRAINER, [trainingDay], HAS_GROUP]);
     const result = await makeService(db, kyivAt(20)).getNext();
     expect(result?.announcement).toBeNull();
@@ -218,7 +218,7 @@ describe('ScheduleService — booking window flag', () => {
     ]);
   });
 
-  // 20:00 cancelled: once 19:00 started there is nothing left to book today, so the next day is shown
+  // 20:00 cancelled: once 19:00 starts, the next day is shown
   it('a cancelled last group training does not keep the day "next"', async () => {
     const tomorrow = { id: 'day-2', localDate: '2026-10-21', status: 'SCHEDULED' };
     const { db } = makeDb([
@@ -306,7 +306,7 @@ describe('ScheduleService — assigned trainings', () => {
       { trainingType: 'split', left: 3, ...waiting },
       { trainingType: 'split', left: 2, ...active },
       { trainingType: 'personal', left: 4, ...waiting },
-      // Can't pay for a training today: burned (not activated in time), expired, bought after it
+      // Can't pay today: burned, expired, bought later
       {
         trainingType: 'split',
         left: 8,
@@ -334,7 +334,7 @@ describe('ScheduleService — assigned trainings', () => {
     ];
     const result = await makeService(db, kyivAt(15), packages).getNext('member-1');
 
-    // 12:00 ended at 13:00, so only the evening split is shown; its trainings left = the split packages usable today
+    // 12:00 ended at 13:00; packageLeft counts only split packages usable today
     expect(result?.assignedSlots).toEqual([
       expect.objectContaining({ id: 'p-evening', isMyBooking: true, spent: true, packageLeft: 5, started: false }),
     ]);
@@ -393,7 +393,7 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
           values.push(v);
           return chain;
         },
-        // the slots insert asks back which rows it really created (a taken time is skipped by the conflict)
+        // Returns the rows really created; a taken time is skipped by the conflict
         onConflictDoNothing: () => {
           const done: any = Promise.resolve();
           done.returning = () => Promise.resolve(createdRows.splice(0));
@@ -419,7 +419,7 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
 
   it("creates each trainer's own times on their weekdays only, 8 seats, never overwriting", async () => {
     mockLoadSchedule.mockResolvedValue(MON_10_WED_19);
-    // reads: trainers, the scheduled days, this trainer's group slots on them
+    // Reads: trainers, scheduled days, the trainer's group slots
     const days = [
       { id: 'd-wed', localDate: '2026-10-21' },
       { id: 'd-mon', localDate: '2026-10-26' },
@@ -496,12 +496,12 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
     ]);
     const values = recordInserts(db);
     const result = await makeRealService(db).ensureGroupSlots();
-    // Only the training day upsert: the cancelled 19:00 is not created again (a new row would bring it back)
+    // Only the day upsert: the cancelled 19:00 is not recreated
     expect(values).toHaveLength(1);
     expect(result.skipped).toContainEqual({ date: '2026-10-21', slotTime: '19:00', reason: 'cancelled' });
   });
 
-  // A changed time (Wed 19:00/20:00 → 19:30) must not put an overlapping training on days already created
+  // Schedule changed from 19:00/20:00 to 19:30: no overlap with slots already created
   it('skips a time within an hour of an active group training already on that day', async () => {
     mockLoadSchedule.mockResolvedValue({
       bookingOpensAt: '14:00',
@@ -538,14 +538,13 @@ describe('ScheduleService — group trainings from each trainer schedule', () =>
     expect(values).toHaveLength(4);
   });
 
-  // What «Зберегти» tells the trainer: how many were added, and which were left out and why
   it('counts added trainings and lists the skipped ones with a reason; a group already at that time is neither', async () => {
     mockLoadSchedule.mockResolvedValue({
       bookingOpensAt: '14:00',
       autoCreate: true,
       times: [{ weekday: 6, slotTime: '19:00' }],
     });
-    // One trainer (a saved schedule): no trainer list read. Saturdays in the horizon: 24.10 (cancelled groups), 31.10 (a personal at 19:00), 7.11 (free)
+    // One trainer, so no trainer list read. Saturdays: 24.10 cancelled, 31.10 personal at 19:00, 7.11 free
     const days = [
       { id: 'd-24', localDate: '2026-10-24' },
       { id: 'd-31', localDate: '2026-10-31' },

@@ -1,9 +1,7 @@
-// Errors a person can run into, by a stable code: the frontend shows its own Ukrainian text for the code
-// (frontend/lib/apiErrors.ts), so the English message may be reworded freely; the code never changes.
-// Thrown as `new ConflictException(apiError('SLOT_FULL'))`: the body is { code, message }, and the exception's
-// message stays the English text (logs, tests)
+// User-facing errors by stable code; the frontend maps the code to its own text (frontend/lib/apiErrors.ts).
+// Messages may be reworded, codes never change. Body: { code, message }
 export const API_ERRORS = {
-  // Booking a group training, cancelling, moving, a guest
+  // Booking, cancelling, moving, guests
   SLOT_FULL: 'Slot is full',
   SLOT_CANCELLED: 'Slot is cancelled',
   SLOT_NOT_FOUND: 'Slot not found',
@@ -27,7 +25,7 @@ export const API_ERRORS = {
   CLUB_CARD_REQUIRED: 'Club card required',
   NOTHING_TO_FREEZE: 'Nothing to freeze',
   FREEZE_REQUESTED: 'Freeze already requested',
-  // The trainer: calendar, «Розклад групових», marks, refunds
+  // Trainer: calendar, weekly schedule, marks, refunds
   TIME_TAKEN: 'Time is already taken',
   GROUP_HOURS: 'Group trainings are from 06:00 to 21:00',
   GROUP_GAP: 'Group trainings must be at least an hour apart',
@@ -41,11 +39,10 @@ export const API_ERRORS = {
 
 export type ApiErrorCode = keyof typeof API_ERRORS;
 
-// The body of an error with a code; `message` words this place's case of it (e.g. «Target slot is full»)
+// `message` can word the error for one place
 export const apiError = (code: ApiErrorCode, message: string = API_ERRORS[code]) => ({ code, message });
 
-// The schedule rules (trainer-schedule/rules.ts) answer with a message from the list above, or another one
-// (e.g. «Unknown weekday»): the code is found by that exact message, none for one not in the list
+// Schedule rules return messages; find the code by exact message (none if not listed)
 export function ruleError(message: string) {
   const code = (Object.keys(API_ERRORS) as ApiErrorCode[]).find((c) => API_ERRORS[c] === message);
   return code ? apiError(code, message) : { message };

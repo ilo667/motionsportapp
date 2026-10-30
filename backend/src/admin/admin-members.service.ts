@@ -10,11 +10,10 @@ import { loadFreezes } from '../freezes/freeze.store';
 import { frozenOn, plusDays } from '../freezes/rules';
 import { markOf, memberCancellations, toCancellationView } from './admin-views';
 
-// Member-initiated cancellations / moves shown to the trainer (with the reason they wrote)
 const CANCELLATION_STATS_DAYS = 30;
 const MEMBER_HISTORY_LIMIT = 20;
 
-// «Клієнти» and the client page: the trainer's own and unassigned clients, their trainer, note, visits, cancellations
+// Client list and client page: own and unassigned members
 @Injectable()
 export class AdminMembersService {
   constructor(
@@ -23,12 +22,11 @@ export class AdminMembersService {
     private readonly entitlements: EntitlementsService,
   ) {}
 
-  // Trainer's client list. trainerNote is admin-only — keep it out of member-facing queries
+  // trainerNote is trainer-only: never select it in member-facing queries
   async getMembers(adminId: string, onlyId?: string) {
     const since = this.clock.now().minus({ days: CANCELLATION_STATS_DAYS }).toJSDate();
-    // Cancellations only (a move to another slot isn't a missed training)
-    // Raw, fully qualified SQL: in a single-table select drizzle drops table names, and an unqualified
-    // "id" inside the subquery would bind to bookings.id
+    // Member cancellations only, moves excluded. Table names explicit: drizzle drops them in a single-table
+    // select, so an unqualified "id" here would bind to bookings.id
     const cancelledCount = sql<number>`(
       SELECT count(*)::int FROM bookings b
       WHERE b.member_id = "members"."id"
@@ -51,9 +49,9 @@ export class AdminMembersService {
       .where(onlyId ? and(visibleTo(adminId), eq(members.id, onlyId)) : visibleTo(adminId))
       .orderBy(asc(members.displayName));
 
-    // «карта до DD.MM», «Перс. 5 · Спліт 2» under each client
+    // Club card and packages left
     const summaries = await this.entitlements.summaries(rows.map((r) => r.id));
-    // «❄ до DD.MM» (last frozen day) under a frozen client
+    // frozenUntil = last frozen day
     const today = this.clock.now().toISODate()!;
     const freezes = await loadFreezes(
       this.database.db,
@@ -71,14 +69,13 @@ export class AdminMembersService {
     });
   }
 
-  // Client page: the same row as in the list
   async getMember(adminId: string, memberId: string) {
     const [member] = await this.getMembers(adminId, memberId);
     if (!member) throw new NotFoundException('Member not found');
     return member;
   }
 
-  // Client page: trainings the member was booked on up to today, with the trainer's mark (newest first)
+  // Booked trainings up to today with their mark, newest first
   async getMemberVisits(adminId: string, memberId: string) {
     await requireVisibleMember(this.database.db, adminId, memberId);
 
@@ -110,7 +107,6 @@ export class AdminMembersService {
     }));
   }
 
-  // Clients page: one member's latest cancellations and moves
   async getMemberCancellations(adminId: string, memberId: string) {
     await requireVisibleMember(this.database.db, adminId, memberId);
 
@@ -130,12 +126,11 @@ export class AdminMembersService {
     return updated;
   }
 
-  // Hand a client to a trainer (or claim an unassigned one). Only the current trainer can do it; a disabled
-  // trainer answers 404 like a missing one
+  // Reassign a visible client; a disabled target trainer is a 404
   async assignTrainer(adminId: string, memberId: string, trainerId: string) {
     if (!(await enabledTrainer(this.database.db, trainerId))) throw new NotFoundException('Trainer not found');
 
-    // Checked again in the update itself: the trainer may be disabled in between
+    // Rechecked in the update: the trainer may be disabled in between
     const [updated] = await this.database.db
       .update(members)
       .set({ trainerId })

@@ -5,8 +5,7 @@ import type { PriceListItem } from "@/lib/api";
 import { PageLayout } from "@/components/ui/PageLayout";
 import { PriceList } from "@/components/prices/PriceList";
 
-// Straight to the backend (the same address the /api rewrite uses): the browser's /api path means nothing on the
-// server, and the browser's session cookie has to be passed on by hand. Only `session`, nothing else the browser sent
+// Server-side: no /api rewrite here, so call BACKEND_URL and pass on the `session` cookie only
 async function getPrices(session: string): Promise<PriceListItem[] | "signed-out" | "trainer" | null> {
   try {
     const res = await fetch(`${process.env.BACKEND_URL ?? "http://localhost:3001"}/prices`, {
@@ -21,8 +20,7 @@ async function getPrices(session: string): Promise<PriceListItem[] | "signed-out
   }
 }
 
-// The gym's prices for a signed-in client (a visitor goes to the client login, a trainer to their panel). Rendered on the
-// server per request: the same list the trainer edits in «Ціни», always current
+// Rendered per request, so always current. Visitors go to /login, trainers to /admin
 export default async function PricesPage() {
   const session = (await cookies()).get("session")?.value;
   const items = session ? await getPrices(session) : "signed-out";

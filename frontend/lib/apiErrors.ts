@@ -1,9 +1,8 @@
 import { ApiError } from "./api";
 
-// What a person sees for an error the backend answers with a code (backend/src/common/api-error.ts lists them; the
-// English message there may be reworded, the code never changes). A code missing here shows the fallback
+// Code → Ukrainian text; codes come from backend/src/common/api-error.ts (a test keeps the lists in step)
 export const ERROR_TEXT: Record<string, string> = {
-  // Booking a group training, cancelling, moving, a guest
+  // Booking, cancelling, moving, guests
   SLOT_FULL: "Місць вже немає, хтось встиг раніше",
   SLOT_CANCELLED: "Цей час скасовано тренером",
   SLOT_NOT_FOUND: "Цього тренування вже немає в розкладі",
@@ -27,7 +26,7 @@ export const ERROR_TEXT: Record<string, string> = {
   CLUB_CARD_REQUIRED: "Спершу потрібна клубна карта.",
   NOTHING_TO_FREEZE: "Немає чого заморожувати: клубної карти чи тренувань.",
   FREEZE_REQUESTED: "Запит уже надіслано.",
-  // The trainer: calendar, «Розклад групових», marks, refunds
+  // Trainer: calendar, schedule, marks, refunds
   TIME_TAKEN: "На цей час уже є тренування",
   GROUP_HOURS: "Групові можна ставити з 06:00 до 21:00",
   GROUP_GAP: "Між груповими має бути щонайменше година",
@@ -41,8 +40,8 @@ export const ERROR_TEXT: Record<string, string> = {
 
 export const DEFAULT_ERROR = "Помилка. Спробуйте ще раз.";
 
-// Ukrainian text for an error from lib/api.ts, by the code in the body. Never the backend's English: no code, a code
-// not in the table or a network failure shows `fallback`. `own` comes first: the same error worded for that place
+// Never shows the backend's English: no code, an unknown one or a network failure gives `fallback`.
+// `own` overrides the wording for one place.
 export function errorText(err: unknown, fallback = DEFAULT_ERROR, own: Record<string, string> = {}): string {
   const code = err instanceof ApiError ? err.body.code : undefined;
   if (typeof code !== "string") return fallback;
@@ -50,5 +49,5 @@ export function errorText(err: unknown, fallback = DEFAULT_ERROR, own: Record<st
   return has(ERROR_TEXT, code) ? ERROR_TEXT[code] : fallback;
 }
 
-// Own keys only (not «constructor» and the like); Object.hasOwn is missing on iOS before 15.4
+// Own keys only (not "constructor"); Object.hasOwn is missing on iOS before 15.4
 const has = (table: Record<string, string>, key: string) => Object.prototype.hasOwnProperty.call(table, key);

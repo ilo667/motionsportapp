@@ -17,11 +17,9 @@ import { sql } from 'drizzle-orm';
 import { GROUP_TYPE, ASSIGNED_TYPES, PASS_TYPES } from '../schedule/training-types';
 import { PRICE_SECTIONS } from '../prices/price-list';
 
-// Indexes: besides primary keys and unique columns, one per column a frequent query looks rows up by (Postgres
-// doesn't index foreign keys by itself). Names as `db:push` gives them: <table>_<column>_idx
+// Postgres doesn't index foreign keys: every frequent lookup column gets an index named <table>_<column>_idx
 
-// CHECK that a text column holds one of the known values (NULL passes, so nullable columns stay optional).
-// A typo in code then fails loudly instead of quietly writing 'ACTVE'
+// CHECK for status-like text columns, so a typo fails loudly. NULL passes, so nullable columns stay optional
 function oneOf(name: string, column: string, values: readonly string[]) {
   return check(name, sql.raw(`${column} IN (${values.map((v) => `'${v}'`).join(', ')})`));
 }
@@ -34,9 +32,9 @@ export const members = pgTable('members', {
   recoveryHash: text('recovery_hash').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   disabledAt: timestamp('disabled_at', { withTimezone: true }),
-  // Trainer-only note ("ходить через раз", "це Катюха"); never returned by member-facing APIs
+  // Trainer-only; never returned by member-facing APIs
   trainerNote: text('trainer_note'),
-  // The member's trainer; null = not assigned yet (every trainer sees them under «Без тренера»)
+  // null = unassigned, visible to every trainer
   trainerId: uuid('trainer_id').references((): AnyPgColumn => admins.id),
 });
 
@@ -45,15 +43,14 @@ export const admins = pgTable('admins', {
   username: text('username').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  // Who sent the invite link; null = added by `npm run seed:admin`
+  // null = created by `npm run seed:admin`
   invitedByAdminId: uuid('invited_by_admin_id').references((): AnyPgColumn => admins.id),
-  // Disabled on «Тренери» (can't sign in, clients moved to another trainer); null = works
+  // Set = can't sign in, clients moved to another trainer
   disabledAt: timestamp('disabled_at', { withTimezone: true }),
   disabledByAdminId: uuid('disabled_by_admin_id').references((): AnyPgColumn => admins.id),
 });
 
-// One-time link that lets a new trainer sign up («Запросити тренера»). Only the SHA-256 of the token is stored,
-// so the link is shown once, when it is created
+// One-time trainer sign-up link. Only the token's SHA-256 is stored, so the link is shown once
 export const trainerInvites = pgTable('trainer_invites', {
   id: uuid('id').primaryKey().defaultRandom(),
   tokenHash: text('token_hash').notNull().unique(),
@@ -80,7 +77,7 @@ export const sessions = pgTable(
   },
   (table) => [
     oneOf('sessions_principal_type_check', 'principal_type', ['member', 'admin']),
-    // Every request finds its session by the cookie's hash
+    // Looked up on every request
     index('sessions_token_hash_idx').on(table.tokenHash),
   ],
 );
@@ -110,27 +107,26 @@ export const trainingSlots = pgTable(
     capacity: integer('capacity').notNull().default(8),
     bookedCount: integer('booked_count').notNull().default(0),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
-    // Whose training it is: the trainer sees only own slots in calendar, today page and history
+    // Each trainer sees only own slots
     trainerId: uuid('trainer_id')
       .notNull()
       .references((): AnyPgColumn => admins.id),
   },
-  // Many halls: trainers work in parallel, so one active training per time per trainer. A cancelled one stays as
-  // history: a training added again at that time is a new row (its bookings, cancellations and fees are its own)
+  // Trainers work in parallel: one ACTIVE slot per time per trainer. A cancelled slot is never reused, so a new
+  // training at that time is a new row and doesn't inherit old bookings or fees
   (table) => [
     uniqueIndex('training_slots_day_time_trainer_idx')
       .on(table.trainingDayId, table.slotTime, table.trainerId)
       .where(sql`status = 'ACTIVE'`),
     oneOf('training_slots_status_check', 'status', ['ACTIVE', 'CANCELLED']),
     oneOf('training_slots_training_type_check', 'training_type', [GROUP_TYPE, ...ASSIGNED_TYPES]),
-    // Safety net for the seat counter: never below zero, never more people than seats
+    // Safety net for the seat counter
     check('training_slots_booked_count_check', sql`booked_count >= 0 AND booked_count <= capacity AND capacity > 0`),
-    // Only a cancelled training has a cancellation time
     check('training_slots_cancelled_at_check', sql`status = 'CANCELLED' OR cancelled_at IS NULL`),
   ],
 );
 
-// Who may see and book an assigned slot (персональні: 1 member, спліт: 1–3). Групові have no rows here
+// Members of an assigned slot (personal: 1, split: 1-3). Group slots have no rows here
 export const slotMembers = pgTable(
   'slot_members',
   {
@@ -144,7 +140,7 @@ export const slotMembers = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.slotId, table.memberId] }),
-    // A member's assigned trainings (the key starts with the slot)
+    // The primary key starts with slot_id, so member lookups need their own index
     index('slot_members_member_id_idx').on(table.memberId),
   ],
 );
@@ -163,24 +159,22 @@ export const bookings = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancellationReason: text('cancellation_reason'),
-    // Set when the member moved this booking to another slot (19:00 → 20:00); null + reason = plain cancel
+    // Set on a move to another slot; null with a reason = plain cancel
     switchedToSlotId: uuid('switched_to_slot_id').references(() => trainingSlots.id),
-    // A late cancellation by the member (booking/cancel-fee.ts): FULL = the training is spent from what pays for it,
-    // HALF = spent too, and half of a single training's price goes back (cancel_refunds). Null = it cost nothing.
-    // The trainer may waive it («Не списувати») until the money is returned
+    // Late-cancellation fee (booking/cancel-fee.ts): FULL = training spent, HALF = spent plus half refund
+    // (cancel_refunds). Waivable until the money is returned
     cancelFee: text('cancel_fee'),
     feeWaivedAt: timestamp('fee_waived_at', { withTimezone: true }),
     feeWaivedBy: uuid('fee_waived_by').references((): AnyPgColumn => admins.id),
   },
   (table) => [
-    // One active booking per member per slot. "One group booking per day" is checked in BookingService
-    // (assigned trainings don't count), under a lock on the member row
+    // "One group booking per day" can't be an index (assigned slots don't count): BookingService checks it
+    // under the member row lock
     uniqueIndex('bookings_member_slot_active_idx')
       .on(table.memberId, table.slotId)
       .where(sql`${table.status} = 'ACTIVE'`),
     oneOf('bookings_status_check', 'status', ['ACTIVE', 'CANCELLED']),
     oneOf('bookings_cancel_fee_check', 'cancel_fee', ['FULL', 'HALF']),
-    // A training's participants and cancellations; a member's visits and cancellations (any status)
     index('bookings_slot_id_idx').on(table.slotId),
     index('bookings_member_id_idx').on(table.memberId),
   ],
@@ -201,9 +195,8 @@ export const attendance = pgTable(
   () => [oneOf('attendance_status_check', 'status', ['PRESENT', 'ABSENT'])],
 );
 
-// A guest a member brings to a group training they are booked on: free, a name only, one per booking. Takes a
-// seat (counted in training_slots.booked_count) and goes with the booking: cancelled with it, moved with it.
-// The trainer may mark them (✓ / ✗, nothing is spent)
+// Free guest of a group booking, one per booking. Takes a seat (booked_count) and is cancelled / moved with
+// the booking. Marking a guest spends nothing
 export const bookingGuests = pgTable(
   'booking_guests',
   {
@@ -241,13 +234,13 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   disabledAt: timestamp('disabled_at', { withTimezone: true }),
 });
 
-// Trainer's devices: push when a member cancels or moves a booking. Separate from members' subscriptions
+// Separate from members' subscriptions, so member-wide pushes never reach a trainer
 export const adminPushSubscriptions = pgTable('admin_push_subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   adminId: uuid('admin_id')
     .notNull()
     .references(() => admins.id),
-  // Constraint name as it already exists in the DB (created by a one-off SQL script)
+  // Pinned to the existing DB name, else db:push offers to truncate
   endpoint: text('endpoint').notNull().unique('admin_push_subscriptions_endpoint_key'),
   p256dh: text('p256dh').notNull(),
   auth: text('auth').notNull(),
@@ -331,22 +324,19 @@ export const payments = pgTable(
   'payments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    // The purchase it pays (per-training payments were removed on 2026-10-23, their rows on 2026-10-27)
     purchaseId: uuid('purchase_id')
       .notNull()
       .references((): AnyPgColumn => purchases.id),
-    // Constraint name as it already exists in the DB (created by a one-off SQL script)
+    // Pinned to the existing DB name, else db:push offers to truncate
     orderId: text('order_id').notNull().unique('payments_order_id_key'),
     amount: integer('amount').notNull(),
     currency: text('currency').notNull().default('UAH'),
-    status: text('status').notNull().default('PENDING'), // PENDING | PAID | FAILED | EXPIRED | REPLACED
+    status: text('status').notNull().default('PENDING'),
     liqpayPaymentId: text('liqpay_payment_id'),
     rawCallback: jsonb('raw_callback'),
-    // LiqPay refunded a paid payment (callback status `reversed`, e.g. «Повернення» in the LiqPay cabinet). Kept as
-    // it came, apart from raw_callback (the success that paid it); the app does nothing else with it yet
+    // LiqPay `reversed` callback (refund), kept apart from raw_callback; not acted on yet
     refundCallback: jsonb('refund_callback'),
-    // Money that came after its purchase ended (raw_callback says success, status is not PAID) is shown to the
-    // trainer until they press «Розібрано» (gave the purchase by hand or the money was refunded)
+    // Stray money (success callback, status not PAID) stays on the trainer's list until handled
     handledAt: timestamp('handled_at', { withTimezone: true }),
     handledByAdminId: uuid('handled_by_admin_id').references(() => admins.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -355,30 +345,28 @@ export const payments = pgTable(
   (table) => [
     oneOf('payments_status_check', 'status', ['PENDING', 'PAID', 'FAILED', 'EXPIRED', 'REPLACED']),
     index('payments_purchase_id_idx').on(table.purchaseId),
-    // Stale PENDING payments, looked for on every schedule load (expireStale)
+    // expireStale() runs on every schedule load
     index('payments_status_created_at_idx').on(table.status, table.createdAt),
   ],
 );
 
-// Gym price list, one row per option ("Повний день · 3 місяці"). Shared by all trainers; a trainer changes
-// amounts only, rows come from `npm run seed:prices`. A purchase copies the amount at the moment it is made
+// One row per option, shared by all trainers. Rows come from `npm run seed:prices`; trainers change amounts only
 export const priceItems = pgTable(
   'price_items',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    // Stable key of the option (the seed upserts by it)
+    // The seed upserts by it
     code: text('code').notNull().unique(),
-    section: text('section').notNull(), // club_card | assigned | group
+    section: text('section').notNull(),
     title: text('title').notNull(),
-    optionLabel: text('option_label'), // "3 місяці", "6 тренувань"; null for a single-option item
+    optionLabel: text('option_label'), // null for a single-option item
     amountUah: integer('amount_uah').notNull(),
     sortOrder: integer('sort_order').notNull(),
-    // What buying it gives: valid for durationMonths from activation (0 = that day only). Trainer service and
-    // group pass: a package of trainingCount trainings for slots of trainingType
+    // Months from activation (0 = that day only); packages also get trainingCount trainings of trainingType
     durationMonths: integer('duration_months'),
     trainingType: text('training_type'),
     trainingCount: integer('training_count'),
-    // Who changed the amount last; null = still the seeded value
+    // null = seeded value
     updatedBy: uuid('updated_by').references(() => admins.id),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -389,7 +377,7 @@ export const priceItems = pgTable(
   ],
 );
 
-// Every price change, append-only: who, when, from what to what
+// Append-only
 export const priceChanges = pgTable('price_changes', {
   id: uuid('id').primaryKey().defaultRandom(),
   priceItemId: uuid('price_item_id')
@@ -403,8 +391,7 @@ export const priceChanges = pgTable('price_changes', {
   changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-// A member's order: a group pass alone, or a club card, a trainer service, or both. Paid by LiqPay (activated by the
-// callback / status API) or in cash (activated when their trainer confirms)
+// A group pass alone, or a club card and / or a trainer service. Paid by LiqPay or in cash (trainer confirms)
 export const purchases = pgTable(
   'purchases',
   {
@@ -412,16 +399,15 @@ export const purchases = pgTable(
     memberId: uuid('member_id')
       .notNull()
       .references(() => members.id),
-    // The member's trainer when the purchase was made: the one who confirms cash
+    // The member's trainer at purchase time: confirms cash
     trainerId: uuid('trainer_id').references(() => admins.id),
     method: text('method').notNull(),
     status: text('status').notNull().default('PENDING'),
     totalUah: integer('total_uah').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     decidedAt: timestamp('decided_at', { withTimezone: true }),
-    // Trainer who confirmed or rejected cash
     decidedBy: uuid('decided_by').references(() => admins.id),
-    // Group pass bought from «Записатися»: the slot to book once paid, and the booking it made
+    // Group pass bought while booking: the slot to book once paid, and the booking it made
     slotId: uuid('slot_id').references(() => trainingSlots.id),
     bookingId: uuid('booking_id').references(() => bookings.id),
   },
@@ -433,7 +419,7 @@ export const purchases = pgTable(
   ],
 );
 
-// Lines of a purchase, with the price list values copied at purchase time (later price changes don't apply)
+// Price list values copied at purchase time, so later price changes don't apply
 export const purchaseItems = pgTable('purchase_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   purchaseId: uuid('purchase_id')
@@ -449,8 +435,7 @@ export const purchaseItems = pgTable('purchase_items', {
 
 const A_MONTH_FROM_TODAY = sql`(CURRENT_DATE + INTERVAL '1 month')::date`;
 
-// Access to the gym. From a paid purchase, or added by the trainer (bought at the reception).
-// Waits for the trainer's «Активувати з сьогодні» (valid_from / valid_until null); burns after activate_by
+// Waits (valid_from / valid_until null) until the trainer activates it; burns after activate_by
 export const clubCards = pgTable(
   'club_cards',
   {
@@ -463,7 +448,7 @@ export const clubCards = pgTable(
     validFrom: date('valid_from'),
     validUntil: date('valid_until'),
     durationMonths: integer('duration_months').notNull().default(0),
-    // The code always sets it; the default only fills rows that existed before activation
+    // Code always sets it; the default only backfilled old rows
     activateBy: date('activate_by').notNull().default(A_MONTH_FROM_TODAY),
     addedBy: uuid('added_by').references(() => admins.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -471,9 +456,8 @@ export const clubCards = pgTable(
   (table) => [index('club_cards_member_id_idx').on(table.memberId)],
 );
 
-// Trainings bought in a pack: a trainer service or a group pass. Left = total minus its spends; the oldest usable
-// pack is spent first. The first mark activates it (activated_on = that training's date, valid for duration_months);
-// not activated by activate_by, it burns
+// A trainer service or group pass. Left = total minus spends. The first attendance mark activates it
+// (activated_on = that training's date); not activated by activate_by, it burns
 export const packages = pgTable(
   'packages',
   {
@@ -487,7 +471,7 @@ export const packages = pgTable(
     trainingType: text('training_type').notNull(),
     total: integer('total').notNull(),
     durationMonths: integer('duration_months').notNull().default(1),
-    // The code always sets both; the defaults only fill rows that existed before activation
+    // Code always sets both; the defaults only backfilled old rows
     purchasedOn: date('purchased_on').notNull().defaultNow(),
     activateBy: date('activate_by').notNull().default(A_MONTH_FROM_TODAY),
     activatedOn: date('activated_on'),
@@ -501,8 +485,8 @@ export const packages = pgTable(
   ],
 );
 
-// One training spent from a package: the trainer marked the booking (✓ or ✗), or the member cancelled it late.
-// «—» (or «Не списувати») deletes the row, which gives the training back to the same package
+// One training spent by an attendance mark or a late cancellation. Deleting the row (unmark, waive) gives it
+// back to the same package
 export const packageSpends = pgTable(
   'package_spends',
   {
@@ -515,32 +499,31 @@ export const packageSpends = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    // Trainings spent from a package (left = total minus these), counted on every look at it
+    // Counted every time a package's trainings left are computed
     index('package_spends_package_id_idx').on(table.packageId),
   ],
 );
 
-// 'HH:MM' on the 15-minute grid, as «Розклад групових» and the calendar use it
+// 'HH:MM' on the 15-minute grid
 const QUARTER_HOUR = "'^([01][0-9]|2[0-3]):(00|15|30|45)$'";
 
-// A trainer's regular group trainings («Розклад групових»). No row: the first trainer gets the old Mon/Wed/Fri
-// 19:00 / 20:00 schedule, any other trainer an empty one (`loadTrainerSchedule`)
+// Weekly group schedule. No row: the first trainer gets LEGACY_DEFAULT, others an empty one (`loadTrainerSchedule`)
 export const trainerSchedules = pgTable(
   'trainer_schedules',
   {
     trainerId: uuid('trainer_id')
       .primaryKey()
       .references(() => admins.id),
-    // 'HH:MM' on the training day; one time for every day
+    // Same time on every training day
     bookingOpensAt: text('booking_opens_at').notNull().default('14:00'),
-    // Create the group trainings 3 weeks ahead by themselves
+    // Create group slots 3 weeks ahead
     autoCreate: boolean('auto_create').notNull().default(false),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   () => [check('trainer_schedules_booking_opens_at_check', sql.raw(`booking_opens_at ~ ${QUARTER_HOUR}`))],
 );
 
-// One row per group training of the week: weekday as in Luxon (1 = Mon … 7 = Sun), 'HH:MM'
+// weekday as in Luxon: 1 = Mon ... 7 = Sun
 export const trainerScheduleTimes = pgTable(
   'trainer_schedule_times',
   {
@@ -557,10 +540,10 @@ export const trainerScheduleTimes = pgTable(
   ],
 );
 
-// «Заморозити абонемент»: the member asks, a trainer approves. Everything the member has (card and packages,
-// waiting or active) is frozen from started_on until ends_on (exclusive: the first day back). On approval the
-// dates are pushed 30 days ahead at once (`freeze_items`), so a freeze nobody ends finishes by itself; an early
-// unfreeze moves them back by the days left. Whether it is over is computed from ends_on, not stored
+// Freezes the card and all packages from started_on to ends_on (exclusive: first day back).
+// - approval pushes their dates 30 days ahead at once (freeze_items), so no cron is needed to end it
+// - an early unfreeze moves them back by the days left
+// - "over" is computed from ends_on, not stored
 export const freezes = pgTable(
   'freezes',
   {
@@ -585,8 +568,7 @@ export const freezes = pgTable(
   ],
 );
 
-// A date a freeze pushed ahead: a card's or package's valid_until (active) or activate_by (waiting).
-// An early unfreeze moves exactly these back
+// A date a freeze pushed: valid_until (active) or activate_by (waiting). An early unfreeze moves exactly these back
 export const freezeItems = pgTable(
   'freeze_items',
   {
@@ -604,8 +586,7 @@ export const freezeItems = pgTable(
   ],
 );
 
-// Half of a single personal / split training goes back after a cancellation 2–24 hours before it (cancel_fee HALF).
-// The app only counts it: the trainer returns the money (LiqPay cabinet or cash) and presses «Повернено»
+// Half refund for a cancel_fee HALF. The app never sends money: the trainer refunds by hand and marks it DONE
 export const cancelRefunds = pgTable(
   'cancel_refunds',
   {

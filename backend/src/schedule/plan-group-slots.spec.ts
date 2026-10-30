@@ -1,6 +1,6 @@
 import { planGroupSlots } from './schedule.service';
 
-// One date, schedule times 19:00 and 20:00 still ahead, the day exists as d1
+// One date with 19:00 and 20:00 still ahead; the day exists as d1
 const DATE = '2026-11-02';
 const plan = (own: { status: string; slotTime: string }[], dayIdOf = new Map([[DATE, 'd1']])) =>
   planGroupSlots(

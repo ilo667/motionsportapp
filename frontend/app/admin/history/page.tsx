@@ -11,7 +11,7 @@ import { longDay } from "@/lib/dates";
 import { Badge } from "@/components/ui/Badge";
 import { toAdminLogin } from "@/lib/adminAuth";
 
-// "11 прийшли з 12 · 1 скасування" for the collapsed day row
+// Collapsed row, e.g. "11 прийшли з 12 · 1 скасування"
 function daySummary(day: HistoryDay) {
   if (day.status === "CANCELLED") return "День скасовано";
   const active = day.slots.filter((s) => s.status === "ACTIVE");
@@ -82,7 +82,7 @@ function HistorySlot({
   );
 }
 
-// Past trainings, newest first. Attendance is editable here at any time (no lock after "Підтвердити всіх")
+// Attendance stays editable here at any time
 export default function HistoryPage() {
   const router = useRouter();
   const [days, setDays] = useState<HistoryDay[] | null>(null);
@@ -97,7 +97,6 @@ export default function HistoryPage() {
         const page = await api.getHistory(before);
         setDays((prev) => [...(before ? (prev ?? []) : []), ...page.days]);
         setNextBefore(page.nextBefore);
-        // The latest day starts expanded
         if (!before && page.days[0]) setOpen(new Set([page.days[0].localDate]));
       } catch (err: unknown) {
         if (!toAdminLogin(err, router)) setError("Не вдалося завантажити історію.");
@@ -140,11 +139,11 @@ export default function HistoryPage() {
         })) ?? null,
     );
 
-  // Optimistic: the mark changes at once and rolls back if saving fails
+  // Optimistic; rolled back if saving fails
   const changeAttendance = async (bookingId: string, previous: AttendanceStatus, next: AttendanceStatus) => {
     setError("");
     setAttendance(bookingId, next);
-    // A guest's row carries the guest's id and is marked through its own route
+    // A guest row carries the guest's id and has its own route
     const participant = days
       ?.flatMap((d) => d.slots.flatMap((s) => s.participants))
       .find((p) => p.bookingId === bookingId);
@@ -183,7 +182,6 @@ export default function HistoryPage() {
             return (
               <div key={day.localDate} className="border border-line rounded-2xl overflow-hidden">
                 {day.status === "CANCELLED" ? (
-                  // Nothing to expand on a cancelled day: a plain row, no arrow
                   <div className="bg-surface px-4 py-3">{dayTitle}</div>
                 ) : (
                   <button

@@ -4,7 +4,7 @@ export class AddClubCardDto {
   @IsUUID('all')
   priceItemId: string;
 
-  // «Додати й активувати з сьогодні»
+  // Active from today instead of waiting
   @IsOptional()
   @IsBoolean()
   activate?: boolean;

@@ -11,15 +11,14 @@ import { kyivToday } from "@/lib/dates";
 const sectionTitle = "font-geologica font-semibold text-heading uppercase mb-3";
 const label = "text-subtle text-xs font-semibold uppercase tracking-wide mb-2";
 
-// Each column with its dot: training types in their calendar colors, club cards in the secondary text color
+// Dot colors: training types as in the calendar, club cards in the secondary text color
 const REVENUE_ROWS: [keyof Omit<Revenue, "total">, string, string][] = [
-  ["clubCards", "Клубні карти", ""], // the bg-subtle class (theme colors aren't CSS variables here)
+  ["clubCards", "Клубні карти", ""], // bg-subtle class: theme colors aren't CSS variables here
   ["personal", "Персональні", TYPE_COLORS["personal"].border],
   ["split", "Спліт", TYPE_COLORS["split"].border],
   ["group", "Групові", TYPE_COLORS["group"].border],
 ];
 
-// Months on the chart, current one last
 const CHART_MONTHS = 12;
 const SHORT_MONTHS = ["січ", "лют", "бер", "кві", "тра", "чер", "лип", "сер", "вер", "жов", "лис", "гру"];
 
@@ -27,8 +26,7 @@ type MonthRevenue = TrainerStats["revenue"]["months"][number];
 
 const noRevenue = (month: string): MonthRevenue => ({ month, clubCards: 0, personal: 0, split: 0, group: 0, total: 0 });
 
-// Every month from the first paid one (at least the last 12, for the chart) up to the current one (Kyiv),
-// with zeros for months nobody paid
+// From the first paid month (at least the last 12) to the current Kyiv month, zero-filled
 function monthsUpToNow(months: MonthRevenue[]) {
   const [y, m] = kyivToday().split("-").map(Number);
   const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -44,13 +42,13 @@ function monthsUpToNow(months: MonthRevenue[]) {
 
 const WEEKDAYS = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
 
-// «жовтень 2026»
+// "Жовтень 2026"
 function monthName(month: string) {
   const name = new Date(`${month}-01T12:00:00`).toLocaleDateString("uk-UA", { month: "long" });
   return `${name[0].toUpperCase()}${name.slice(1)} ${month.slice(0, 4)}`;
 }
 
-// «ср, 21 жовтня»
+// "ср, 21 жовтня"
 function dayName(localDate: string) {
   return new Date(`${localDate}T12:00:00`).toLocaleDateString("uk-UA", {
     weekday: "short",
@@ -95,8 +93,7 @@ const BarsIcon = () => (
 const segButton = (on: boolean) =>
   `px-3.5 py-1.5 rounded-full transition-colors ${on ? "bg-teal text-on-teal font-semibold" : "text-subtle hover:text-body"}`;
 
-// «Прибуток»: one card by default («Весь час», or a month with ‹ ›); «Графік» shows a bar per month for the
-// last 12 instead, a tap on a bar picks the month. The picked month carries over between the two
+// One period card, or a 12-month bar chart; the picked month carries over between them
 function RevenueBlock({ revenue }: { revenue: TrainerStats["revenue"] }) {
   const months = monthsUpToNow(revenue.months);
   const [chart, setChart] = useState(false);
@@ -142,7 +139,7 @@ function RevenueBlock({ revenue }: { revenue: TrainerStats["revenue"] }) {
           type="button"
           onClick={() => {
             setChart(!chart);
-            // The chart shows the last 12 months: an older pick goes to the current month
+            // An older pick than the chart shows goes to the current month
             if (!chart && selected < months.length - CHART_MONTHS) setSelected(months.length - 1);
             setAllTime(false);
           }}
@@ -221,7 +218,6 @@ function RevenueBlock({ revenue }: { revenue: TrainerStats["revenue"] }) {
   );
 }
 
-// The trainer's own numbers: revenue (paid purchases of their clients, by the month paid) and load (people ✓)
 export default function StatsPage() {
   const { data: stats, error } = useAdminData(api.getStats);
   const loadError = error != null;

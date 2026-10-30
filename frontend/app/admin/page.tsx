@@ -31,7 +31,7 @@ export default function AdminPage() {
       const data = await api.getAdminSchedule();
       setSchedule(data);
       setLoadFailed(false);
-      // null: this trainer has no upcoming trainings
+      // null = no upcoming trainings
       if (!data) return;
       const [ann, exs] = await Promise.all([
         api.getAnnouncement(data.localDate).catch(() => null),
@@ -40,7 +40,7 @@ export default function AdminPage() {
       setAnnouncement(ann);
       setExamples(exs);
     } catch (err: unknown) {
-      // Signed out on the first load: the login; once the page has shown, a failed refresh only says so
+      // Redirect to login only on the first load; later a failed refresh just says so
       if (authedRef.current || !toAdminLogin(err, router)) setLoadFailed(true);
     }
   }, [router]);
@@ -113,7 +113,7 @@ export default function AdminPage() {
   const now = new Date(schedule.serverTime);
   const closeAt = new Date(schedule.bookingCloseAt);
   const afterWindow = now >= closeAt;
-  // Booking is only for group trainings: a day with only personal / split ones shows no booking badge
+  // A day with only assigned trainings shows no booking badge
   const hasGroup = schedule.slots.some((s) => s.trainingType === "group");
 
   return (
@@ -124,7 +124,7 @@ export default function AdminPage() {
 
       <p className="text-muted text-sm mb-1 capitalize">{longDay(schedule.localDate)}</p>
 
-      {/* Push on this device when a client cancels or moves a booking (with the reason) */}
+      {/* Push when a client cancels or moves */}
       <div className="mb-2">
         <PushSubscribeButton />
       </div>

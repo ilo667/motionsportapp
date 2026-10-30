@@ -14,8 +14,6 @@ import { BuyBlock } from "./BuyBlock";
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase text-xs tracking-wide";
 
-// «Мої покупки»: club card, packages and group passes, the purchase that awaits payment, and the ways into the
-// purchase flow (trainer service, club card alone, group pass)
 export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
   const router = useRouter();
   const [data, setData] = useState<MyPurchases | null>(null);
@@ -32,7 +30,7 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
         })
         .catch((err: unknown) => {
           const status = statusOf(err);
-          // 403 = signed in as a trainer: their panel, not the member login
+          // 403 = a trainer's session
           if (status === 401) router.push("/login");
           else if (status === 403) router.push("/admin");
           else setLoadError(true);
@@ -65,7 +63,7 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
   }
 
   const pending = data?.pending;
-  // Nothing new while frozen or asking to: the freeze moves the dates of what the member has
+  // No buying while a freeze is open: it moves the dates of what the member has
   const frozen = !!freeze?.freeze;
   return (
     <PageLayout variant="top" loading={!data && !loadError} action={action}>

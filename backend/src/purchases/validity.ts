@@ -1,13 +1,13 @@
 import { DateTime } from 'luxon';
 import { KY_ZONE } from '../schedule/training-types';
 
-// Date rules for club cards and packages (trainer services and group passes). All dates are YYYY-MM-DD in Kyiv,
-// so they compare as strings. A month runs to the same date (or the month's last day), that day included
+// Club card and package dates: Kyiv YYYY-MM-DD, compared as strings. A month ends on the same date
+// (or the month's last day), inclusive
 
 const plusMonths = (date: string, months: number) =>
   DateTime.fromISO(date, { zone: KY_ZONE }).plus({ months }).toISODate()!;
 
-// Not activated within a month of the purchase: it burns
+// Not activated by then: it burns
 export const activateByFor = (purchasedOn: string) => plusMonths(purchasedOn, 1);
 
 // From the activation day; 0 months = that day only
@@ -20,8 +20,7 @@ export type PassDates = {
   validUntil: string | null;
 };
 
-// Can the pass pay for a training on this date? Never for one before the purchase; a waiting pass until its
-// last day to activate (the first mark activates it), an activated one until its last day
+// From the purchase day until activate_by (waiting) or valid_until (activated)
 export const passUsableOn = (p: PassDates, date: string) =>
   p.purchasedOn <= date && date <= (p.activatedOn ? p.validUntil! : p.activateBy);
 

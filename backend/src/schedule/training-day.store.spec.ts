@@ -2,7 +2,7 @@ import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { trainingDayOn } from './training-day.store';
 
-// A one-read chain that keeps the WHERE condition, so the test can check which day was asked for
+// Keeps the WHERE condition so the test can check which day was asked for
 function makeDb(rows: unknown[]) {
   const where: SQL[] = [];
   const chain: any = { then: (resolve: (v: unknown) => void) => resolve(rows) };

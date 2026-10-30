@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageLayout } from "@/components/ui/PageLayout";
 
-// Any unknown URL (and notFound() calls). Rendered inside the root layout
+// Also for notFound() calls; rendered inside the root layout
 export default function NotFound() {
   return (
     <PageLayout className="items-center text-center">

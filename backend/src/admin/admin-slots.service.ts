@@ -28,7 +28,6 @@ import { apiError, ruleError } from '../common/api-error';
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-// A new group training of this trainer (calendar, «Розклад групових» for a day)
 const groupSlotRow = (trainingDayId: string, slotTime: string, trainerId: string) => ({
   trainingDayId,
   slotTime,
@@ -39,7 +38,7 @@ const groupSlotRow = (trainingDayId: string, slotTime: string, trainerId: string
   trainerId,
 });
 
-// Adding, changing and cancelling the trainer's trainings: group and assigned slots, their members, a whole day
+// Adding, changing and cancelling the trainer's trainings and days
 @Injectable()
 export class AdminSlotsService {
   constructor(
@@ -48,8 +47,7 @@ export class AdminSlotsService {
     private readonly clock: ClockService,
   ) {}
 
-  // Group slot at any time from 06:00 to 21:00 (not in the past), at least an hour from the trainer's other active group trainings
-  // that day. A cancelled slot at that time stays as it was (a new row), an active assigned one is never taken over
+  // 06:00-21:00, not in the past, an hour from the trainer's other group trainings that day
   async upsertGroupSlot(adminId: string, date: string, slotTime: string) {
     const timeError = groupTimeError(slotTime, []);
     if (timeError) throw new BadRequestException(ruleError(timeError));
@@ -77,8 +75,7 @@ export class AdminSlotsService {
       const [slot] = await tx
         .insert(trainingSlots)
         .values(groupSlotRow(dayId, slotTime, adminId))
-        // A new training (a cancelled one at that time stays as it was); this trainer's active group one there
-        // stays as is, their own active assigned training there is not taken over
+        // Cancelled slots are never reused (partial index); an active assigned slot is not taken over
         .onConflictDoUpdate({
           target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.trainerId],
           targetWhere: sql`status = 'ACTIVE'`,
@@ -93,7 +90,7 @@ export class AdminSlotsService {
     return { ok: true };
   }
 
-  // Personal (1 member) or split (1–3 members) at any time; seen and booked only by those members
+  // Personal (1 member) or split (1-3); visible only to its members
   async createAssignedSlot(adminId: string, date: string, dto: CreateAssignedSlotDto) {
     await this.validateSlotMembers(adminId, dto.trainingType, dto.memberIds);
 
@@ -117,7 +114,7 @@ export class AdminSlotsService {
           bookedCount: dto.memberIds.length,
           trainerId: adminId,
         })
-        // Always a new training: an active one of this trainer at that time has the time
+        // An active training of this trainer already holds the time
         .onConflictDoNothing({
           target: [trainingSlots.trainingDayId, trainingSlots.slotTime, trainingSlots.trainerId],
           where: sql`status = 'ACTIVE'`,
@@ -127,8 +124,7 @@ export class AdminSlotsService {
       if (!slot) throw new ConflictException(apiError('TIME_TAKEN'));
 
       await tx.insert(slotMembers).values(dto.memberIds.map((memberId) => ({ slotId: slot.id, memberId })));
-      // Assigning is booking: the members are on the training right away. It is paid from their package
-      // when the trainer marks attendance, not per training
+      // Assigning is booking; the package is spent when attendance is marked
       await tx
         .insert(bookings)
         .values(dto.memberIds.map((memberId) => ({ memberId, slotId: slot.id, status: 'ACTIVE' })));
@@ -138,8 +134,7 @@ export class AdminSlotsService {
     return { ok: true, slotId };
   }
 
-  // Change who an assigned slot is for. A newly added member is booked; a removed one loses the booking,
-  // unless their attendance is already marked (it may have been spent from their package)
+  // Added members are booked, removed ones cancelled; removing a marked member is a 409 (may be spent)
   async updateSlotMembers(adminId: string, slotId: string, memberIds: string[]) {
     await this.database.db.transaction(async (tx) => {
       const slot = await requireOwnSlot(tx, adminId, slotId, true);
@@ -160,14 +155,14 @@ export class AdminSlotsService {
 
       const removed = booked.filter((b) => !memberIds.includes(b.memberId));
       if (removed.some((b) => b.marked)) throw new ConflictException(apiError('ATTENDANCE_MARKED'));
-      // Only members new to the slot are booked: one who cancelled themselves stays cancelled
+      // Only members new to the slot: one who cancelled themselves stays cancelled
       const added = memberIds.filter((id) => !onSlot.some((m) => m.memberId === id));
       await this.rejectFrozen(tx, added, slot.localDate);
 
       await tx.delete(slotMembers).where(eq(slotMembers.slotId, slotId));
       await tx.insert(slotMembers).values(memberIds.map((memberId) => ({ slotId, memberId })));
       if (removed.length > 0) {
-        // No reason: a system cancellation, never shown as the member's
+        // No reason = system cancellation, never shown as the member's
         await tx
           .update(bookings)
           .set({ status: 'CANCELLED', cancelledAt: this.clock.now().toJSDate() })
@@ -193,7 +188,7 @@ export class AdminSlotsService {
     return { ok: true };
   }
 
-  // Members must be the trainer's own or unassigned clients; on an existing slot, members already on it may stay
+  // Own or unassigned clients; members already on the slot may stay
   private async validateSlotMembers(
     adminId: string,
     trainingType: string,
@@ -217,13 +212,12 @@ export class AdminSlotsService {
     if (found.length !== new Set(memberIds).size) throw new NotFoundException('Member not found');
   }
 
-  // A frozen member can't be put on a training on a frozen day (members already on the slot may stay)
   private async rejectFrozen(db: Db | Tx, memberIds: string[], date: string) {
     const frozen = (await loadFreezes(db, memberIds)).some((f) => frozenOn(f, date));
     if (frozen) throw new ConflictException(apiError('MEMBER_FROZEN'));
   }
 
-  // Training day row for the date, (re)scheduled. Returns its id
+  // Upserts the day as SCHEDULED
   private async ensureDay(tx: Tx, date: string) {
     const [day] = await tx
       .insert(trainingDays)
@@ -236,8 +230,8 @@ export class AdminSlotsService {
     return day.id;
   }
 
-  // SCHEDULED: adds this trainer's group slots of that weekday from «Розклад групових» (times taken or past are skipped).
-  // CANCELLED: cancels only this trainer's slots; the day itself is cancelled when nothing active is left on it
+  // SCHEDULED: adds the trainer's weekly group times for that weekday.
+  // CANCELLED: cancels this trainer's slots; the day goes CANCELLED only when no active slot is left
   async upsertTrainingDay(adminId: string, date: string, dto: UpsertTrainingDayDto) {
     if (dto.status === 'SCHEDULED') {
       await this.database.db.transaction(async (tx) => {
@@ -254,8 +248,7 @@ export class AdminSlotsService {
               eq(trainingSlots.status, 'ACTIVE'),
             ),
           );
-        // Leave out a time already past (nobody could book it, as in ensureGroupSlots) and one within an hour of a
-        // group training already there that day
+        // Skip past times and times within an hour of an existing group training
         const now = this.clock.now();
         const times = (await loadTrainerSchedule(tx, adminId)).times.filter(
           (t) =>
@@ -292,7 +285,6 @@ export class AdminSlotsService {
 
     const cancelled = await this.database.db.transaction(async (tx) => {
       const booked = await cancelSlotsTx(tx, mySlotIds, this.clock.now().toJSDate());
-      // Other trainers' trainings that day keep the day scheduled
       await tx
         .update(trainingDays)
         .set({ status: 'CANCELLED', updatedAt: this.clock.now().toJSDate() })
@@ -317,7 +309,7 @@ export class AdminSlotsService {
   async updateSlot(adminId: string, slotId: string, dto: UpdateSlotDto) {
     const slot = await requireOwnSlot(this.database.db, adminId, slotId);
 
-    // Only cancelling (UpdateSlotDto); a training cancelled already is left as it is
+    // Cancel only; already cancelled is a no-op
     if (dto.status === 'CANCELLED' && slot.status === 'ACTIVE') {
       const cancelled = await this.database.db.transaction((tx) =>
         cancelSlotsTx(tx, [slotId], this.clock.now().toJSDate()),

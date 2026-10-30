@@ -10,8 +10,7 @@ import { memberLabel } from "./memberLabel";
 import { MemberPickers } from "./MemberPickers";
 import { fieldsFor, useSave } from "./slotForm";
 
-// A clicked training: who is on it and who cancelled, change the members of a personal / split one, cancel it.
-// Mounted per training (key = slotId): `slot` may be swapped for a fresher copy while it is open
+// Mounted per training (key = slotId); `slot` may be swapped for a fresher copy while open
 export function EditSlotModal({
   slot,
   repeatsWeekly,
@@ -43,8 +42,7 @@ export function EditSlotModal({
   }, [slot.slotId]);
 
   const assigned = slot.trainingType !== "group";
-  // The trainer's own and unassigned clients, plus anyone already on this training (another trainer's client
-  // must not silently disappear from the picker and be dropped on save)
+  // Plus anyone already on the slot, so another trainer's client isn't silently dropped on save
   const pickerMembers: { id: string; displayName: string; memberCode?: string }[] = [
     ...members,
     ...slot.members.filter((sm) => !members.some((m) => m.id === sm.id)),

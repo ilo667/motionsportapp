@@ -11,13 +11,11 @@ import { memberFrozenOn } from '../freezes/freeze.store';
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-// A group booking opens on the training day at the trainer's time («Мій розклад») and closes when the training
-// starts; cancelling and switching also end at the start
+// Opens on the training day at the trainer's booking_opens_at, closes at the start (so do cancel and switch)
 export function groupBookingWindow(localDate: string, slotTime: string, opensAt: string) {
   return { openAt: bookingOpensAt(localDate, opensAt), closeAt: slotStartsAt(localDate, slotTime) };
 }
 
-// The member's active group booking on that day (one per day)
 export async function findGroupBooking(db: Db | Tx, memberId: string, trainingDayId: string) {
   const [row] = await db
     .select({
@@ -42,8 +40,7 @@ export async function findGroupBooking(db: Db | Tx, memberId: string, trainingDa
   return row ?? null;
 }
 
-// The member cancelled this training late and paid for it (booking/cancel-fee.ts, not waived): no booking it
-// again, or the same training would be spent twice
+// Slots cancelled late with an unwaived fee: booking one again would spend it twice
 export async function lateCancelledSlotIds(db: Db | Tx, memberId: string, slotIds: string[]): Promise<Set<string>> {
   if (slotIds.length === 0) return new Set();
   const rows = await db
@@ -76,9 +73,8 @@ export type GroupBookingResult =
         | 'LATE_CANCELLED';
     };
 
-// Locks the member's row (FOR UPDATE) until the transaction ends: one member's bookings, purchases and freezes run
-// one at a time, so two requests at once can't both pass a «one per day» / «one open purchase» / freeze check.
-// Returns what callers need from the row, null for an unknown member
+// Serializes one member's bookings, purchases and freezes, so concurrent requests can't both pass a
+// one-per-day, one-open-purchase or freeze check. null = unknown member
 export async function lockMember(tx: Tx, memberId: string) {
   const [member] = await tx
     .select({ trainerId: members.trainerId, displayName: members.displayName })
@@ -89,16 +85,16 @@ export async function lockMember(tx: Tx, memberId: string) {
   return member ?? null;
 }
 
-// Books a group training inside a transaction that must not fail because of it (a payment being confirmed, a cash
-// purchase): every rule is checked before the insert, so no unique violation can abort the caller's transaction.
-// Same rules as BookingService.book (the freeze too), except the group pass (the caller is the one paying for it)
+// Books inside a caller's transaction (payment, cash purchase) without throwing: every rule is checked before
+// the insert, since a unique violation would abort that transaction. Keep in step with BookingService.book
+// (minus the group pass check: the caller is paying for it)
 export async function tryBookGroup(
   tx: Tx,
   now: DateTime,
   memberId: string,
   slotId: string,
 ): Promise<GroupBookingResult> {
-  // Member row first, like BookingService: one group booking per member per day
+  // Member row before slot row: same lock order as BookingService
   await lockMember(tx, memberId);
   const [slot] = await tx
     .select({
@@ -137,7 +133,7 @@ export async function tryBookGroup(
     .values({ memberId, slotId, status: 'ACTIVE' })
     .returning({ id: bookings.id });
   await takeSeats(tx, slotId, 1);
-  // They hold a seat now: no «З'явилось місце» for this slot (BookingService.book does the same)
+  // Any booking turns the member's vacancy alert off, as in BookingService.book
   await tx
     .update(vacancyAlerts)
     .set({ active: false })
@@ -145,8 +141,7 @@ export async function tryBookGroup(
   return { ok: true, bookingId: booking.id };
 }
 
-// A booking that goes takes its guest along: cancels the active guests of these bookings and returns the ids of
-// the bookings that had one, so the caller frees one more seat for each (training_slots.booked_count)
+// Returns the bookings that had a guest, so the caller frees one more seat for each
 export async function cancelGuests(tx: Tx, bookingIds: string[], at: Date): Promise<Set<string>> {
   if (bookingIds.length === 0) return new Set();
   const rows = await tx
@@ -157,7 +152,7 @@ export async function cancelGuests(tx: Tx, bookingIds: string[], at: Date): Prom
   return new Set(rows.map((r) => r.bookingId));
 }
 
-// Takes seats on a training (a booking, its guest); the caller holds the slot row lock and has checked capacity
+// Caller holds the slot row lock and has checked capacity
 export async function takeSeats(tx: Tx, slotId: string, seats: number) {
   await tx
     .update(trainingSlots)
@@ -165,8 +160,7 @@ export async function takeSeats(tx: Tx, slotId: string, seats: number) {
     .where(eq(trainingSlots.id, slotId));
 }
 
-// Frees seats on a training (a booking that went, its guest) under the slot row lock, and says whether a group
-// training was full before: then «З'явилось місце» is due to those waiting for it (sent after the transaction)
+// Under the slot row lock. true = a full group slot: the caller sends vacancy pushes after the transaction
 export async function freeSeats(tx: Tx, slotId: string, seats: number): Promise<boolean> {
   const [slot] = await tx
     .select({

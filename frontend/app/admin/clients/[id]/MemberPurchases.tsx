@@ -9,7 +9,7 @@ import { formatUah, lineName } from "@/lib/prices";
 type Card = MemberPurchasesData["cards"][number];
 type Pack = MemberPurchasesData["packages"][number];
 
-// Only the current state's dates exist (a waiting card has no valid_from yet), so build that one label only
+// Only the current state's dates exist (a waiting card has no validFrom yet)
 const cardDates = (c: Card): string => {
   switch (c.state) {
     case "waiting":
@@ -56,8 +56,6 @@ const STATUS: Record<Purchase["status"], string> = {
   CANCELLED: "скасовано",
 };
 
-// Expanded under a client: their cards (with «Активувати з сьогодні»), packages and purchase history,
-// plus «Додати клубну карту з рецепції»
 export function MemberPurchases({ memberId, onChanged }: { memberId: string; onChanged: () => void }) {
   const [data, setData] = useState<MemberPurchasesData | null>(null);
   const [failed, setFailed] = useState(false);
@@ -79,7 +77,6 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
     load();
   }, [load]);
 
-  // Club card options come from the shared price list
   const openAddCard = () =>
     api
       .getPrices()
@@ -210,7 +207,7 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
             </button>
           </div>
         ) : (
-          // Only when the client has no club card now (none, ended or burned)
+          // Only without a current club card (none, expired or burned)
           !data.card && (
             <button type="button" onClick={openAddCard} className="text-accent text-xs hover:underline mt-2">
               + Додати клубну карту з рецепції

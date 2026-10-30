@@ -4,7 +4,6 @@ import { SessionGuard, SessionUser } from '../auth/session.guard';
 import { MemberGuard } from '../common/guards/member.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
-// A member's own freeze: its state, ask to freeze, take the request back, ask to unfreeze
 @Controller('freezes')
 @UseGuards(SessionGuard, MemberGuard)
 export class FreezesController {

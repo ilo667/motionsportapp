@@ -7,7 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 interface Props {
   action: "cancel" | "switch";
   switchTime?: string;
-  slotId?: string; // a cancel: asks what it would cost now (late cancellation)
+  slotId?: string; // cancel only: fetches the late-cancellation fee
   onConfirm: (reason: string) => void;
   onDismiss: () => void;
 }

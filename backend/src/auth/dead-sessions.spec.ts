@@ -13,7 +13,6 @@ describe('deleteDeadSessions', () => {
     expect(del).toHaveBeenCalledWith(sessions);
     const { sql, params } = new PgDialect().sqlToQuery(where[0]);
     expect(sql).toBe('("sessions"."expires_at" < $1 or "sessions"."revoked_at" < $2)');
-    // A dead session stays for 30 days
     expect(params).toEqual(['2026-09-27T10:00:00.000Z', '2026-09-27T10:00:00.000Z']);
   });
 });

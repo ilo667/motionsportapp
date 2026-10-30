@@ -107,7 +107,6 @@ describe('AnnouncementGeneratorService', () => {
           }),
         }),
       }));
-      // Reset lazy init
       (service as any).genAI = null;
       const result = await service.generate([]);
       expect(result.source).toBe('fallback');

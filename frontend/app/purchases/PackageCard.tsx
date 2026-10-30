@@ -1,11 +1,10 @@
 import { TrainingPackage } from "@/lib/api";
 import { ddmm } from "@/lib/dates";
 
-// «Групові · Абонемент 10»; a trainer service's title already says what it is
+// A trainer service's title already names its type
 export const packageTitle = (p: TrainingPackage) => (p.trainingType === "group" ? `Групові · ${p.title}` : p.title);
 
-// One circle per training: done ones filled with a check, the next one outlined in green, the rest grey.
-// Wraps onto a second row for 10–12
+// One circle per training; wraps onto a second row for 10-12
 function TrainingDots({ done, total }: { done: number; total: number }) {
   return (
     <div className="flex flex-wrap -m-1 mt-3" role="img" aria-label={`Пройдено ${done} з ${total}`}>
@@ -38,7 +37,6 @@ function TrainingDots({ done, total }: { done: number; total: number }) {
   );
 }
 
-// A package or group pass waiting or going on: until when, and the trainings done and ahead
 export function PackageCard({ p }: { p: TrainingPackage }) {
   return (
     <div className="rounded-xl border border-line bg-surface p-4">

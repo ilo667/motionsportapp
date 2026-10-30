@@ -1,5 +1,4 @@
-// The gym's price list as of 2026-10-23. Used only by `npm run seed:prices` to fill an empty table;
-// after that the amounts live in the DB and trainers change them on the «Ціни» page
+// Seed data for `npm run seed:prices` only; afterwards trainers edit amounts in the DB
 export const PRICE_SECTIONS = ['club_card', 'assigned', 'group'] as const;
 export type PriceSection = (typeof PRICE_SECTIONS)[number];
 
@@ -9,9 +8,8 @@ export type PriceListItem = {
   title: string;
   optionLabel: string | null;
   amountUah: number;
-  // How long it lasts from activation (0 = that day only). Not activated within a month of the purchase, it burns
+  // From activation; 0 = that day only
   durationMonths?: number;
-  // Trainer service / group pass: which slots the package pays for, and how many trainings it holds
   trainingType?: 'group' | 'personal' | 'split';
   trainingCount?: number;
 };

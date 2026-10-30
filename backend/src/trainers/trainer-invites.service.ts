@@ -7,8 +7,7 @@ import { newToken, hashToken } from '../auth/token';
 
 export const INVITE_DAYS = 7;
 
-// «Запросити тренера»: any signed-in trainer makes a one-time link; the new trainer signs up through
-// POST /auth/admin/register (AuthService.registerAdmin)
+// One-time trainer invite links; sign-up is AuthService.registerAdmin
 @Injectable()
 export class TrainerInvitesService {
   constructor(
@@ -16,7 +15,7 @@ export class TrainerInvitesService {
     private readonly clock: ClockService,
   ) {}
 
-  // The raw token leaves the server only here; the DB keeps its hash
+  // The only time the raw token leaves the server; the DB keeps its hash
   async create(adminId: string) {
     const token = newToken();
     const expiresAt = this.clock.now().plus({ days: INVITE_DAYS }).toJSDate();
@@ -27,7 +26,6 @@ export class TrainerInvitesService {
     return { id: invite.id, token, expiresAt };
   }
 
-  // Invites still waiting to be used, from every trainer
   async listActive() {
     return this.database.db
       .select({
@@ -48,7 +46,7 @@ export class TrainerInvitesService {
       .orderBy(asc(trainerInvites.createdAt));
   }
 
-  // Any trainer may revoke any invite; compare-and-set, so a used or already revoked one answers 409
+  // Any trainer may revoke any invite. Compare-and-set: used or revoked → 409
   async revoke(inviteId: string) {
     const [revoked] = await this.database.db
       .update(trainerInvites)

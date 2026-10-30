@@ -31,7 +31,7 @@ export class BookingController {
     return this.bookingService.book(user.id, dto.slotId);
   }
 
-  // What «Скасувати» would cost now (late cancellation), for the warning before the member confirms
+  // Late-cancellation warning shown before the member confirms
   @Get('cancel-fee')
   async cancelFee(@CurrentUser() user: SessionUser, @Query('slotId', ParseUUIDPipe) slotId: string) {
     if (user.type !== 'member') throw new Error('Members only');
@@ -52,7 +52,6 @@ export class BookingController {
     return this.bookingService.switchSlot(user.id, dto.newSlotId, dto.reason);
   }
 
-  // A free guest on the member's group booking (one per booking)
   @Post('guest')
   @HttpCode(HttpStatus.OK)
   async addGuest(@CurrentUser() user: SessionUser, @Body() dto: AddGuestDto) {

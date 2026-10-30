@@ -1,7 +1,7 @@
 import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsUUID } from 'class-validator';
 
 export class SlotMembersDto {
-  // Exact count per type (персональні 1, спліт 1–3) is checked in the service
+  // Per-type count (personal 1, split 1-3) is checked in the service
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(3)

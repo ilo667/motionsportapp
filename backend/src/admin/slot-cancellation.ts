@@ -7,9 +7,8 @@ import { cancelGuests } from '../booking/group-booking';
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-// A cancelled training costs nothing: its attendance marks go, and with them the trainings they took from
-// packages (activation stays, as with «—»). Called in the transaction that cancels the bookings, before it.
-// A member's own late cancellation stays as it was: they cancelled before the trainer did
+// A cancelled training costs nothing: delete marks and spends of active bookings (activation stays).
+// Must run before the bookings are cancelled. Member late cancellations are untouched
 async function releaseMarks(tx: Tx, slotIds: string[]) {
   if (slotIds.length === 0) return;
   const ofSlots = () =>
@@ -21,10 +20,8 @@ async function releaseMarks(tx: Tx, slotIds: string[]) {
   await tx.delete(attendance).where(inArray(attendance.bookingId, ofSlots()));
 }
 
-// Cancels these slots and every active booking on them (a system cancellation, no reason); their marks and spends
-// go back first. The slots are locked before the bookings are read, so a member booking at this moment waits and
-// then finds the training cancelled, or was booked already and is among those returned. The caller marks the day
-// CANCELLED when it has to, and tells the returned members after the transaction (notifySlotsCancelled)
+// Slots are locked before bookings are read, so a concurrent booking either waits and sees the slot cancelled
+// or is in the result. Caller handles the day status and calls notifySlotsCancelled after commit
 export async function cancelSlotsTx(
   tx: Tx,
   slotIds: string[],
@@ -53,7 +50,7 @@ export async function cancelSlotsTx(
   return active.map(({ slotId, memberId }) => ({ slotId, memberId }));
 }
 
-// «Тренування скасовано» to the members who were booked (from cancelSlotsTx), one push per training
+// One push per training to the members returned by cancelSlotsTx
 export async function notifySlotsCancelled(
   notifications: NotificationService,
   slots: { id: string; slotTime: string; localDate: string }[],

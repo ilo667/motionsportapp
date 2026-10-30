@@ -6,8 +6,7 @@ import { CancellationReasonModal } from "./CancellationReasonModal";
 import { GroupPassModal } from "./GroupPassModal";
 import { kyivTime } from "@/lib/kyivTime";
 
-// Group slot (any time the trainer set; paid: a group pass, else «Записатись» offers to buy one). Booking,
-// cancelling and switching end when the training starts. Assigned: AssignedSlotCard
+// Group slot: needs a group pass (else booking offers to buy one); booking, cancelling, switching end at the start
 interface SlotCardProps {
   slot: SlotView;
   allSlots: SlotView[];
@@ -15,7 +14,7 @@ interface SlotCardProps {
   bookingWindowOpen: boolean;
   afterWindow: boolean;
   bookingOpenAt: string | null;
-  frozen: boolean; // the member's membership is frozen on this day: no booking
+  frozen: boolean; // frozen on this day: no booking
   onMutate: (fn: () => Promise<unknown>) => void;
   onRefresh: () => void;
 }
@@ -33,12 +32,11 @@ export function SlotCard({
 }: SlotCardProps) {
   const [modal, setModal] = useState<{ action: "cancel" } | { action: "switch"; targetSlot: SlotView } | null>(null);
   const [buying, setBuying] = useState(false);
-  // «+ Гість»: the name field is open
+  // null = guest name field closed
   const [guestName, setGuestName] = useState<string | null>(null);
 
-  // A move goes to another training of the day that has not started yet
   const otherSlot = allSlots.find((s) => s.id !== slot.id && s.status === "ACTIVE" && !s.started && !s.lateCancelled);
-  // A guest moves along and needs a seat there too
+  // The guest moves along and needs a seat too
   const seatsNeeded = slot.myGuest ? 2 : 1;
   const canSwitch = !!otherSlot && otherSlot.bookedCount + seatsNeeded <= otherSlot.capacity;
 
@@ -123,7 +121,6 @@ export function SlotCard({
               </form>
             ) : (
               !isFull && (
-                // A free guest takes one more seat on this training
                 <button
                   type="button"
                   onClick={() => setGuestName("")}
@@ -163,8 +160,7 @@ export function SlotCard({
             Записатись
           </button>
         ) : (
-          // Full slot. Also offered to a member booked on the other time: when a seat frees up,
-          // their own card shows "Перейти на …"
+          // Also offered to a member booked on the other time: a freed seat shows them "Перейти на …"
           <div className="flex flex-col space-y-2">
             <p className="text-muted text-sm font-medium">Місць немає</p>
             {bookingWindowOpen &&

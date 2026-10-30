@@ -4,7 +4,7 @@ import { useEffect } from "react";
 export function SwRegister() {
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      // Without a service worker the app still works; only offline and push are missing
+      // Deliberately ignored: the app works without it, minus offline and push
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
   }, []);

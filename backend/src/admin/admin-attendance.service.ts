@@ -11,8 +11,7 @@ import { apiError } from '../common/api-error';
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-// Attendance marks on the trainer's trainings (✓ / ✗ / «—», «Підтвердити всіх», guests) and «Не списувати» on a
-// late cancellation. A mark spends from the member's package (EntitlementsService.syncSpend) in the same transaction
+// Attendance marks and late-cancellation fee waivers. A mark spends from a package in the same transaction
 @Injectable()
 export class AdminAttendanceService {
   constructor(
@@ -36,7 +35,7 @@ export class AdminAttendanceService {
         await this.saveMark(tx, booking.id, 'PRESENT', now, adminId);
         await this.entitlements.syncSpend(tx, booking.id);
       }
-      // Their guests too (nothing to spend)
+      // Guests too; nothing to spend
       await tx
         .update(bookingGuests)
         .set({ attendance: 'PRESENT', markedAt: now, markedByAdminId: adminId })
@@ -54,8 +53,7 @@ export class AdminAttendanceService {
     return { marked: activeBookings.length };
   }
 
-  // «Не списувати»: the training a late cancellation took goes back, and the half refund (if any) is dropped.
-  // Only on this trainer's trainings, and only while the money hasn't been returned. Compare-and-set
+  // «Не списувати»: returns the spent training and drops a DUE half refund. Compare-and-set; refused once refunded
   async waiveCancelFee(bookingId: string, adminId: string) {
     const [booking] = await this.database.db
       .select({ id: bookings.id, refundStatus: cancelRefunds.status })
@@ -86,7 +84,7 @@ export class AdminAttendanceService {
         .set({ status: 'CANCELLED' })
         .where(and(eq(cancelRefunds.bookingId, bookingId), eq(cancelRefunds.status, 'DUE')))
         .returning({ id: cancelRefunds.id });
-      // Returned meanwhile (another trainer's tap): keep the fee, nothing changes
+      // Refunded meanwhile: keep the fee
       if (!refund && booking.refundStatus === 'DUE') throw new ConflictException(apiError('MONEY_RETURNED'));
       await this.entitlements.syncSpend(tx, bookingId);
     });
@@ -94,7 +92,6 @@ export class AdminAttendanceService {
   }
 
   async updateBookingAttendance(bookingId: string, dto: UpdateAttendanceDto, adminId: string) {
-    // Only bookings on this trainer's own trainings
     const [booking] = await this.database.db
       .select({ id: bookings.id })
       .from(bookings)
@@ -105,7 +102,7 @@ export class AdminAttendanceService {
     if (!booking) throw new NotFoundException('Booking not found');
 
     const now = this.clock.now().toJSDate();
-    // The mark and the package move together: ✓ / ✗ spends a training, «—» gives it back
+    // Mark and spend move together: a mark spends, unmarking gives it back
     await this.database.db.transaction(async (tx) => {
       if (dto.status === 'UNMARKED') {
         await tx.delete(attendance).where(eq(attendance.bookingId, bookingId));
@@ -118,7 +115,7 @@ export class AdminAttendanceService {
     return { ok: true };
   }
 
-  // ✓ / ✗ on a booking, or changed; the caller spends from the package (syncSpend) in the same transaction
+  // Caller must syncSpend in the same transaction
   private async saveMark(tx: Tx, bookingId: string, status: 'PRESENT' | 'ABSENT', at: Date, adminId: string) {
     await tx
       .insert(attendance)
@@ -126,7 +123,7 @@ export class AdminAttendanceService {
       .onConflictDoUpdate({ target: attendance.bookingId, set: { status, markedAt: at, markedByAdminId: adminId } });
   }
 
-  // A guest's mark: for the trainer's count only, nothing is spent. Only guests on this trainer's trainings
+  // Guest marks are for the count only; nothing is spent
   async updateGuestAttendance(guestId: string, dto: UpdateAttendanceDto, adminId: string) {
     const [guest] = await this.database.db
       .select({ id: bookingGuests.id })

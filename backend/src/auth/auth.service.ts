@@ -23,8 +23,7 @@ import type { ChangePasswordDto } from './dto/change-password.dto';
 
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const BCRYPT_ROUNDS = 12;
-// Hash of a random string nobody knows, same cost as real ones: an unknown member code or username still costs one
-// bcrypt compare, so the response time doesn't tell which codes exist
+// Same bcrypt cost as real hashes: an unknown code or username takes as long, so timing leaks nothing
 const DUMMY_HASH = '$2b$12$t.Mnp58vbb/O.oSG0aHVEuyog3GrnDk1woQu4pJdSwJ0TDWhl7DkO';
 
 export async function secretMatches(secret: string, hash: string | undefined): Promise<boolean> {
@@ -109,7 +108,7 @@ export class AuthService {
     return { username: admin.username, sessionToken };
   }
 
-  // The invite page asks first, so a dead link shows a message instead of a form
+  // Lets the invite page show a message for a dead link instead of a form
   async checkInvite(rawToken: string) {
     const [invite] = await this.database.db
       .select({ id: trainerInvites.id })
@@ -119,8 +118,7 @@ export class AuthService {
     return { valid: !!invite };
   }
 
-  // A new trainer signs up through a one-time invite link. The invite is taken compare-and-set, so the same link
-  // can't create two trainers; a taken username rolls everything back and the link still works
+  // Invite taken compare-and-set: one link, one trainer. A taken username rolls back, the link stays usable
   async registerAdmin(dto: RegisterAdminDto) {
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
     const now = this.clock.now().toJSDate();
@@ -149,7 +147,7 @@ export class AuthService {
     return { username: admin.username, sessionToken };
   }
 
-  // A trainer changes their own password; their other sessions (other phones) are signed out
+  // Revokes the trainer's other sessions
   async changeAdminPassword(adminId: string, sessionId: string, dto: ChangePasswordDto) {
     const [admin] = await this.database.db
       .select({ passwordHash: admins.passwordHash })
@@ -212,14 +210,13 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 
     await this.database.db.insert(sessions).values({ principalType, principalId, tokenHash, expiresAt });
-    // Housekeeping: a failure here must not fail the sign-in; the next one tries again
+    // Housekeeping must not fail the sign-in; the next one retries
     await deleteDeadSessions(this.database.db, new Date()).catch((err: unknown) =>
       this.logger.warn(`Deleting dead sessions failed: ${String(err)}`),
     );
     return rawToken;
   }
 
-  // Not used, not revoked, not expired
   private liveInvite(rawToken: string) {
     return and(
       eq(trainerInvites.tokenHash, hashToken(rawToken)),

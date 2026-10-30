@@ -16,7 +16,7 @@ function makeNotifications() {
   return { svc, push, subs };
 }
 
-// A failed push never fails the request that sent it: a member's cancel, a cash request, a freeze, «Відхилити»
+// A failed push must never fail the request that sent it
 describe('Push — a failure is logged, never thrown', () => {
   it('the event row cannot be written (the database is down)', async () => {
     const db = {

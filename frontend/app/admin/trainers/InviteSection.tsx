@@ -12,9 +12,8 @@ function formatDateTime(iso: string) {
   });
 }
 
-// «Запросити тренера»: a one-time link (shown once), shared or copied; the invites still waiting, with «Відкликати»
 export function InviteSection({ invites, onChange }: { invites: TrainerInvite[]; onChange: () => void }) {
-  // The link is shown only right after it is made: the server keeps just a hash of it
+  // Shown once: the server keeps only its hash
   const [link, setLink] = useState<string | null>(null);
   const [linkId, setLinkId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,14 +37,14 @@ export function InviteSection({ invites, onChange }: { invites: TrainerInvite[];
     }
   };
 
-  // «Копіювати» always copies; on Mac browsers navigator.share exists too, so sharing is a separate button
+  // Mac browsers have navigator.share too, so sharing is a separate button
   const copy = async () => {
     if (!link) return;
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);
     } catch {
-      // No clipboard access: select the link so it can be copied by hand
+      // No clipboard access: select the link for copying by hand
       if (linkRef.current) window.getSelection()?.selectAllChildren(linkRef.current);
     }
   };
@@ -55,13 +54,12 @@ export function InviteSection({ invites, onChange }: { invites: TrainerInvite[];
     try {
       await navigator.share({ title: "Motion Gym", text: "Запрошення тренера в Motion Gym", url: link });
     } catch {
-      // The share sheet was closed; nothing to do
+      // Deliberately empty: the share sheet was closed
     }
   };
 
   const revoke = async (id: string) => {
     setError("");
-    // The link on screen is dead once its invite is revoked
     if (id === linkId) setLink(null);
     try {
       await api.revokeTrainerInvite(id);

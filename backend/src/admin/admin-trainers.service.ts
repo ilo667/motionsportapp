@@ -19,7 +19,6 @@ import { enabledTrainer, getDefaultTrainerId } from '../schedule/default-trainer
 import { slotOverAt } from '../schedule/training-types';
 import { cancelSlotsTx, notifySlotsCancelled } from './slot-cancellation';
 
-// «Тренери»: the list of trainers and «Вимкнути»
 @Injectable()
 export class AdminTrainersService {
   constructor(
@@ -28,9 +27,7 @@ export class AdminTrainersService {
     private readonly clock: ClockService,
   ) {}
 
-  // All trainers (reassigning a client, the «Тренери» page): who invited whom, null = added by seed:admin
-  // Disabled trainers stay in the list (with who disabled them); the pickers leave them out. Usernames only, never
-  // password hashes
+  // Includes disabled trainers (pickers filter them). invitedBy null = seed:admin. Never select password hashes
   async getTrainers() {
     const inviter = alias(admins, 'inviter');
     const disabler = alias(admins, 'disabler');
@@ -49,11 +46,9 @@ export class AdminTrainersService {
       .orderBy(asc(admins.username));
   }
 
-  // «Вимкнути» on «Тренери»: any trainer disables another one (not themselves, not the first trainer, whose group
-  // trainings clients without a trainer see). In one transaction: the trainer can't sign in any more (sessions
-  // revoked), their clients and the cash purchases waiting for them move to the chosen trainer, their trainings
-  // not over yet (an hour after the start, as the 22:00 cron counts) are cancelled — the days stay, so other
-  // trainers' schedules still fill them — and their automatic group trainings are switched off
+  // One transaction: revoke sessions and pushes, move clients and pending cash purchases, cancel trainings not
+  // over yet, turn off auto-creation. Not self, not the first trainer (unassigned members see their groups).
+  // Days are not marked CANCELLED: other trainers still use them
   async disableTrainer(adminId: string, trainerId: string, transferToId: string) {
     if (trainerId === adminId) throw new BadRequestException('Cannot disable yourself');
     if (trainerId === (await getDefaultTrainerId(this.database.db)))
@@ -73,8 +68,7 @@ export class AdminTrainersService {
 
     const { movedClients, toCancel, affected } = await this.database.db.transaction(async (tx) => {
       const at = now.toJSDate();
-      // Both trainers' rows locked in id order (two disables at once wait for each other, no deadlock), then the
-      // chosen one checked again: it may have been disabled since the check above
+      // Lock both rows in id order (no deadlock), then recheck the target: it may have been disabled meanwhile
       const locked = await tx
         .select({ id: admins.id, disabledAt: admins.disabledAt })
         .from(admins)
@@ -100,12 +94,11 @@ export class AdminTrainersService {
         .set({ trainerId: transferToId })
         .where(eq(members.trainerId, trainerId))
         .returning({ id: members.id });
-      // Only the member's trainer confirms cash: the new one takes over the requests waiting in the hall
+      // Only the member's trainer confirms cash
       await tx
         .update(purchases)
         .set({ trainerId: transferToId })
         .where(and(eq(purchases.trainerId, trainerId), eq(purchases.status, 'PENDING'), eq(purchases.method, 'CASH')));
-      // Their phones get no trainer pushes any more
       await tx
         .update(adminPushSubscriptions)
         .set({ disabledAt: at })
@@ -116,9 +109,8 @@ export class AdminTrainersService {
         .values({ trainerId, ...settings })
         .onConflictDoUpdate({ target: trainerSchedules.trainerId, set: settings });
 
-      // Read here, after the above: a training auto-added a moment ago is cancelled too, and the slot rows are
-      // locked, so a member booking at this moment waits and then finds the training cancelled (or was booked
-      // already and is among those told)
+      // Read and lock here, last: catches a just-auto-added slot, and a concurrent booking waits, then sees it
+      // cancelled (or is already among those notified)
       const fromToday = await tx
         .select({ id: trainingSlots.id, localDate: trainingDays.localDate, slotTime: trainingSlots.slotTime })
         .from(trainingSlots)

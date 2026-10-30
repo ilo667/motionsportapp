@@ -24,8 +24,7 @@ beforeEach(() => {
 
 const at = (hour: number) => DateTime.fromObject({ year: 2026, month: 10, day: 20, hour }, { zone: 'Europe/Kyiv' });
 
-// Reads, in order: member lock, the slot locked with its day, the member's trainer, the member's group booking
-// that day. Writes: the booking insert (returns its id), the seat counter
+// Reads in order: member lock, slot with its day, member's trainer, member's group booking that day
 function makeTx(reads: unknown[][]) {
   const queue = [...reads];
   const inserts: unknown[] = [];
@@ -80,8 +79,7 @@ describe('tryBookGroup — booking inside someone else’s transaction, never th
     expect(inserts).toEqual([{ memberId: 'member-1', slotId: 'slot-1', status: 'ACTIVE' }]);
   });
 
-  // Booked through «Купити разово / абонемент / готівкою»: the «Повідомити про місце» alert for this slot goes off,
-  // as after «Записатись»
+  // Same as a regular booking
   it("turns off the member's vacancy alert for the slot", async () => {
     const { tx, updates } = makeTx([MEMBER, [slot], TRAINER, []]);
     await tryBookGroup(tx, at(15), 'member-1', 'slot-1');
@@ -95,7 +93,6 @@ describe('tryBookGroup — booking inside someone else’s transaction, never th
     expect(inserts).toEqual([]);
   });
 
-  // Cancelled late and paid for it: booking the same training again would spend it twice
   it('the member cancelled this training late: LATE_CANCELLED, nothing inserted', async () => {
     const { tx, inserts } = makeTx([MEMBER, [slot], TRAINER, [], [{ slotId: 'slot-1' }]]);
     expect(await tryBookGroup(tx, at(15), 'member-1', 'slot-1')).toEqual({ ok: false, reason: 'LATE_CANCELLED' });
@@ -168,7 +165,7 @@ describe('freeSeats — a booking (and its guest) gave its seats back', () => {
   });
 });
 
-// One member's bookings, purchases and freezes run one at a time only while this really locks the row
+// Every per-member serialization depends on this really locking the row
 describe('lockMember — the member row under FOR UPDATE', () => {
   it('locks the row and returns the trainer and name', async () => {
     const forCalls: unknown[][] = [];

@@ -1,4 +1,4 @@
-// Locally the variables come from backend/.env; on Vercel the platform sets them
+// Locally from backend/.env; Vercel sets them itself
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';

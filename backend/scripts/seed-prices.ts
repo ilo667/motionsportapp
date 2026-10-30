@@ -5,12 +5,11 @@ import { sql } from 'drizzle-orm';
 import { priceItems } from '../src/database/schema';
 import { DEFAULT_PRICE_LIST } from '../src/prices/price-list';
 
-// Adds missing price list rows and refreshes the others' metadata. Amounts trainers changed are kept, so it is safe to rerun
+// Adds missing rows and refreshes metadata; never overwrites amounts, so safe to rerun
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = drizzle({ client: pool });
 
-  // Existing rows get the list's names, order and what they give; amounts are never touched
   const rows = await db
     .insert(priceItems)
     .values(DEFAULT_PRICE_LIST.map((item, i) => ({ ...item, sortOrder: (i + 1) * 10 })))

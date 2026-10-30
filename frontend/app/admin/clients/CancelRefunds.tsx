@@ -5,8 +5,7 @@ import { ddmm } from "@/lib/dates";
 import { TYPE_LABEL } from "@/lib/trainingTypes";
 import { formatUah } from "@/lib/prices";
 
-// Top of «Клієнти»: half of a single personal / split training to give back, after the client cancelled it
-// 2–24 hours before. The trainer returns the money (LiqPay cabinet or cash) and presses «Повернено»
+// Half refunds after a late cancellation (2-24 h before); the app sends no money, the trainer only marks it done
 export function CancelRefunds({ refunds, onDone }: { refunds: CancelRefund[]; onDone: () => void }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");

@@ -1,6 +1,6 @@
 import { TrainerJoinForm } from "./TrainerJoinForm";
 
-// The page an invite link opens: /admin/join?t=<token>
+// Invite link: /admin/join?t=<token>
 export default async function TrainerJoinPage({
   searchParams,
 }: {

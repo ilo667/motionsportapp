@@ -28,7 +28,7 @@ export class NotificationService {
     private readonly vacancyAlerts: VacancyAlertsService,
   ) {}
 
-  // Never throws: a failed push never fails the request that sent it (the member's cancel, the trainer's «Відхилити»…)
+  // Never throws: a failed push must not fail the request that sent it
   async enqueueAndProcess(eventType: EventType, dedupeKey: string, payload: Record<string, unknown>) {
     try {
       const inserted = await this.database.db
@@ -37,7 +37,7 @@ export class NotificationService {
         .onConflictDoNothing()
         .returning({ id: notificationEvents.id });
 
-      if (inserted.length === 0) return; // already sent
+      if (inserted.length === 0) return; // dedupe: already sent
 
       const [event] = await this.database.db
         .select()
@@ -51,8 +51,7 @@ export class NotificationService {
     }
   }
 
-  // Sent once, right away. A failed event stays FAILED (logged); there are no retries (push delivery isn't
-  // guaranteed anyway, and a retry could re-send to those who already got it)
+  // No retries: delivery isn't guaranteed anyway, and a retry could re-send to those who got it
   private async processEvent(event: typeof notificationEvents.$inferSelect) {
     try {
       const p = event.payload as Record<string, unknown>;
@@ -80,7 +79,7 @@ export class NotificationService {
   private async sendOpening(payload: Record<string, unknown>) {
     const localDate = payload.localDate as string;
     const trainerIds = payload.trainerIds as string[] | undefined;
-    // Older events have no trainerIds: everyone, as before
+    // Older events have no trainerIds: send to everyone
     const subscriptions = trainerIds
       ? await this.subs.findForTrainers(trainerIds, payload.includeUnassigned === true)
       : await this.subs.findAll();
@@ -122,7 +121,6 @@ export class NotificationService {
     await this.vacancyAlerts.deactivateBySlot(slotId);
   }
 
-  // To the trainer: a member cancelled or moved a booking, with the reason they wrote
   private async sendMemberCancelled(payload: Record<string, unknown>) {
     const displayName = payload.displayName as string;
     const slotTime = payload.slotTime as string;
@@ -134,7 +132,7 @@ export class NotificationService {
     const title = switchedToTime
       ? `Перенесення ${slotTime} → ${switchedToTime}, ${this.fmtDate(localDate)}`
       : `Скасування ${slotTime}, ${this.fmtDate(localDate)}`;
-    // The trainer whose training it is (older events without trainerId go to every trainer)
+    // Older events without trainerId go to every trainer
     const subscriptions = trainerId ? await this.subs.findAdminByAdminId(trainerId) : await this.subs.findAllAdmin();
     for (const sub of subscriptions) {
       const result = await this.push.send(sub, { title, body: `${displayName}: ${reason}`, icon: ICON, url: '/admin' });
@@ -142,7 +140,6 @@ export class NotificationService {
     }
   }
 
-  // To the member's trainer: they want to pay cash for a purchase (confirmed on «Клієнти»)
   private async sendCashRequested(payload: Record<string, unknown>) {
     const subscriptions = await this.subs.findAdminByAdminId(payload.trainerId as string);
     const body = `${payload.displayName as string}: ${payload.totalUah as number} ₴`;
@@ -152,8 +149,7 @@ export class NotificationService {
     }
   }
 
-  // To the member's trainer: a freeze or unfreeze to approve on «Клієнти». A client without a trainer: nobody
-  // (every trainer sees the request there)
+  // No trainer: no push; every trainer sees the request on the clients page
   private async sendFreezeRequested(payload: Record<string, unknown>) {
     const trainerId = payload.trainerId as string | null;
     if (!trainerId) return;
@@ -170,7 +166,6 @@ export class NotificationService {
     }
   }
 
-  // To the member: the trainer approved or rejected their freeze / unfreeze
   private async sendFreezeDecided(payload: Record<string, unknown>) {
     const subscriptions = await this.subs.findActiveByMemberIds([payload.memberId as string]);
     const approved = payload.approved === true;

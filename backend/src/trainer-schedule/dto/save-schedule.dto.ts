@@ -13,7 +13,7 @@ class ScheduleTimeDto {
   slotTime: string;
 }
 
-// «Мій розклад» as a whole; the rules (06:00–21:00, an hour apart, opening first) are checked by the service
+// Format only; schedule rules are checked by the service (scheduleError)
 export class SaveScheduleDto {
   @Matches(HH_MM)
   bookingOpensAt: string;

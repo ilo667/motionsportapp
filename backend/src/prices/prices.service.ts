@@ -5,7 +5,6 @@ import { ClockService } from '../clock/clock.service';
 import { priceItems, priceChanges, admins } from '../database/schema';
 import type { UpdatePriceDto } from './dto/update-price.dto';
 
-// Latest changes shown under the price list
 const CHANGES_LIMIT = 30;
 
 @Injectable()
@@ -15,7 +14,6 @@ export class PricesService {
     private readonly clock: ClockService,
   ) {}
 
-  // The whole price list in page order, plus who changed what lately (usernames only)
   async getPrices() {
     const items = await this.database.db
       .select({
@@ -48,13 +46,13 @@ export class PricesService {
       .limit(CHANGES_LIMIT);
 
     return {
-      // updatedAt only once a trainer changed it: the seeded value has no author
+      // Seeded values have no author, so no updatedAt
       items: items.map((i) => ({ ...i, updatedAt: i.updatedBy ? i.updatedAt.toISOString() : null })),
       changes: changes.map((c) => ({ ...c, changedAt: c.changedAt.toISOString() })),
     };
   }
 
-  // For clients (the «Ціни» page): what each option costs, in page order. No trainer names
+  // Member view: no trainer names
   async getMemberPrices() {
     return this.database.db
       .select({
@@ -68,8 +66,7 @@ export class PricesService {
       .orderBy(asc(priceItems.sortOrder));
   }
 
-  // Compare-and-set: the amount changes only if it is still what the trainer saw, so two trainers editing
-  // at once can't silently overwrite each other. Every change is logged in price_changes
+  // Compare-and-set on the amount the trainer saw: concurrent edits can't silently overwrite each other
   async updatePrice(adminId: string, id: string, dto: UpdatePriceDto) {
     if (dto.amountUah === dto.expectedAmountUah) {
       const current = await this.current(id);
@@ -108,7 +105,6 @@ export class PricesService {
     return item;
   }
 
-  // 409 with the current amount and who set it, so the page can tell the trainer
   private changedMeanwhile(current: { amountUah: number; updatedBy: string | null }) {
     return new ConflictException({
       statusCode: 409,

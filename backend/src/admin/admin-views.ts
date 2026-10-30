@@ -5,11 +5,7 @@ import { bookings, cancelRefunds, members, trainingDays, trainingSlots } from '.
 
 type Db = DatabaseService['db'];
 
-// What the admin shows in several places: attendance marks, and the cancellations members made themselves
-// (today page, history, calendar modal, client page)
-
 export type Mark = 'PRESENT' | 'ABSENT' | 'UNMARKED';
-// No attendance row (or a guest's null) = not marked yet
 export const markOf = (status: string | null) => (status ?? 'UNMARKED') as Mark;
 
 type CancellationRow = {
@@ -31,7 +27,7 @@ export function toCancellationView(r: CancellationRow) {
     reason: r.reason ?? '',
     cancelledAt: r.cancelledAt?.toISOString() ?? null,
     switchedToTime: r.switchedToTime, // null = cancelled, otherwise moved to that time
-    // A late cancellation (booking/cancel-fee.ts): what it cost, half a single training back, and «Не списувати»
+    // Late-cancellation fee (booking/cancel-fee.ts)
     fee: r.cancelFee
       ? {
           kind: r.cancelFee as 'FULL' | 'HALF',
@@ -43,9 +39,7 @@ export function toCancellationView(r: CancellationRow) {
   };
 }
 
-// Bookings the member cancelled or moved themselves (they always write a reason). System cancellations
-// (the trainer cancelled the training or removed the member, a freeze, cash «Відхилити») have no reason and
-// are left out
+// Member's own cancellations and moves; system cancellations have no reason and are excluded
 export function memberCancellations(db: Db, filter: SQL, limit?: number) {
   const target = alias(trainingSlots, 'target_slot');
   const query = db

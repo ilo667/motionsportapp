@@ -12,8 +12,7 @@ interface AssignedSlotCardProps {
   onMutate: (fn: () => Promise<unknown>) => void;
 }
 
-// Personal / split the trainer assigned to this member. The member is booked already; the training is paid
-// from a package when the trainer marks attendance. No package left → «Оплатити» opens the purchase flow
+// Assigned = already booked; paid from a package on the attendance mark. No package left: «Оплатити» to buy one
 export function AssignedSlotCard({ slot, onMutate }: AssignedSlotCardProps) {
   const [cancelOpen, setCancelOpen] = useState(false);
 

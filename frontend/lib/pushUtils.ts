@@ -7,14 +7,13 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
-// Registers the browser's subscription for whoever is signed in (member or trainer); the server upserts by endpoint
+// For whoever is signed in now; the server upserts by endpoint
 export async function syncSubscription(sub: PushSubscription) {
   const json = sub.toJSON() as { endpoint: string; keys?: { p256dh?: string; auth?: string } };
   await api.subscribePush({ endpoint: json.endpoint, p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" });
 }
 
-// On page load: if this browser is already subscribed, register it for whoever is signed in now
-// (after logout the server switched it off; signing in again turns pushes back on without a new prompt)
+// Logout switched it off on the server; this turns it back on without a new permission prompt
 export async function resyncExistingSubscription() {
   try {
     if (!("serviceWorker" in navigator)) return;
@@ -22,7 +21,7 @@ export async function resyncExistingSubscription() {
     const existing = await reg?.pushManager?.getSubscription();
     if (existing) await syncSubscription(existing);
   } catch {
-    // no push support or offline: nothing to sync
+    // Deliberately empty: no push support or offline
   }
 }
 
@@ -33,7 +32,7 @@ export async function ensurePushSubscribed(): Promise<boolean> {
   try {
     const reg = await navigator.serviceWorker.ready;
     const existing = await reg.pushManager.getSubscription();
-    // The browser may be subscribed under the other role (trainer testing as a member), so register it again
+    // May be registered under the other role, so register it again
     if (existing) {
       await syncSubscription(existing);
       return true;

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { longDay } from "@/lib/dates";
 
-// «Скасувати мої тренування цього дня», asked once more: only this trainer's trainings go, other trainers' stay
+// Cancels only this trainer's trainings that day
 export function CancelDayButton({ date, onCancel }: { date: string; onCancel: () => void }) {
   const [confirming, setConfirming] = useState(false);
 

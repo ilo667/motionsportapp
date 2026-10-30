@@ -28,13 +28,12 @@ const FIRST = 'trainer-0';
 const GONE = 'trainer-2';
 const NEW = 'trainer-3';
 
-// Reads take `reads` in order, writes take `writes` in order (what … RETURNING gives back). Every write is
-// recorded with its table, payload and where condition (as SQL)
+// Reads and writes (RETURNING) consume their lists in order; each write is logged with table, payload, where SQL
 function makeDb(reads: unknown[][], writes: unknown[][] = []) {
   let r = 0;
   let w = 0;
   const log: { op: string; table: unknown; payload?: unknown; where?: { sql: string; params: unknown[] } }[] = [];
-  // Reads and writes in the order they ran ('select', or the written table)
+  // 'select' or the written table, in run order
   const order: unknown[] = [];
 
   function readLink(): any {
@@ -136,8 +135,7 @@ describe('Disabling a trainer — refusals', () => {
     expect(log.map((e) => e.table)).toEqual([admins]);
   });
 
-  // Two trainers at once: A disables B (clients to C) while D disables C. Both admin rows are locked in the
-  // transaction and C is checked again there, so B's clients never land on a disabled trainer
+  // Race: A disables B (clients to C) while D disables C; the recheck under lock stops B's clients landing on C
   it('the chosen trainer disabled meanwhile (seen under the row lock): 404 and nothing is written', async () => {
     const { db, log } = makeDb([
       [{ id: FIRST }],
@@ -160,7 +158,7 @@ describe('Disabling a trainer — refusals', () => {
 });
 
 describe('Disabling a trainer', () => {
-  // The trainer's active slots from today: 10:30 is over (an hour after the start), 11:30 is going on, tomorrow ahead
+  // 10:30 is over (an hour after start), 11:30 is going on, tomorrow is ahead
   const slots = [
     slot('s-over', '2026-10-26', '10:30'),
     slot('s-now', '2026-10-26', '11:30'),
@@ -232,9 +230,7 @@ describe('Disabling a trainer', () => {
     expect(writesTo(log, trainingDays)).toEqual([]);
   });
 
-  // A member booking in the same moment waits for the slot lock and then finds it cancelled, or is booked
-  // already and is told: either way the trainings are read inside the transaction, after the trainer is disabled
-  // and the automatic trainings switched off
+  // Reading slots last, under lock, means a concurrent booking is either refused or notified
   it('reads the trainings to cancel inside the transaction, after disabling and switching auto-add off', async () => {
     const { order } = await disable();
     const selects = order.map((t, i) => (t === 'select' ? i : -1)).filter((i) => i >= 0);

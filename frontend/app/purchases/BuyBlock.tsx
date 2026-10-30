@@ -3,7 +3,6 @@ import { CatalogItem, MyPurchases } from "@/lib/api";
 import { formatUah } from "@/lib/prices";
 import type { PurchaseMode } from "./PurchaseFlow";
 
-// «від 250 ₴»: the cheapest option of a list
 const fromPrice = (items: CatalogItem[]) =>
   items.length ? `від ${formatUah(Math.min(...items.map((i) => i.amountUah)))}` : "";
 
@@ -63,8 +62,7 @@ function BuyTile({
   );
 }
 
-// «Купити»: «З тренером», «Групові», «Клубна карта». No buying ahead: a tile shows only while the member has nothing
-// of that kind left to use (what they have is listed above); nothing at all when no tile is left
+// No buying ahead: a tile shows only when nothing of that kind is left; no tiles, no block
 export function BuyBlock({
   data,
   titleClass,

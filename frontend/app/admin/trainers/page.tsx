@@ -17,7 +17,6 @@ function formatDate(iso: string) {
   });
 }
 
-// Everyone on the page, waiting invites, and which trainer is signed in (to put them first)
 const loadTrainersPage = () =>
   Promise.all([api.getTrainers(), api.getTrainerInvites(), api.me()]).then(([trainers, invites, user]) => ({
     trainers,
@@ -25,14 +24,12 @@ const loadTrainersPage = () =>
     me: user.type === "admin" ? (user.username ?? null) : null,
   }));
 
-// «Тренери»: invite a trainer by a one-time link, see who is here, change own password
 export default function TrainersPage() {
   const { data, error, reload: load } = useAdminData(loadTrainersPage);
   const trainers = data?.trainers ?? null;
   const invites = data?.invites ?? [];
   const me = data?.me ?? null;
   const loadError = error != null;
-  // «Вимкнути»: the trainer in the dialog, and what the last one did
   const [disabling, setDisabling] = useState<Trainer | null>(null);
   const [disabledText, setDisabledText] = useState("");
 
@@ -95,12 +92,12 @@ export default function TrainersPage() {
       {disabling && trainers && (
         <DisableDialog
           trainer={disabling}
-          // Clients can go to any trainer still working, me first
+          // Enabled trainers only, me first
           targets={trainers
             .filter((t) => !t.disabledAt && t.id !== disabling.id)
             .sort((a, b) => Number(b.username === me) - Number(a.username === me))}
           onClose={() => setDisabling(null)}
-          // Someone disabled this trainer first: the list shows it
+          // Someone disabled them first: reload shows it
           onConflict={load}
           onDone={(text) => {
             setDisabling(null);
@@ -113,7 +110,7 @@ export default function TrainersPage() {
   );
 }
 
-// The first trainer (clients without a trainer see their group trainings) can't be disabled
+// The first trainer can't be disabled: unassigned clients see their group trainings
 function firstId(trainers: Trainer[]) {
   return [...trainers].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]?.id;
 }

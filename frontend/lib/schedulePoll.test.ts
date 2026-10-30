@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ScheduleNext } from "@/lib/api";
 import { nextPollDelay, POLL_ERROR_MS, POLL_IDLE_MAX_MS, POLL_OPEN_MS } from "@/lib/schedulePoll";
 
-// Only the fields nextPollDelay reads; the day: booking opens 14:00, closes 20:00 (Kyiv, UTC+2)
+// Booking opens 14:00, closes 20:00 (Kyiv, UTC+2)
 function schedule(serverTime: string, over: Partial<ScheduleNext> = {}): ScheduleNext {
   return {
     serverTime,

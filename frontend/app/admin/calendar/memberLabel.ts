@@ -1,6 +1,6 @@
 import { trainingsCount } from "@/lib/plural";
 
-// A member of an assigned training: cancelled, paid (spent from a package), trainings left to pay it, or not paid
+// Cancelled, paid (spent from a package), covered by a package, or unpaid
 export function memberLabel(m: { booked: boolean; spent: boolean; packageLeft: number }) {
   if (!m.booked) return { text: "скасовано", className: "text-muted" };
   if (m.spent) return { text: "оплачено", className: "text-teal" };

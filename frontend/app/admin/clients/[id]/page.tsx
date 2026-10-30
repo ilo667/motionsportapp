@@ -19,7 +19,6 @@ const MARK: Record<MemberVisit["attendance"], { text: string; className: string 
 
 const sectionTitle = "text-subtle text-xs font-semibold uppercase tracking-wide mb-2";
 
-// The trainings the client was booked on, up to today, with the mark
 function Visits({ memberId }: { memberId: string }) {
   const [items, setItems] = useState<MemberVisit[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -62,7 +61,7 @@ const FREEZE_STATUS: Record<MemberFreeze["status"], string> = {
   CANCELLED: "клієнт скасував запит",
 };
 
-// The client's freezes: dates, state, who approved. Hidden when there were none
+// Hidden when there were none
 function Freezes({ memberId, headingClass }: { memberId: string; headingClass: string }) {
   const [items, setItems] = useState<MemberFreeze[] | null>(null);
 
@@ -98,18 +97,16 @@ function Freezes({ memberId, headingClass }: { memberId: string; headingClass: s
   );
 }
 
-// The trainers a client can be given to, and who is signed in
 const loadTrainerPicker = () =>
   Promise.all([api.getTrainers(), api.me()]).then(([trainers, me]) => ({ trainers, myId: me.id }));
 
-// Everything about one client: card and trainings, visits, cancellations, purchases
 export default function ClientPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const fetchMember = useCallback(() => api.getMember(id), [id]);
   const { data: member, setData: setMember, error: memberError, reload: load } = useAdminData(fetchMember);
   const loadError = memberError == null ? null : statusOf(memberError) === 404 ? "missing" : "failed";
-  // The trainer list for «Тренер»; if it fails the picker would be empty with no reason given, so it says so
+  // A failed load is reported: an empty picker would give no reason
   const { data: picker, error: pickerError } = useAdminData(loadTrainerPicker);
   const trainers = picker?.trainers ?? [];
   const myId = picker?.myId ?? "";
@@ -143,7 +140,7 @@ export default function ClientPage() {
               trainers={trainers}
               myId={myId}
               onAssigned={(trainerId) =>
-                // Given to another trainer: this client is no longer theirs to see
+                // Given away: no longer visible to this trainer
                 trainerId === myId ? setMember({ ...member, trainerId }) : router.push("/admin/clients")
               }
             />

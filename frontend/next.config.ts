@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Basic security headers on every page. No CSP yet: it would need tuning for the LiqPay form POST,
-  // Next.js inline scripts and fonts. HSTS is already set by Vercel
+  // No CSP yet: needs tuning for the LiqPay form POST, Next.js inline scripts and fonts. HSTS comes from Vercel
   async headers() {
     return [
       {
