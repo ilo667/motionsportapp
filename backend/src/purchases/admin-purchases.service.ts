@@ -22,6 +22,7 @@ import { cardState } from './validity';
 import { memberFrozenOn } from '../freezes/freeze.store';
 import { requireVisibleMember, visibleTo } from '../schedule/default-trainer';
 import { purchaseViews } from './purchase-views';
+import { apiError } from '../common/api-error';
 
 // Latest purchases shown on a client's page
 const MEMBER_PURCHASES_LIMIT = 20;
@@ -262,8 +263,7 @@ export class AdminPurchasesService {
       await lockMember(tx, memberId);
       await this.rejectFrozen(tx, memberId);
       // One club card at a time: a new one only once the current card has ended or burned
-      if (await this.entitlements.usableCard(memberId, tx))
-        throw new ConflictException('Member already has a club card');
+      if (await this.entitlements.usableCard(memberId, tx)) throw new ConflictException(apiError('CLUB_CARD_EXISTS'));
       await this.entitlements.addManualCard(tx, memberId, trainerId, priceItemId, activate);
     });
     return { ok: true };
@@ -285,7 +285,7 @@ export class AdminPurchasesService {
   // A card added or started during a freeze would miss the pushed dates: after the unfreeze
   private async rejectFrozen(db: Q, memberId: string) {
     if (await memberFrozenOn(db, memberId, this.clock.now().toISODate()!)) {
-      throw new ConflictException('Member is frozen');
+      throw new ConflictException(apiError('MEMBER_FROZEN'));
     }
   }
 }

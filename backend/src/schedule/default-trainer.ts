@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { and, asc, eq, getTableColumns, isNull, or } from 'drizzle-orm';
 import { admins, members, trainingDays, trainingSlots } from '../database/schema';
 import type { DatabaseService } from '../database/database.service';
+import { apiError } from '../common/api-error';
 
 type Db = DatabaseService['db'];
 type Q = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -61,6 +62,6 @@ export async function requireOwnSlot(db: Q, trainerId: string, slotId: string, l
     .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
     .where(eq(trainingSlots.id, slotId));
   const [slot] = await (lock ? query.for('update', { of: trainingSlots }).limit(1) : query.limit(1));
-  if (!slot || slot.trainerId !== trainerId) throw new NotFoundException('Slot not found');
+  if (!slot || slot.trainerId !== trainerId) throw new NotFoundException(apiError('SLOT_NOT_FOUND'));
   return slot;
 }

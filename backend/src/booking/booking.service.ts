@@ -30,6 +30,7 @@ import {
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 import { memberFrozenOn } from '../freezes/freeze.store';
 import { cancelFee, halfBack, type CancelFee } from './cancel-fee';
+import { apiError } from '../common/api-error';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -40,7 +41,7 @@ async function oneBookingPerDay<T>(run: () => Promise<T>): Promise<T> {
     return await run();
   } catch (err: unknown) {
     if ((err as { code?: string })?.code === '23505') {
-      throw new ConflictException('You already have an active booking for this day');
+      throw new ConflictException(apiError('ALREADY_BOOKED_TODAY'));
     }
     throw err;
   }
@@ -74,41 +75,43 @@ export class BookingService {
       .where(eq(trainingSlots.id, slotId))
       .limit(1);
 
-    if (!slot) throw new NotFoundException('Slot not found');
-    if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
+    if (!slot) throw new NotFoundException(apiError('SLOT_NOT_FOUND'));
+    if (slot.status !== 'ACTIVE') throw new ConflictException(apiError('SLOT_CANCELLED'));
     // Assigned trainings are booked by the trainer (assigning is booking), never by the member
     if (slot.trainingType !== GROUP_TYPE) throw new BadRequestException('This slot requires payment');
     // Members book only their own trainer's group trainings
     if (slot.trainerId !== (await getMemberTrainerId(this.database.db, memberId)))
-      throw new NotFoundException('Slot not found');
+      throw new NotFoundException(apiError('SLOT_NOT_FOUND'));
 
-    if (slot.dayStatus !== 'SCHEDULED') throw new ConflictException('Training day is not scheduled');
+    if (slot.dayStatus !== 'SCHEDULED') throw new ConflictException(apiError('DAY_NOT_SCHEDULED'));
 
     await this.validateBookingWindow(slot.localDate, slot.slotTime, slot.trainerId);
     if (await memberFrozenOn(this.database.db, memberId, slot.localDate)) {
-      throw new ConflictException('Membership frozen');
+      throw new ConflictException(apiError('MEMBERSHIP_FROZEN'));
     }
     // Group trainings are paid: a pass usable that day with a training left (else «Записатися» offers to buy one)
     if ((await this.entitlements.groupPassLeft(memberId, slot.localDate)) === 0) {
-      throw new ConflictException('Group pass required');
+      throw new ConflictException(apiError('GROUP_PASS_REQUIRED'));
     }
 
     await oneBookingPerDay(() =>
       this.database.db.transaction(async (tx) => {
         await lockMember(tx, memberId);
         // Again under the member lock: a freeze approved at this moment cancels bookings under the same lock
-        if (await memberFrozenOn(tx, memberId, slot.localDate)) throw new ConflictException('Membership frozen');
+        if (await memberFrozenOn(tx, memberId, slot.localDate))
+          throw new ConflictException(apiError('MEMBERSHIP_FROZEN'));
         // Cancelled this training late (and paid for it): not booked again
         if ((await lateCancelledSlotIds(tx, memberId, [slotId])).size > 0) {
-          throw new ConflictException('Cancelled late');
+          throw new ConflictException(apiError('CANCELLED_LATE'));
         }
 
         const locked = await this.lockSlot(tx, slotId);
-        if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is no longer available');
-        if (locked.bookedCount >= locked.capacity) throw new ConflictException('Slot is full');
+        if (!locked || locked.status !== 'ACTIVE')
+          throw new ConflictException(apiError('SLOT_NOT_FOUND', 'Slot is no longer available'));
+        if (locked.bookedCount >= locked.capacity) throw new ConflictException(apiError('SLOT_FULL'));
 
         if (await findGroupBooking(tx, memberId, locked.trainingDayId)) {
-          throw new ConflictException('You already have an active booking for this day');
+          throw new ConflictException(apiError('ALREADY_BOOKED_TODAY'));
         }
 
         await tx.insert(bookings).values({ memberId, slotId, status: 'ACTIVE' });
@@ -177,15 +180,15 @@ export class BookingService {
       .where(eq(trainingSlots.id, newSlotId))
       .limit(1);
 
-    if (!target) throw new NotFoundException('Slot not found');
+    if (!target) throw new NotFoundException(apiError('SLOT_NOT_FOUND'));
     if (target.trainingType !== GROUP_TYPE) throw new BadRequestException('Only group trainings can be switched');
     if (target.trainerId !== (await getMemberTrainerId(this.database.db, memberId)))
-      throw new NotFoundException('Slot not found');
+      throw new NotFoundException(apiError('SLOT_NOT_FOUND'));
 
     const current = await findGroupBooking(this.database.db, memberId, target.trainingDayId);
 
-    if (!current) throw new NotFoundException('No active booking to switch from');
-    if (current.slotId === newSlotId) throw new BadRequestException('Already booked on this slot');
+    if (!current) throw new NotFoundException(apiError('NO_ACTIVE_BOOKING', 'No active booking to switch from'));
+    if (current.slotId === newSlotId) throw new BadRequestException(apiError('ALREADY_ON_SLOT'));
 
     // Same day: findGroupBooking looked in the target's day
     const localDate = target.localDate;
@@ -203,9 +206,9 @@ export class BookingService {
         const slot1 = await this.lockSlot(tx, firstId);
         const slot2 = await this.lockSlot(tx, secondId);
 
-        if (!slot1 || !slot2) throw new NotFoundException('Slot not found');
+        if (!slot1 || !slot2) throw new NotFoundException(apiError('SLOT_NOT_FOUND'));
         if ((await lateCancelledSlotIds(tx, memberId, [newSlotId])).size > 0) {
-          throw new ConflictException('Cancelled late');
+          throw new ConflictException(apiError('CANCELLED_LATE'));
         }
 
         const newSlot = slot1.id === newSlotId ? slot1 : slot2;
@@ -213,8 +216,10 @@ export class BookingService {
         const guest = await this.activeGuest(tx, current.id);
         const seats = guest ? 2 : 1;
 
-        if (newSlot.status !== 'ACTIVE') throw new ConflictException('Target slot is cancelled');
-        if (newSlot.bookedCount + seats > newSlot.capacity) throw new ConflictException('Target slot is full');
+        if (newSlot.status !== 'ACTIVE')
+          throw new ConflictException(apiError('SLOT_CANCELLED', 'Target slot is cancelled'));
+        if (newSlot.bookedCount + seats > newSlot.capacity)
+          throw new ConflictException(apiError('SLOT_FULL', 'Target slot is full'));
 
         const [moved] = await tx
           .update(bookings)
@@ -226,7 +231,7 @@ export class BookingService {
           })
           .where(and(eq(bookings.id, current.id), eq(bookings.status, 'ACTIVE')))
           .returning({ id: bookings.id });
-        if (!moved) throw new ConflictException('Booking has changed, refresh and try again');
+        if (!moved) throw new ConflictException(apiError('BOOKING_CHANGED'));
 
         const [created] = await tx
           .insert(bookings)
@@ -327,11 +332,11 @@ export class BookingService {
     await this.database.db.transaction(async (tx) => {
       await lockMember(tx, memberId);
       const locked = await this.lockSlot(tx, slotId);
-      if (!locked || locked.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
+      if (!locked || locked.status !== 'ACTIVE') throw new ConflictException(apiError('SLOT_CANCELLED'));
       const booking = await this.activeBooking(tx, memberId, slotId);
-      if (!booking) throw new NotFoundException('No active booking found');
-      if (await this.activeGuest(tx, booking.id)) throw new ConflictException('Guest already added');
-      if (locked.bookedCount >= locked.capacity) throw new ConflictException('Slot is full');
+      if (!booking) throw new NotFoundException(apiError('NO_ACTIVE_BOOKING'));
+      if (await this.activeGuest(tx, booking.id)) throw new ConflictException(apiError('GUEST_EXISTS'));
+      if (locked.bookedCount >= locked.capacity) throw new ConflictException(apiError('SLOT_FULL'));
 
       await tx.insert(bookingGuests).values({ bookingId: booking.id, name: guestName });
       await takeSeats(tx, slotId, 1);
@@ -346,7 +351,7 @@ export class BookingService {
     const wasFull = await this.database.db.transaction(async (tx) => {
       const locked = await this.lockSlot(tx, slotId);
       const booking = await this.activeBooking(tx, memberId, slotId);
-      if (!locked || !booking) throw new NotFoundException('No active booking found');
+      if (!locked || !booking) throw new NotFoundException(apiError('NO_ACTIVE_BOOKING'));
       if ((await cancelGuests(tx, [booking.id], this.clock.now().toJSDate())).size === 0)
         throw new NotFoundException('No guest');
       return freeSeats(tx, slotId, 1);
@@ -373,7 +378,7 @@ export class BookingService {
       .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
       .where(eq(trainingSlots.id, slotId))
       .limit(1);
-    if (!slot || slot.trainingType !== GROUP_TYPE) throw new NotFoundException('Slot not found');
+    if (!slot || slot.trainingType !== GROUP_TYPE) throw new NotFoundException(apiError('SLOT_NOT_FOUND'));
     return slot;
   }
 
@@ -401,7 +406,7 @@ export class BookingService {
       .innerJoin(trainingDays, eq(trainingDays.id, trainingSlots.trainingDayId))
       .where(and(eq(bookings.memberId, memberId), eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')))
       .limit(1);
-    if (!row) throw new NotFoundException('No active booking found');
+    if (!row) throw new NotFoundException(apiError('NO_ACTIVE_BOOKING'));
     return row;
   }
 
@@ -463,14 +468,14 @@ export class BookingService {
   // Cancelling, switching away and removing a guest: only until the training starts
   private validateBeforeStart(localDate: string, slotTime: string) {
     const now = this.clock.now();
-    if (now >= slotStartsAt(localDate, slotTime)) throw new BadRequestException('Training has already started');
+    if (now >= slotStartsAt(localDate, slotTime)) throw new BadRequestException(apiError('TRAINING_STARTED'));
   }
 
   private async validateBookingWindow(localDate: string, slotTime: string, trainerId: string) {
     const now = this.clock.now();
     const { bookingOpensAt: opensAt } = await loadTrainerSchedule(this.database.db, trainerId);
     const { openAt, closeAt } = groupBookingWindow(localDate, slotTime, opensAt);
-    if (now < openAt) throw new BadRequestException('Booking is not open yet');
-    if (now >= closeAt) throw new BadRequestException('Booking window has closed');
+    if (now < openAt) throw new BadRequestException(apiError('BOOKING_NOT_OPEN'));
+    if (now >= closeAt) throw new BadRequestException(apiError('BOOKING_CLOSED'));
   }
 }

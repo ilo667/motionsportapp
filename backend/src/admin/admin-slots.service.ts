@@ -23,6 +23,7 @@ import { loadFreezes } from '../freezes/freeze.store';
 import { frozenOn } from '../freezes/rules';
 import { cancelSlotsTx, notifySlotsCancelled } from './slot-cancellation';
 import { trainingDayOn } from '../schedule/training-day.store';
+import { apiError, ruleError } from '../common/api-error';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -51,8 +52,8 @@ export class AdminSlotsService {
   // that day. A cancelled slot at that time stays as it was (a new row), an active assigned one is never taken over
   async upsertGroupSlot(adminId: string, date: string, slotTime: string) {
     const timeError = groupTimeError(slotTime, []);
-    if (timeError) throw new BadRequestException(timeError);
-    if (slotStartsAt(date, slotTime) <= this.clock.now()) throw new BadRequestException('Training time is in the past');
+    if (timeError) throw new BadRequestException(ruleError(timeError));
+    if (slotStartsAt(date, slotTime) <= this.clock.now()) throw new BadRequestException(apiError('TIME_PAST'));
 
     await this.database.db.transaction(async (tx) => {
       const dayId = await this.ensureDay(tx, date);
@@ -72,7 +73,7 @@ export class AdminSlotsService {
         slotTime,
         others.map((o) => o.slotTime),
       );
-      if (gapError) throw new BadRequestException(gapError);
+      if (gapError) throw new BadRequestException(ruleError(gapError));
       const [slot] = await tx
         .insert(trainingSlots)
         .values(groupSlotRow(dayId, slotTime, adminId))
@@ -86,7 +87,7 @@ export class AdminSlotsService {
         })
         .returning({ id: trainingSlots.id });
 
-      if (!slot) throw new ConflictException('Time is already taken');
+      if (!slot) throw new ConflictException(apiError('TIME_TAKEN'));
     });
 
     return { ok: true };
@@ -99,7 +100,7 @@ export class AdminSlotsService {
     const startsAt = slotStartsAt(date, dto.slotTime);
     if (!startsAt.isValid) throw new BadRequestException('Invalid date');
     const now = this.clock.now();
-    if (startsAt <= now) throw new BadRequestException('Training time is in the past');
+    if (startsAt <= now) throw new BadRequestException(apiError('TIME_PAST'));
     await this.rejectFrozen(this.database.db, dto.memberIds, date);
 
     const capacity = ASSIGNED_MEMBER_LIMITS[dto.trainingType].max;
@@ -123,7 +124,7 @@ export class AdminSlotsService {
         })
         .returning({ id: trainingSlots.id });
 
-      if (!slot) throw new ConflictException('Time is already taken');
+      if (!slot) throw new ConflictException(apiError('TIME_TAKEN'));
 
       await tx.insert(slotMembers).values(dto.memberIds.map((memberId) => ({ slotId: slot.id, memberId })));
       // Assigning is booking: the members are on the training right away. It is paid from their package
@@ -143,7 +144,7 @@ export class AdminSlotsService {
     await this.database.db.transaction(async (tx) => {
       const slot = await requireOwnSlot(tx, adminId, slotId, true);
       if (!isAssignedType(slot.trainingType)) throw new BadRequestException('Group trainings are open to everyone');
-      if (slot.status !== 'ACTIVE') throw new ConflictException('Slot is cancelled');
+      if (slot.status !== 'ACTIVE') throw new ConflictException(apiError('SLOT_CANCELLED'));
 
       await this.validateSlotMembers(adminId, slot.trainingType, memberIds, tx, slotId);
 
@@ -158,7 +159,7 @@ export class AdminSlotsService {
         .where(and(eq(bookings.slotId, slotId), eq(bookings.status, 'ACTIVE')));
 
       const removed = booked.filter((b) => !memberIds.includes(b.memberId));
-      if (removed.some((b) => b.marked)) throw new ConflictException('Attendance already marked');
+      if (removed.some((b) => b.marked)) throw new ConflictException(apiError('ATTENDANCE_MARKED'));
       // Only members new to the slot are booked: one who cancelled themselves stays cancelled
       const added = memberIds.filter((id) => !onSlot.some((m) => m.memberId === id));
       await this.rejectFrozen(tx, added, slot.localDate);
@@ -219,7 +220,7 @@ export class AdminSlotsService {
   // A frozen member can't be put on a training on a frozen day (members already on the slot may stay)
   private async rejectFrozen(db: Db | Tx, memberIds: string[], date: string) {
     const frozen = (await loadFreezes(db, memberIds)).some((f) => frozenOn(f, date));
-    if (frozen) throw new ConflictException('Member is frozen');
+    if (frozen) throw new ConflictException(apiError('MEMBER_FROZEN'));
   }
 
   // Training day row for the date, (re)scheduled. Returns its id

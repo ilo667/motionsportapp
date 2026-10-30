@@ -6,6 +6,7 @@ import type { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { ClockService } from '../clock/clock.service';
 import { EntitlementsService, inLockOrder } from '../purchases/entitlements.service';
 import { requireOwnSlot } from '../schedule/default-trainer';
+import { apiError } from '../common/api-error';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -64,7 +65,7 @@ export class AdminAttendanceService {
       .where(and(eq(bookings.id, bookingId), eq(trainingSlots.trainerId, adminId)))
       .limit(1);
     if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.refundStatus === 'DONE') throw new ConflictException('Money already returned');
+    if (booking.refundStatus === 'DONE') throw new ConflictException(apiError('MONEY_RETURNED'));
 
     await this.database.db.transaction(async (tx) => {
       const [done] = await tx
@@ -86,7 +87,7 @@ export class AdminAttendanceService {
         .where(and(eq(cancelRefunds.bookingId, bookingId), eq(cancelRefunds.status, 'DUE')))
         .returning({ id: cancelRefunds.id });
       // Returned meanwhile (another trainer's tap): keep the fee, nothing changes
-      if (!refund && booking.refundStatus === 'DUE') throw new ConflictException('Money already returned');
+      if (!refund && booking.refundStatus === 'DUE') throw new ConflictException(apiError('MONEY_RETURNED'));
       await this.entitlements.syncSpend(tx, bookingId);
     });
     return { ok: true };

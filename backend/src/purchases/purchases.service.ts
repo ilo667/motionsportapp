@@ -12,26 +12,27 @@ import { cardState } from './validity';
 import { GROUP_TYPE } from '../schedule/training-types';
 import { openFreeze } from '../freezes/freeze.store';
 import { purchaseViews } from './purchase-views';
+import { apiError } from '../common/api-error';
 
 // Same answers as BookingService.book gives for the same reasons
 function bookingError(reason: Extract<GroupBookingResult, { ok: false }>['reason']) {
   switch (reason) {
     case 'NOT_FOUND':
-      return new NotFoundException('Slot not found');
+      return new NotFoundException(apiError('SLOT_NOT_FOUND'));
     case 'CANCELLED':
-      return new ConflictException('Slot is cancelled');
+      return new ConflictException(apiError('SLOT_CANCELLED'));
     case 'NOT_SCHEDULED':
-      return new ConflictException('Training day is not scheduled');
+      return new ConflictException(apiError('DAY_NOT_SCHEDULED'));
     case 'WINDOW':
-      return new BadRequestException('Booking window has closed');
+      return new BadRequestException(apiError('BOOKING_CLOSED'));
     case 'FULL':
-      return new ConflictException('Slot is full');
+      return new ConflictException(apiError('SLOT_FULL'));
     case 'ALREADY_BOOKED':
-      return new ConflictException('You already have an active booking for this day');
+      return new ConflictException(apiError('ALREADY_BOOKED_TODAY'));
     case 'FROZEN':
-      return new ConflictException('Membership frozen');
+      return new ConflictException(apiError('MEMBERSHIP_FROZEN'));
     case 'LATE_CANCELLED':
-      return new ConflictException('Cancelled late');
+      return new ConflictException(apiError('CANCELLED_LATE'));
   }
 }
 
@@ -165,13 +166,13 @@ export class PurchasesService {
         .from(trainingSlots)
         .where(eq(trainingSlots.id, dto.slotId))
         .limit(1);
-      if (slot?.trainingType !== GROUP_TYPE) throw new NotFoundException('Slot not found');
+      if (slot?.trainingType !== GROUP_TYPE) throw new NotFoundException(apiError('SLOT_NOT_FOUND'));
     }
     if (cards.length || services.length) {
       const hasCard = !!(await this.entitlements.usableCard(memberId));
       // One club card at a time: a new one only once the current card has ended or burned
-      if (cards.length && hasCard) throw new ConflictException('Member already has a club card');
-      if (services.length && !cards.length && !hasCard) throw new BadRequestException('Club card required');
+      if (cards.length && hasCard) throw new ConflictException(apiError('CLUB_CARD_EXISTS'));
+      if (services.length && !cards.length && !hasCard) throw new BadRequestException(apiError('CLUB_CARD_REQUIRED'));
     }
 
     // No buying ahead: more trainings of a type only once the member has none of it left to use
@@ -181,7 +182,7 @@ export class PurchasesService {
       const unused = own.some(
         (p) => p.trainingType === passType && p.left > 0 && (p.state === 'waiting' || p.state === 'active'),
       );
-      if (unused) throw new ConflictException('Member still has trainings of this type');
+      if (unused) throw new ConflictException(apiError('TRAININGS_LEFT'));
     }
   }
 
@@ -197,10 +198,10 @@ export class PurchasesService {
         .from(purchases)
         .where(and(eq(purchases.memberId, memberId), eq(purchases.status, 'PENDING')))
         .limit(1);
-      if (open) throw new ConflictException('You have an unpaid purchase');
+      if (open) throw new ConflictException(apiError('UNPAID_PURCHASE'));
       // Nothing new while frozen or asking to: the freeze pushes the dates of what the member has on approval
       if (await openFreeze(tx, memberId, this.clock.now().toISODate()!)) {
-        throw new ConflictException('Membership frozen');
+        throw new ConflictException(apiError('MEMBERSHIP_FROZEN'));
       }
       if (dto.method === 'CASH' && !member.trainerId) throw new BadRequestException('No trainer to pay cash to');
 

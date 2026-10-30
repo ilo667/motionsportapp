@@ -1,54 +1,54 @@
-// The backend answers in English (lib/api.ts puts its message into the Error). What a person sees, matched as a
-// part of that message; the first match wins, so a longer message goes before a shorter one inside it
-const API_ERRORS: [string, string][] = [
+import { ApiError } from "./api";
+
+// What a person sees for an error the backend answers with a code (backend/src/common/api-error.ts lists them; the
+// English message there may be reworded, the code never changes). A code missing here shows the fallback
+export const ERROR_TEXT: Record<string, string> = {
   // Booking a group training, cancelling, moving, a guest
-  ["Target slot is full", "Місць вже немає, хтось встиг раніше"],
-  ["Slot is full", "Місць вже немає, хтось встиг раніше"],
-  ["Target slot is cancelled", "Цей час скасовано тренером"],
-  ["Slot is cancelled", "Цей час скасовано тренером"],
-  ["Slot is no longer available", "Цього тренування вже немає в розкладі"],
-  ["Slot not found", "Цього тренування вже немає в розкладі"],
-  ["Training day is not scheduled", "Цього дня тренувань немає"],
-  ["Booking is not open yet", "Запис ще не відкрився"],
-  ["Booking window has closed", "Час запису вже минув"],
-  ["Training has already started", "Тренування вже почалося"],
-  ["You already have an active booking for this day", "Ви вже записані на цей день"],
-  ["Already booked on this slot", "Ви вже записані на це тренування"],
-  ["Cancelled late", "Ви скасували це тренування пізно, записатися знову не можна"],
-  ["Group pass required", "Потрібен абонемент на групові: натисніть «Записатись» ще раз"],
-  ["Guest already added", "Гостя вже додано"],
-  ["Membership frozen", "Абонемент заморожено"],
-  ["Booking has changed", "Запис змінився. Оновіть сторінку й спробуйте ще раз."],
-  ["No active booking", "Запису вже немає. Оновіть сторінку."],
+  SLOT_FULL: "Місць вже немає, хтось встиг раніше",
+  SLOT_CANCELLED: "Цей час скасовано тренером",
+  SLOT_NOT_FOUND: "Цього тренування вже немає в розкладі",
+  DAY_NOT_SCHEDULED: "Цього дня тренувань немає",
+  BOOKING_NOT_OPEN: "Запис ще не відкрився",
+  BOOKING_CLOSED: "Час запису вже минув",
+  TRAINING_STARTED: "Тренування вже почалося",
+  ALREADY_BOOKED_TODAY: "Ви вже записані на цей день",
+  ALREADY_ON_SLOT: "Ви вже записані на це тренування",
+  CANCELLED_LATE: "Ви скасували це тренування пізно, записатися знову не можна",
+  GROUP_PASS_REQUIRED: "Потрібен абонемент на групові: натисніть «Записатись» ще раз",
+  GUEST_EXISTS: "Гостя вже додано",
+  MEMBERSHIP_FROZEN: "Абонемент заморожено",
+  BOOKING_CHANGED: "Запис змінився. Оновіть сторінку й спробуйте ще раз.",
+  NO_ACTIVE_BOOKING: "Запису вже немає. Оновіть сторінку.",
   // Purchases and freezes
-  [
-    "You have an unpaid purchase",
-    "У вас уже є покупка, що очікує оплати. Оплатіть або скасуйте її на сторінці «Мій абонемент».",
-  ],
-  ["Purchase pending", "Спершу завершіть або скасуйте покупку, що очікує оплати."],
-  ["Member still has trainings of this type", "Ще є тренування цього типу: нові можна купити, коли вони закінчаться."],
-  ["Member already has a club card", "Клубна карта вже є."],
-  ["Club card required", "Спершу потрібна клубна карта."],
-  ["Nothing to freeze", "Немає чого заморожувати: клубної карти чи тренувань."],
-  ["Freeze already requested", "Запит уже надіслано."],
+  UNPAID_PURCHASE: "У вас уже є покупка, що очікує оплати. Оплатіть або скасуйте її на сторінці «Мій абонемент».",
+  PURCHASE_PENDING: "Спершу завершіть або скасуйте покупку, що очікує оплати.",
+  TRAININGS_LEFT: "Ще є тренування цього типу: нові можна купити, коли вони закінчаться.",
+  CLUB_CARD_EXISTS: "Клубна карта вже є.",
+  CLUB_CARD_REQUIRED: "Спершу потрібна клубна карта.",
+  NOTHING_TO_FREEZE: "Немає чого заморожувати: клубної карти чи тренувань.",
+  FREEZE_REQUESTED: "Запит уже надіслано.",
   // The trainer: calendar, «Розклад групових», marks, refunds
-  ["Time is already taken", "На цей час уже є тренування"],
-  ["Group trainings are from 06:00 to 21:00", "Групові можна ставити з 06:00 до 21:00"],
-  ["at least an hour apart", "Між груповими має бути щонайменше година"],
-  ["15-minute steps", "Вкажіть час з кроком 15 хвилин"],
-  ["Training time is in the past", "Цей час уже минув"],
-  ["Booking must open before the first training", "Запис має відкриватися раніше за перше тренування"],
-  ["Attendance already marked", "Цій людині вже поставили відмітку, її не можна прибрати"],
-  ["Member is frozen", "Абонемент клієнта заморожено на цей день"],
-  ["Money already returned", "Гроші вже повернено, списання не скасувати."],
-];
+  TIME_TAKEN: "На цей час уже є тренування",
+  GROUP_HOURS: "Групові можна ставити з 06:00 до 21:00",
+  GROUP_GAP: "Між груповими має бути щонайменше година",
+  TIME_GRID: "Вкажіть час з кроком 15 хвилин",
+  TIME_PAST: "Цей час уже минув",
+  OPENS_AFTER_TRAINING: "Запис має відкриватися раніше за перше тренування",
+  ATTENDANCE_MARKED: "Цій людині вже поставили відмітку, її не можна прибрати",
+  MEMBER_FROZEN: "Абонемент клієнта заморожено на цей день",
+  MONEY_RETURNED: "Гроші вже повернено, списання не скасувати.",
+};
 
 export const DEFAULT_ERROR = "Помилка. Спробуйте ще раз.";
 
-// Ukrainian text for an error from lib/api.ts. Never the backend's English: a message not in the table (or a
-// network failure) shows `fallback`. `own` comes first: the same error worded for that place
-export function errorText(err: unknown, fallback = DEFAULT_ERROR, own: [string, string][] = []): string {
-  const raw = err instanceof Error ? err.message : "";
-  if (!raw) return fallback;
-  return [...own, ...API_ERRORS].find(([needle]) => raw.includes(needle))?.[1] ?? fallback;
+// Ukrainian text for an error from lib/api.ts, by the code in the body. Never the backend's English: no code, a code
+// not in the table or a network failure shows `fallback`. `own` comes first: the same error worded for that place
+export function errorText(err: unknown, fallback = DEFAULT_ERROR, own: Record<string, string> = {}): string {
+  const code = err instanceof ApiError ? err.body.code : undefined;
+  if (typeof code !== "string") return fallback;
+  if (has(own, code)) return own[code];
+  return has(ERROR_TEXT, code) ? ERROR_TEXT[code] : fallback;
 }
+
+// Own keys only (not «constructor» and the like); Object.hasOwn is missing on iOS before 15.4
+const has = (table: Record<string, string>, key: string) => Object.prototype.hasOwnProperty.call(table, key);

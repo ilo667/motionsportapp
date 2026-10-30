@@ -95,9 +95,9 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
       onChanged();
     } catch (err) {
       setError(
-        errorText(err, "Не вдалося активувати клубну карту", [
-          ["Member is frozen", "Клієнт заморожений: активуйте після розморозки"],
-        ]),
+        errorText(err, "Не вдалося активувати клубну карту", {
+          MEMBER_FROZEN: "Клієнт заморожений: активуйте після розморозки",
+        }),
       );
     } finally {
       setSaving(false);
@@ -116,9 +116,9 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
       onChanged();
     } catch (err) {
       setError(
-        errorText(err, "Не вдалося додати клубну карту", [
-          ["Member is frozen", "Клієнт заморожений: додайте клубну карту після розморозки"],
-        ]),
+        errorText(err, "Не вдалося додати клубну карту", {
+          MEMBER_FROZEN: "Клієнт заморожений: додайте клубну карту після розморозки",
+        }),
       );
     } finally {
       setSaving(false);

@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import { KY_ZONE } from '../schedule/training-types';
+import { API_ERRORS } from '../common/api-error';
 
 // A trainer's regular group trainings («Мій розклад»): times per weekday (Luxon: 1 = Mon … 7 = Sun), one opening
 // time for booking on the training day, and whether they are created ahead by themselves
@@ -28,15 +29,15 @@ const onGrid = (time: string) => /^\d{2}:\d{2}$/.test(time) && minutes(time) % 1
 
 // One group training time against the others of that day (the schedule page and the calendar)
 export function groupTimeError(slotTime: string, sameDayTimes: string[]): string | null {
-  if (!onGrid(slotTime)) return 'Time must be in 15-minute steps';
-  if (slotTime < GROUP_EARLIEST || slotTime > GROUP_LATEST) return 'Group trainings are from 06:00 to 21:00';
+  if (!onGrid(slotTime)) return API_ERRORS.TIME_GRID;
+  if (slotTime < GROUP_EARLIEST || slotTime > GROUP_LATEST) return API_ERRORS.GROUP_HOURS;
   if (sameDayTimes.some((t) => Math.abs(minutes(t) - minutes(slotTime)) < GROUP_MIN_GAP_MINUTES))
-    return 'Group trainings must be at least an hour apart';
+    return API_ERRORS.GROUP_GAP;
   return null;
 }
 
 export function scheduleError(s: TrainerSchedule): string | null {
-  if (!onGrid(s.bookingOpensAt)) return 'Time must be in 15-minute steps';
+  if (!onGrid(s.bookingOpensAt)) return API_ERRORS.TIME_GRID;
   for (let i = 0; i < s.times.length; i++) {
     const { weekday, slotTime } = s.times[i];
     if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7) return 'Unknown weekday';
@@ -47,7 +48,7 @@ export function scheduleError(s: TrainerSchedule): string | null {
     );
     if (error) return error;
   }
-  if (s.times.some((t) => t.slotTime <= s.bookingOpensAt)) return 'Booking must open before the first training';
+  if (s.times.some((t) => t.slotTime <= s.bookingOpensAt)) return API_ERRORS.OPENS_AFTER_TRAINING;
   return null;
 }
 

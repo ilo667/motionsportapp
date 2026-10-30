@@ -24,6 +24,7 @@ import { openFreeze } from './freeze.store';
 import { cancelGuests, freeSeats, lockMember } from '../booking/group-booking';
 import { FREEZE_DAYS, daysBetween, plusDays } from './rules';
 import { requireVisibleMember, visibleTo } from '../schedule/default-trainer';
+import { apiError } from '../common/api-error';
 
 type Db = DatabaseService['db'];
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -79,15 +80,15 @@ export class FreezesService {
   async request(memberId: string) {
     const { freezeId, trainerId, displayName } = await this.database.db.transaction(async (tx) => {
       const member = await this.lockMember(tx, memberId);
-      if (await openFreeze(tx, memberId, this.today())) throw new ConflictException('Freeze already requested');
+      if (await openFreeze(tx, memberId, this.today())) throw new ConflictException(apiError('FREEZE_REQUESTED'));
       // A purchase paid during the freeze would start after its dates were pushed: finish it first
       const [pending] = await tx
         .select({ id: purchases.id })
         .from(purchases)
         .where(and(eq(purchases.memberId, memberId), eq(purchases.status, 'PENDING')))
         .limit(1);
-      if (pending) throw new ConflictException('Purchase pending');
-      if (!(await this.hasSomethingToFreeze(memberId, tx))) throw new ConflictException('Nothing to freeze');
+      if (pending) throw new ConflictException(apiError('PURCHASE_PENDING'));
+      if (!(await this.hasSomethingToFreeze(memberId, tx))) throw new ConflictException(apiError('NOTHING_TO_FREEZE'));
       const [row] = await tx
         .insert(freezes)
         .values({ memberId, status: 'REQUESTED', requestedAt: this.clock.now().toJSDate() })

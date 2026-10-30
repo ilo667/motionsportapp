@@ -1,47 +1,59 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ERROR, errorText } from "@/lib/apiErrors";
+import { ApiError } from "@/lib/api";
+import { DEFAULT_ERROR, ERROR_TEXT, errorText } from "@/lib/apiErrors";
 
-// What lib/api.ts throws: the backend's message in an Error
-const apiError = (message: string) => Object.assign(new Error(message), { status: 409 });
+// What lib/api.ts throws for an error with a code: the backend's English message and the body { code, message }
+const coded = (code: string, message = "English text") => new ApiError(message, 409, { code, message });
 
 describe("errorText", () => {
-  it("translates a backend message", () => {
-    expect(errorText(apiError("Slot is full"))).toBe("Місць вже немає, хтось встиг раніше");
-    expect(errorText(apiError("Cancelled late"))).toBe("Ви скасували це тренування пізно, записатися знову не можна");
+  it("shows the text for the code", () => {
+    expect(errorText(coded("SLOT_FULL"))).toBe("Місць вже немає, хтось встиг раніше");
+    expect(errorText(coded("CANCELLED_LATE"))).toBe("Ви скасували це тренування пізно, записатися знову не можна");
   });
 
-  it("matches a part of the message (the rules add details)", () => {
-    expect(errorText(apiError("Group trainings must be at least an hour apart"))).toBe(
+  it("goes by the code, not the English message: a reworded message changes nothing", () => {
+    expect(errorText(coded("GROUP_GAP", "Keep group trainings 60 minutes apart"))).toBe(
       "Між груповими має бути щонайменше година",
     );
-    expect(errorText(apiError("Time must be in 15-minute steps"))).toBe("Вкажіть час з кроком 15 хвилин");
+    expect(errorText(coded("SLOT_FULL", "Target slot is full"))).toBe("Місць вже немає, хтось встиг раніше");
   });
 
-  it("a longer message wins over a shorter one inside it", () => {
-    expect(errorText(apiError("Target slot is cancelled"))).toBe("Цей час скасовано тренером");
-    expect(errorText(apiError("Slot is no longer available"))).toBe("Цього тренування вже немає в розкладі");
+  it("never shows the backend's English: no code or an unknown one gets the fallback", () => {
+    expect(errorText(new ApiError("Member not found", 404, { message: "Member not found" }))).toBe(DEFAULT_ERROR);
+    expect(errorText(coded("SOMETHING_NEW"), "Помилка входу.")).toBe("Помилка входу.");
+    expect(errorText(coded("constructor"))).toBe(DEFAULT_ERROR);
   });
 
-  it("never shows the backend's English: an unknown message gets the fallback", () => {
-    expect(errorText(apiError("Member not found"))).toBe(DEFAULT_ERROR);
-    expect(errorText(apiError("Internal Server Error"), "Помилка входу.")).toBe("Помилка входу.");
-  });
-
-  it("a network failure or something that is not an Error gets the fallback", () => {
+  it("a network failure or something that is not an ApiError gets the fallback", () => {
     expect(errorText(new TypeError("Failed to fetch"))).toBe(DEFAULT_ERROR);
+    expect(errorText(new Error("Slot is full"))).toBe(DEFAULT_ERROR);
     expect(errorText("boom")).toBe(DEFAULT_ERROR);
     expect(errorText(undefined, "Не вдалося зберегти.")).toBe("Не вдалося зберегти.");
   });
 
   it("a place can word the same error its own way", () => {
-    const own: [string, string][] = [["Member is frozen", "Клієнт заморожений: активуйте після розморозки"]];
-    expect(errorText(apiError("Member is frozen"), "Не вдалося", own)).toBe(
-      "Клієнт заморожений: активуйте після розморозки",
-    );
-    expect(errorText(apiError("Member is frozen"))).toBe("Абонемент клієнта заморожено на цей день");
+    const own = { MEMBER_FROZEN: "Клієнт заморожений: активуйте після розморозки" };
+    expect(errorText(coded("MEMBER_FROZEN"), "Не вдалося", own)).toBe("Клієнт заморожений: активуйте після розморозки");
+    expect(errorText(coded("MEMBER_FROZEN"))).toBe("Абонемент клієнта заморожено на цей день");
   });
 
   it("the unpaid purchase text keeps «Мій абонемент», which GroupPassModal turns into a link", () => {
-    expect(errorText(apiError("You have an unpaid purchase"))).toContain("Мій абонемент");
+    expect(errorText(coded("UNPAID_PURCHASE"))).toContain("Мій абонемент");
+  });
+});
+
+// The two projects live in one repo: every code the backend can send has a text here, and nothing here is stale
+describe("error codes match the backend", () => {
+  const catalog = readFileSync(resolve(__dirname, "../../backend/src/common/api-error.ts"), "utf8");
+  const backendCodes = [...catalog.matchAll(/^\s+([A-Z_]+): '/gm)].map((m) => m[1]).sort();
+
+  it("the backend list is read", () => {
+    expect(backendCodes.length).toBeGreaterThan(20);
+  });
+
+  it("the same codes on both sides", () => {
+    expect(Object.keys(ERROR_TEXT).sort()).toEqual(backendCodes);
   });
 });

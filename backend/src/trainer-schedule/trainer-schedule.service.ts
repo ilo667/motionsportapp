@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { trainerSchedules, trainerScheduleTimes } from '../database/schema';
 import { scheduleError, type TrainerSchedule } from './rules';
+import { ruleError } from '../common/api-error';
 import { loadTrainerSchedule } from './trainer-schedule.store';
 
 @Injectable()
@@ -22,7 +23,7 @@ export class TrainerScheduleService {
   // The whole schedule at once: settings upserted, the week's times replaced
   async save(trainerId: string, schedule: TrainerSchedule) {
     const error = scheduleError(schedule);
-    if (error) throw new BadRequestException(error);
+    if (error) throw new BadRequestException(ruleError(error));
 
     await this.database.db.transaction(async (tx) => {
       const settings = {
