@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Structure
 
+CI (`.github/workflows/ci.yml`, GitHub Actions, every push and pull request): for backend and frontend `npm ci`, prettier, lint, `tsc`, tests and build; keep it green, a new check that should block a push goes there.
+
 The pre-commit hook lives in `.githooks/pre-commit` (in the repo; once per clone: `git config core.hooksPath .githooks`). It rejects `gap-*` and a long dash in UI text in staged frontend files, and unformatted (prettier) backend / frontend files. Change the checks there, not in `.git/hooks`.
 
 Two independent projects, no shared root `package.json`:
