@@ -2,6 +2,7 @@ import { ForbiddenException, RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA } from '@nestjs/common/constants';
 import { DateTime } from 'luxon';
 import { InternalCronController } from './internal-cron.controller';
+import { CronService } from './cron.service';
 import { loadTrainerSchedule } from '../trainer-schedule/trainer-schedule.store';
 
 jest.mock('../trainer-schedule/trainer-schedule.store', () => ({ loadTrainerSchedule: jest.fn() }));
@@ -10,14 +11,8 @@ const mockLoadSchedule = loadTrainerSchedule as jest.Mock;
 function makeController(db: any = {}, entitlements: any = {}, at = '2026-10-23T22:00:00') {
   const paymentService = { expireStale: jest.fn().mockResolvedValue({ expired: 0 }) };
   const clock = { now: () => DateTime.fromISO(at, { zone: 'Europe/Kyiv' }) };
-  const controller = new InternalCronController(
-    { db } as any,
-    {} as any,
-    {} as any,
-    clock,
-    paymentService as any,
-    entitlements,
-  );
+  const cron = new CronService({ db } as any, {} as any, {} as any, clock, entitlements);
+  const controller = new InternalCronController(cron, paymentService as any);
   return { controller, paymentService };
 }
 
@@ -204,14 +199,8 @@ describe('InternalCronController — «Записуйтесь» at each trainer 
     const db: any = { select: () => link() };
     const notifications = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
     const clock = { now: () => DateTime.fromISO('2026-10-23T00:00:00', { zone: 'Europe/Kyiv' }).set({ hour, minute }) };
-    const controller = new InternalCronController(
-      { db } as any,
-      notifications as any,
-      {} as any,
-      clock,
-      {} as any,
-      {} as any,
-    );
+    const cron = new CronService({ db } as any, notifications as any, {} as any, clock, {} as any);
+    const controller = new InternalCronController(cron, {} as any);
     await controller.bookingOpen(undefined as any);
     return notifications.enqueueAndProcess.mock.calls;
   }

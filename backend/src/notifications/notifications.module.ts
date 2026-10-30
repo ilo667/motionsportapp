@@ -11,11 +11,12 @@ import { NotificationService } from './notification.service';
 import { PushSubscriptionsController } from './push-subscriptions.controller';
 import { VacancyAlertsController } from './vacancy-alerts.controller';
 import { InternalCronController } from './internal-cron.controller';
+import { CronService } from './cron.service';
 
 @Module({
   imports: [DatabaseModule, AuthModule, AiModule, PaymentModule, EntitlementsModule],
   controllers: [PushSubscriptionsController, VacancyAlertsController, InternalCronController],
-  providers: [PushService, PushSubscriptionsService, VacancyAlertsService, NotificationService],
+  providers: [PushService, PushSubscriptionsService, VacancyAlertsService, NotificationService, CronService],
   exports: [NotificationService, VacancyAlertsService],
 })
 export class NotificationsModule {}
