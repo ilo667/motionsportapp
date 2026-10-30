@@ -100,6 +100,8 @@ export default function ClientPage() {
   const [member, setMember] = useState<AdminMember | null>(null);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [myId, setMyId] = useState("");
+  // The trainer list for «Тренер» didn't load: the picker would be empty with no reason given
+  const [trainersFailed, setTrainersFailed] = useState(false);
   const [loadError, setLoadError] = useState<"missing" | "failed" | null>(null);
 
   const load = useCallback(
@@ -120,8 +122,10 @@ export default function ClientPage() {
         setTrainers(trainerList);
         setMyId(me.id);
       })
-      .catch(() => {});
-  }, [load]);
+      .catch((err: unknown) => {
+        if (!toAdminLogin(err, router)) setTrainersFailed(true);
+      });
+  }, [load, router]);
 
   const back = (
     <Link href="/admin/clients" className="text-muted text-sm hover:text-body transition-colors">
@@ -155,6 +159,9 @@ export default function ClientPage() {
                 trainerId === myId ? setMember({ ...member, trainerId }) : router.push("/admin/clients")
               }
             />
+            {trainersFailed && (
+              <p className="text-danger text-xs mt-1">Не вдалося завантажити тренерів. Оновіть сторінку.</p>
+            )}
           </div>
 
           <section>

@@ -68,6 +68,7 @@ export default function SchedulePage() {
     if (pollingRef.current) {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
+        // fetchSchedule shows its own errors; it rethrows only after redirecting or signing out, nothing left to do
         fetchRef.current?.().catch(() => {});
       }, nextPollDelay(data));
     }
@@ -79,7 +80,7 @@ export default function SchedulePage() {
 
   const startPolling = useCallback(() => {
     pollingRef.current = true;
-    fetchSchedule().catch(() => {});
+    fetchSchedule().catch(() => {}); // handled inside fetchSchedule, as above
   }, [fetchSchedule]);
 
   useEffect(() => {
@@ -120,6 +121,7 @@ export default function SchedulePage() {
   };
 
   const handleLogout = async () => {
+    // Signing out goes on even if the request fails: api.logout() has cleared the local flag already
     await api.logout().catch(() => {});
     router.push("/login");
   };

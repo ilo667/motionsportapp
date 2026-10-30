@@ -24,6 +24,7 @@ export function PushSubscribeButton() {
       .then(async (reg) => {
         const existing = await reg.pushManager.getSubscription();
         // Keep the server in sync for the current role (same browser may have subscribed as the other one)
+        // Best effort on load: if it fails, the button still offers to subscribe
         if (existing) syncSubscription(existing).catch(() => {});
         setSubscribed(!!existing);
       })

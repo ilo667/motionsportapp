@@ -41,6 +41,7 @@ export function AdminMenu() {
 
   const logout = async () => {
     setOpen(false);
+    // Signing out goes on even if the request fails: api.logout() has cleared the local flag already
     await api.logout().catch(() => {});
     router.push("/admin/login");
   };

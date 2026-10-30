@@ -18,7 +18,12 @@ export default function ForgotPage() {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async (text: string) => {
-    await navigator.clipboard.writeText(text).catch(() => {});
+    // No clipboard (an old browser, a page not on https): no «Скопійовано», the code stays on screen to copy by hand
+    const ok = await navigator.clipboard.writeText(text).then(
+      () => true,
+      () => false,
+    );
+    if (!ok) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

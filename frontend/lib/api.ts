@@ -112,6 +112,7 @@ export const api = {
       localStorage.removeItem("mg_authed");
     } catch {}
     const endpoint = await currentPushEndpoint();
+    // Best effort: a failed unsubscribe must not stop the logout
     if (endpoint) await api.unsubscribePush(endpoint).catch(() => {});
     return post("/auth/logout");
   },

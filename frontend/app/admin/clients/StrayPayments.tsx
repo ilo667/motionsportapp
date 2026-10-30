@@ -11,20 +11,25 @@ export function StrayPayments() {
   const [items, setItems] = useState<StrayPayment[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  // Not loaded: the block shows that, since hiding it would hide money waiting to be sorted out
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const load = useCallback(
     () =>
       api
         .getStrayPayments()
-        .then(setItems)
-        .catch(() => {}),
+        .then((list) => {
+          setItems(list);
+          setLoadFailed(false);
+        })
+        .catch(() => setLoadFailed(true)),
     [],
   );
   useEffect(() => {
     load();
   }, [load]);
 
-  if (items.length === 0) return null;
+  if (items.length === 0 && !loadFailed) return null;
 
   const handled = async (id: string) => {
     setBusyId(id);
@@ -46,6 +51,7 @@ export function StrayPayments() {
         Оплата прийшла, коли покупку вже скасовано, тож клієнт нічого не отримав. Видайте покупку вручну або поверніть
         гроші.
       </p>
+      {loadFailed && <p className="text-danger text-xs mb-3">Не вдалося завантажити. Оновіть сторінку.</p>}
       <div className="flex flex-col space-y-3">
         {items.map((p) => (
           <div key={p.paymentId} className="rounded-xl border border-warn-line bg-warn-bg p-4">

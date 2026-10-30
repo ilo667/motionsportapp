@@ -56,9 +56,12 @@ export default function CalendarPage() {
 
   const [modal, setModal] = useState<OpenModal | null>(null);
 
-  const handleAuthError = useCallback(
+  // A failed load (members, a month, the schedule): signed out → login; else say so, since an empty calendar
+  // would look like no trainings
+  const [loadError, setLoadError] = useState(false);
+  const handleLoadError = useCallback(
     (err: unknown) => {
-      toAdminLogin(err, router);
+      if (!toAdminLogin(err, router)) setLoadError(true);
     },
     [router],
   );
@@ -67,11 +70,8 @@ export default function CalendarPage() {
   // which trainings repeat weekly (↻), and where «Щотижня» adds a time
   const [schedule, setSchedule] = useState<TrainerSchedule | null>(null);
   useEffect(() => {
-    api
-      .getMySchedule()
-      .then(setSchedule)
-      .catch(() => {});
-  }, []);
+    api.getMySchedule().then(setSchedule).catch(handleLoadError);
+  }, [handleLoadError]);
 
   // A group training at a weekday and time of the schedule, created by itself while auto-creation is on
   const repeatsWeekly = (s: CalendarSlot) =>
@@ -80,8 +80,8 @@ export default function CalendarPage() {
     schedule.times.some((t) => t.weekday === weekdayOf(s.localDate) && t.slotTime === s.slotTime);
 
   useEffect(() => {
-    api.getMembers().then(setMembers).catch(handleAuthError);
-  }, [handleAuthError]);
+    api.getMembers().then(setMembers).catch(handleLoadError);
+  }, [handleLoadError]);
 
   const fetchMonths = useCallback(
     async (months: string) => {
@@ -91,10 +91,10 @@ export default function CalendarPage() {
         setSlots(data);
         return data;
       } catch (err: unknown) {
-        handleAuthError(err);
+        handleLoadError(err);
       }
     },
-    [handleAuthError],
+    [handleLoadError],
   );
 
   const handleDatesSet = useCallback(
@@ -177,6 +177,7 @@ export default function CalendarPage() {
   return (
     <PageLayout variant="top" action={<AdminMenu />}>
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">Календар</h1>
+      {loadError && <p className="text-danger text-sm mb-4">Не вдалося завантажити календар. Оновіть сторінку.</p>}
 
       <div className="flex items-center -m-1 flex-wrap mb-4">
         {TYPES.map((t) => (

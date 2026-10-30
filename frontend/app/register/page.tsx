@@ -21,7 +21,12 @@ export default function RegisterPage() {
   const [copied, setCopied] = useState<"code" | "recovery" | null>(null);
 
   const copyToClipboard = async (text: string, key: "code" | "recovery") => {
-    await navigator.clipboard.writeText(text).catch(() => {});
+    // No clipboard (an old browser, a page not on https): no «Скопійовано», the code stays on screen to copy by hand
+    const ok = await navigator.clipboard.writeText(text).then(
+      () => true,
+      () => false,
+    );
+    if (!ok) return;
     setCopied(key);
     setTimeout(() => setCopied(null), 2000);
   };

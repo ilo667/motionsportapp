@@ -22,24 +22,22 @@ export default function ClientsPage() {
   const [freezes, setFreezes] = useState<FreezeRequest[]>([]);
   const [refunds, setRefunds] = useState<CancelRefund[]>([]);
 
+  // A failed refresh after a decision: the lists on screen are stale, so say so
+  const [reloadError, setReloadError] = useState(false);
+
   // After a cash or freeze decision: the request lists and the summaries change
   const reloadPurchases = () => {
-    api
-      .getPendingCash()
-      .then(setCash)
-      .catch(() => {});
-    api
-      .getPendingFreezes()
-      .then(setFreezes)
-      .catch(() => {});
-    api
-      .getPendingCancelRefunds()
-      .then(setRefunds)
-      .catch(() => {});
-    api
-      .getMembers()
-      .then(setMembers)
-      .catch(() => {});
+    Promise.all([api.getPendingCash(), api.getPendingFreezes(), api.getPendingCancelRefunds(), api.getMembers()])
+      .then(([cashList, freezeList, refundList, memberList]) => {
+        setCash(cashList);
+        setFreezes(freezeList);
+        setRefunds(refundList);
+        setMembers(memberList);
+        setReloadError(false);
+      })
+      .catch((err: unknown) => {
+        if (!toAdminLogin(err, router)) setReloadError(true);
+      });
   };
 
   useEffect(() => {
@@ -131,6 +129,7 @@ export default function ClientsPage() {
 
       {members && (
         <div className="flex flex-col space-y-8">
+          {reloadError && <p className="text-danger text-sm">Не вдалося оновити список. Оновіть сторінку.</p>}
           <StrayPayments />
           <CashRequests requests={cash} onDecided={reloadPurchases} />
           <FreezeRequests requests={freezes} onDecided={reloadPurchases} />
