@@ -1,10 +1,9 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { api, Trainer, TrainerInvite } from "@/lib/api";
+import { useState } from "react";
+import { api, Trainer } from "@/lib/api";
 import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
-import { toAdminLogin } from "@/lib/adminAuth";
+import { useAdminData } from "@/lib/useAdminData";
 import { DisableDialog } from "./DisableDialog";
 import { InviteSection } from "./InviteSection";
 import { PasswordSection } from "./PasswordSection";
@@ -18,30 +17,24 @@ function formatDate(iso: string) {
   });
 }
 
+// Everyone on the page, waiting invites, and which trainer is signed in (to put them first)
+const loadTrainersPage = () =>
+  Promise.all([api.getTrainers(), api.getTrainerInvites(), api.me()]).then(([trainers, invites, user]) => ({
+    trainers,
+    invites,
+    me: user.type === "admin" ? (user.username ?? null) : null,
+  }));
+
 // «Тренери»: invite a trainer by a one-time link, see who is here, change own password
 export default function TrainersPage() {
-  const router = useRouter();
-  const [trainers, setTrainers] = useState<Trainer[] | null>(null);
-  const [invites, setInvites] = useState<TrainerInvite[]>([]);
-  const [me, setMe] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState(false);
+  const { data, error, reload: load } = useAdminData(loadTrainersPage);
+  const trainers = data?.trainers ?? null;
+  const invites = data?.invites ?? [];
+  const me = data?.me ?? null;
+  const loadError = error != null;
   // «Вимкнути»: the trainer in the dialog, and what the last one did
   const [disabling, setDisabling] = useState<Trainer | null>(null);
   const [disabledText, setDisabledText] = useState("");
-
-  const load = useCallback(() => {
-    Promise.all([api.getTrainers(), api.getTrainerInvites(), api.me()])
-      .then(([t, i, user]) => {
-        setTrainers(t);
-        setInvites(i);
-        setMe(user.type === "admin" ? (user.username ?? null) : null);
-      })
-      .catch((err: unknown) => {
-        if (!toAdminLogin(err, router)) setLoadError(true);
-      });
-  }, [router]);
-
-  useEffect(load, [load]);
 
   return (
     <PageLayout variant="top" loading={!trainers && !loadError} action={<AdminMenu />}>

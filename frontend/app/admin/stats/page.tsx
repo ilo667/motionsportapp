@@ -1,12 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { api, Revenue, TrainerStats } from "@/lib/api";
 import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { TYPE_COLORS } from "@/lib/trainingTypes";
 import { formatUah } from "@/lib/prices";
-import { toAdminLogin } from "@/lib/adminAuth";
+import { useAdminData } from "@/lib/useAdminData";
 import { kyivToday } from "@/lib/dates";
 
 const sectionTitle = "font-geologica font-semibold text-heading uppercase mb-3";
@@ -210,18 +209,8 @@ function RevenueBlock({ revenue }: { revenue: TrainerStats["revenue"] }) {
 
 // The trainer's own numbers: revenue (paid purchases of their clients, by the month paid) and load (people ✓)
 export default function StatsPage() {
-  const router = useRouter();
-  const [stats, setStats] = useState<TrainerStats | null>(null);
-  const [loadError, setLoadError] = useState(false);
-
-  useEffect(() => {
-    api
-      .getStats()
-      .then(setStats)
-      .catch((err: unknown) => {
-        if (!toAdminLogin(err, router)) setLoadError(true);
-      });
-  }, [router]);
+  const { data: stats, error } = useAdminData(api.getStats);
+  const loadError = error != null;
 
   const maxAvg = Math.max(1, ...(stats?.weekdays.map((w) => w.avgPresent) ?? []));
 

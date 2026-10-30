@@ -1,14 +1,13 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { api, ApiError, PriceChange, PriceItem, statusOf } from "@/lib/api";
+import { api, ApiError, PriceItem, statusOf } from "@/lib/api";
 import { PriceList } from "@/components/prices/PriceList";
 import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { kyivDateTime } from "@/lib/dates";
 import { Modal } from "@/components/ui/Modal";
 import { formatUah, lineName } from "@/lib/prices";
-import { toAdminLogin } from "@/lib/adminAuth";
+import { useAdminData } from "@/lib/useAdminData";
 
 // Same limit as UpdatePriceDto on the backend
 const MAX_PRICE_UAH = 100_000;
@@ -64,33 +63,15 @@ function ConfirmModal({
 }
 
 export default function PricesPage() {
-  const router = useRouter();
-  const [items, setItems] = useState<PriceItem[] | null>(null);
-  const [changes, setChanges] = useState<PriceChange[]>([]);
-  const [loadError, setLoadError] = useState(false);
+  const { data, error: fetchError, reload: load } = useAdminData(api.getPrices);
+  const items = data?.items ?? null;
+  const changes = data?.changes ?? [];
+  const loadError = fetchError != null;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState<{ item: PriceItem; amountUah: number } | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const load = useCallback(
-    () =>
-      api
-        .getPrices()
-        .then(({ items, changes }) => {
-          setItems(items);
-          setChanges(changes);
-        })
-        .catch((err: unknown) => {
-          if (!toAdminLogin(err, router)) setLoadError(true);
-        }),
-    [router],
-  );
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const startEdit = (item: PriceItem) => {
     setEditingId(item.id);

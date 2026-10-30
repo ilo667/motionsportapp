@@ -1,12 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { api, SkippedTraining, TrainerSchedule } from "@/lib/api";
 import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { errorText } from "@/lib/apiErrors";
 import { trainingsCount } from "@/lib/plural";
-import { toAdminLogin } from "@/lib/adminAuth";
+import { useAdminData } from "@/lib/useAdminData";
 
 // Weekdays as the backend counts them (1 = Пн … 7 = Нд)
 const WEEKDAYS = [
@@ -61,9 +60,8 @@ function shortDate(date: string) {
 
 // «Розклад групових»: the trainer's regular group trainings, created 3 weeks ahead by themselves
 export default function GroupSchedulePage() {
-  const router = useRouter();
-  const [schedule, setSchedule] = useState<TrainerSchedule | null>(null);
-  const [loadError, setLoadError] = useState(false);
+  const { data: schedule, setData: setSchedule, error: fetchError } = useAdminData(api.getMySchedule);
+  const loadError = fetchError != null;
   // The weekday whose «+ час» field is open, and what is typed there
   const [adding, setAdding] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
@@ -71,15 +69,6 @@ export default function GroupSchedulePage() {
   const [error, setError] = useState("");
   // What the last save put in the calendar; null until saved (or after an edit)
   const [saved, setSaved] = useState<{ text: string; skipped: string[] } | null>(null);
-
-  useEffect(() => {
-    api
-      .getMySchedule()
-      .then(setSchedule)
-      .catch((err: unknown) => {
-        if (!toAdminLogin(err, router)) setLoadError(true);
-      });
-  }, [router]);
 
   const change = (next: TrainerSchedule) => {
     setSchedule(next);

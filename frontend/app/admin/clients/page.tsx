@@ -1,8 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { api, AdminMember, Trainer, CashRequest, FreezeRequest, CancelRefund } from "@/lib/api";
+import { api, AdminMember } from "@/lib/api";
 import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { CashRequests } from "./CashRequests";
@@ -10,68 +8,46 @@ import { StrayPayments } from "./StrayPayments";
 import { FreezeRequests } from "./FreezeRequests";
 import { CancelRefunds } from "./CancelRefunds";
 import { FREQUENT_CANCELLATIONS, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
-import { toAdminLogin } from "@/lib/adminAuth";
+import { useAdminData } from "@/lib/useAdminData";
+
+// The list, the trainers to reassign to, who is signed in, and the requests on top
+const loadClientsPage = () =>
+  Promise.all([
+    api.getMembers(),
+    api.getTrainers(),
+    api.me(),
+    api.getPendingCash(),
+    api.getPendingFreezes(),
+    api.getPendingCancelRefunds(),
+  ]).then(([members, trainers, me, cash, freezes, refunds]) => ({
+    members,
+    trainers,
+    myId: me.id,
+    cash,
+    freezes,
+    refunds,
+  }));
 
 export default function ClientsPage() {
-  const router = useRouter();
-  const [members, setMembers] = useState<AdminMember[] | null>(null);
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [myId, setMyId] = useState("");
-  const [loadError, setLoadError] = useState(false);
-  const [cash, setCash] = useState<CashRequest[]>([]);
-  const [freezes, setFreezes] = useState<FreezeRequest[]>([]);
-  const [refunds, setRefunds] = useState<CancelRefund[]>([]);
+  // After a cash, freeze or refund decision `reload` refreshes the requests and the summaries; if that fails the
+  // page keeps the old lists and says they are stale
+  const { data, setData, error, reload } = useAdminData(loadClientsPage);
+  const loadError = error != null && !data;
+  const reloadError = error != null && !!data;
+  const members = data?.members ?? null;
+  const trainers = data?.trainers ?? [];
+  const myId = data?.myId ?? "";
 
-  // A failed refresh after a decision: the lists on screen are stale, so say so
-  const [reloadError, setReloadError] = useState(false);
-
-  // After a cash or freeze decision: the request lists and the summaries change
-  const reloadPurchases = () => {
-    Promise.all([api.getPendingCash(), api.getPendingFreezes(), api.getPendingCancelRefunds(), api.getMembers()])
-      .then(([cashList, freezeList, refundList, memberList]) => {
-        setCash(cashList);
-        setFreezes(freezeList);
-        setRefunds(refundList);
-        setMembers(memberList);
-        setReloadError(false);
-      })
-      .catch((err: unknown) => {
-        if (!toAdminLogin(err, router)) setReloadError(true);
-      });
-  };
-
-  useEffect(() => {
-    Promise.all([
-      api.getMembers(),
-      api.getTrainers(),
-      api.me(),
-      api.getPendingCash(),
-      api.getPendingFreezes(),
-      api.getPendingCancelRefunds(),
-    ])
-      .then(([memberList, trainerList, me, cashList, freezeList, refundList]) => {
-        setMembers(memberList);
-        setTrainers(trainerList);
-        setMyId(me.id);
-        setCash(cashList);
-        setFreezes(freezeList);
-        setRefunds(refundList);
-      })
-      .catch((err: unknown) => {
-        if (!toAdminLogin(err, router)) setLoadError(true);
-      });
-  }, [router]);
+  const setMembers = (update: (members: AdminMember[]) => AdminMember[]) =>
+    setData((prev) => prev && { ...prev, members: update(prev.members) });
 
   const updateNote = (id: string, trainerNote: string | null) =>
-    setMembers((prev) => prev?.map((m) => (m.id === id ? { ...m, trainerNote } : m)) ?? null);
+    setMembers((list) => list.map((m) => (m.id === id ? { ...m, trainerNote } : m)));
 
   // Given to another trainer: the client leaves this trainer's list
   const updateTrainer = (id: string, trainerId: string) =>
-    setMembers(
-      (prev) =>
-        (trainerId === myId
-          ? prev?.map((m) => (m.id === id ? { ...m, trainerId } : m))
-          : prev?.filter((m) => m.id !== id)) ?? null,
+    setMembers((list) =>
+      trainerId === myId ? list.map((m) => (m.id === id ? { ...m, trainerId } : m)) : list.filter((m) => m.id !== id),
     );
 
   const mine = members?.filter((m) => m.trainerId) ?? [];
@@ -131,9 +107,9 @@ export default function ClientsPage() {
         <div className="flex flex-col space-y-8">
           {reloadError && <p className="text-danger text-sm">Не вдалося оновити список. Оновіть сторінку.</p>}
           <StrayPayments />
-          <CashRequests requests={cash} onDecided={reloadPurchases} />
-          <FreezeRequests requests={freezes} onDecided={reloadPurchases} />
-          <CancelRefunds refunds={refunds} onDone={reloadPurchases} />
+          <CashRequests requests={data?.cash ?? []} onDecided={reload} />
+          <FreezeRequests requests={data?.freezes ?? []} onDecided={reload} />
+          <CancelRefunds refunds={data?.refunds ?? []} onDone={reload} />
 
           {unassigned.length > 0 && (
             <section>

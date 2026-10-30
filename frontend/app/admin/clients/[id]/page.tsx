@@ -2,14 +2,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { api, AdminMember, MemberFreeze, MemberVisit, Trainer, statusOf } from "@/lib/api";
+import { api, MemberFreeze, MemberVisit, statusOf } from "@/lib/api";
 import { PageLayout } from "@/components/ui/PageLayout";
 import { AdminMenu } from "@/components/admin/AdminMenu";
 import { MemberPurchases } from "./MemberPurchases";
 import { CancellationHistory, NoteCell, PurchaseSummary, TrainerPicker } from "@/components/admin/ClientParts";
 import { ddmm, shortDay } from "@/lib/dates";
 import { TYPE_LABEL } from "@/lib/trainingTypes";
-import { toAdminLogin } from "@/lib/adminAuth";
+import { useAdminData } from "@/lib/useAdminData";
 
 const MARK: Record<MemberVisit["attendance"], { text: string; className: string }> = {
   PRESENT: { text: "✓ Відвідано", className: "text-accent" },
@@ -93,39 +93,22 @@ function Freezes({ memberId, headingClass }: { memberId: string; headingClass: s
   );
 }
 
+// The trainers a client can be given to, and who is signed in
+const loadTrainerPicker = () =>
+  Promise.all([api.getTrainers(), api.me()]).then(([trainers, me]) => ({ trainers, myId: me.id }));
+
 // Everything about one client: card and trainings, visits, cancellations, purchases
 export default function ClientPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [member, setMember] = useState<AdminMember | null>(null);
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [myId, setMyId] = useState("");
-  // The trainer list for «Тренер» didn't load: the picker would be empty with no reason given
-  const [trainersFailed, setTrainersFailed] = useState(false);
-  const [loadError, setLoadError] = useState<"missing" | "failed" | null>(null);
-
-  const load = useCallback(
-    () =>
-      api
-        .getMember(id)
-        .then(setMember)
-        .catch((err: unknown) => {
-          if (!toAdminLogin(err, router)) setLoadError(statusOf(err) === 404 ? "missing" : "failed");
-        }),
-    [id, router],
-  );
-
-  useEffect(() => {
-    load();
-    Promise.all([api.getTrainers(), api.me()])
-      .then(([trainerList, me]) => {
-        setTrainers(trainerList);
-        setMyId(me.id);
-      })
-      .catch((err: unknown) => {
-        if (!toAdminLogin(err, router)) setTrainersFailed(true);
-      });
-  }, [load, router]);
+  const fetchMember = useCallback(() => api.getMember(id), [id]);
+  const { data: member, setData: setMember, error: memberError, reload: load } = useAdminData(fetchMember);
+  const loadError = memberError == null ? null : statusOf(memberError) === 404 ? "missing" : "failed";
+  // The trainer list for «Тренер»; if it fails the picker would be empty with no reason given, so it says so
+  const { data: picker, error: pickerError } = useAdminData(loadTrainerPicker);
+  const trainers = picker?.trainers ?? [];
+  const myId = picker?.myId ?? "";
+  const trainersFailed = pickerError != null;
 
   const back = (
     <Link href="/admin/clients" className="text-muted text-sm hover:text-body transition-colors">
