@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
+import { validateEnv } from '../src/config/env';
 import type { INestApplication } from '@nestjs/common';
 import type { IncomingMessage, ServerResponse } from 'http';
 
@@ -10,6 +11,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 let appPromise: Promise<INestApplication> | undefined;
 
 async function bootstrap(): Promise<INestApplication> {
+  validateEnv();
   const instance = await NestFactory.create(AppModule);
   configureApp(instance);
   await instance.init();

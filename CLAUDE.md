@@ -235,7 +235,7 @@ Two separate Vercel projects pointing at this repo:
 - **frontend project** — root: `frontend/`
 - **backend project** — root: `backend/`, entry: `api/index.ts`, rewrites all to `/api`
 
-Required env vars:
+Required env vars (checked before Nest starts by `validateEnv()` in `backend/src/config/env.ts`, called from `main.ts` and `api/index.ts`: a missing or broken one stops the start with a list of problems; a new variable gets a rule there and a line in `backend/.env.example`; `main.ts` loads `backend/.env` through `dotenv`):
 - Backend: `DATABASE_URL`, `FRONTEND_URL`, `CRON_SECRET` (random ≥16 chars, required for crons in production)
 - Backend (push): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
 - Backend (AI announcements): `GEMINI_API_KEY` (without it a fallback text is used)
