@@ -480,13 +480,8 @@ describe('PaymentService — money for a purchase that no longer awaits it', () 
   });
 });
 
-describe('PaymentService — PAYMENT_EXPIRY_MINUTES', () => {
-  afterEach(() => {
-    delete process.env.PAYMENT_EXPIRY_MINUTES;
-  });
-
-  it('uses the configured expiry for expiresAt', async () => {
-    process.env.PAYMENT_EXPIRY_MINUTES = '2';
+describe('PaymentService — expiry', () => {
+  it('a pending payment expires 15 minutes after it was created', async () => {
     mockLiqpayStatus.mockResolvedValue({ result: 'error', status: 'error', err_code: 'payment_not_found' });
     const pending = {
       id: 'pay-1',
@@ -497,18 +492,13 @@ describe('PaymentService — PAYMENT_EXPIRY_MINUTES', () => {
     const { db } = makeDb([[pending]]);
     await expect(makeService(db).getStatus('mg-1', 'member-1')).resolves.toEqual({
       status: 'PENDING',
-      expiresAt: '2026-10-21T19:02:00.000Z',
+      expiresAt: '2026-10-21T19:15:00.000Z',
     });
   });
 });
 
 describe('PaymentService — LiqPay expired_date', () => {
-  afterEach(() => {
-    delete process.env.PAYMENT_EXPIRY_MINUTES;
-  });
-
   it('passes expired_date equal to our expiry so LiqPay closes the order together with the purchase', async () => {
-    process.env.PAYMENT_EXPIRY_MINUTES = '15';
     const { db } = makeDb([PURCHASE, ...LINES, []]);
 
     const before = Date.now();

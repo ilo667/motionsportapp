@@ -38,6 +38,9 @@ function newOrderId(purchaseId: string) {
 // the whole transaction is rolled back and the money is handled by hand
 class PurchaseNotAwaitingPayment extends Error {}
 
+// An unpaid purchase lasts 15 minutes; LiqPay gets the same deadline (expired_date), so both end together
+const PAYMENT_EXPIRY_MS = 15 * 60 * 1000;
+
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
@@ -53,10 +56,6 @@ export class PaymentService {
   }
   private get privateKey() {
     return process.env.LIQPAY_PRIVATE_KEY ?? '';
-  }
-  // Lower it (e.g. 2) to test expiry without waiting
-  private get expiryMs() {
-    return parseInt(process.env.PAYMENT_EXPIRY_MINUTES ?? '15', 10) * 60 * 1000;
   }
 
   // LiqPay checkout for the member's own PENDING LiqPay purchase. The amount is the purchase total, fixed when it
@@ -151,7 +150,10 @@ export class PaymentService {
       result_url: `${process.env.FRONTEND_URL ?? ''}/payment/return?order=${orderId}`,
       // LiqPay closes the order at the same moment our expiry ends the purchase,
       // so an old LiqPay tab can't be paid after it is gone. Format: UTC "YYYY-MM-DD HH:mm:ss"
-      expired_date: new Date(this.clock.now().toMillis() + this.expiryMs).toISOString().replace('T', ' ').slice(0, 19),
+      expired_date: new Date(this.clock.now().toMillis() + PAYMENT_EXPIRY_MS)
+        .toISOString()
+        .replace('T', ' ')
+        .slice(0, 19),
     };
 
     const data = liqpayEncode(params);
@@ -233,7 +235,7 @@ export class PaymentService {
       return status === 'PAID' && payment.slotId ? { status, booked: !!payment.bookingId } : { status };
     }
 
-    const expiresAt = new Date(payment.createdAt.getTime() + this.expiryMs).toISOString();
+    const expiresAt = new Date(payment.createdAt.getTime() + PAYMENT_EXPIRY_MS).toISOString();
     const remote = await this.fetchLiqpayStatus(orderId);
     if (!remote || remote.result !== 'ok') {
       this.logger.log(
@@ -262,7 +264,7 @@ export class PaymentService {
   }
 
   async expireStale() {
-    const cutoff = new Date(this.clock.now().toMillis() - this.expiryMs);
+    const cutoff = new Date(this.clock.now().toMillis() - PAYMENT_EXPIRY_MS);
     const stale = await this.database.db
       .select({ id: payments.id, purchaseId: payments.purchaseId, orderId: payments.orderId })
       .from(payments)
