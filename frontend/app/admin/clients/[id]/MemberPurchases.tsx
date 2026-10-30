@@ -15,9 +15,9 @@ const cardDates = (c: Card): string => {
     case "waiting":
       return `Активувати до ${ddmm(c.activateBy)}, інакше згорить`;
     case "active":
-      return `З ${ddmm(c.validFrom!)} по ${ddmm(c.validUntil!)}`;
+      return `З ${ddmm(c.validFrom)} по ${ddmm(c.validUntil)}`;
     case "expired":
-      return `Діяла до ${ddmm(c.validUntil!)}`;
+      return `Діяла до ${ddmm(c.validUntil)}`;
     case "burned":
       return `Не активована до ${ddmm(c.activateBy)}`;
   }
@@ -28,9 +28,9 @@ const packDates = (p: Pack): string => {
     case "waiting":
       return `почнеться з першого тренування, до ${ddmm(p.activateBy)}`;
     case "active":
-      return `діє до ${ddmm(p.validUntil!)}`;
+      return `діє до ${ddmm(p.validUntil)}`;
     case "expired":
-      return `закінчився ${ddmm(p.validUntil!)}`;
+      return `закінчився ${ddmm(p.validUntil)}`;
     case "burned":
       return "не почато вчасно, згорів";
     case "used":

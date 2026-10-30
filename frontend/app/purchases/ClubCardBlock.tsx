@@ -7,7 +7,7 @@ export function ClubCardBlock({ data }: { data: MyPurchases }) {
   const { card, lastCard } = data;
   const [badge, badgeText, label, hint] = card
     ? card.state === "active"
-      ? ["ok" as const, "Діє", card.label, `До ${ddmm(card.validUntil!)}`]
+      ? ["ok" as const, "Діє", card.label, `До ${ddmm(card.validUntil)}`]
       : [
           "warn" as const,
           "Чекає активації",
@@ -17,7 +17,7 @@ export function ClubCardBlock({ data }: { data: MyPurchases }) {
     : lastCard?.state === "burned"
       ? ["danger" as const, "Згоріла", lastCard.label, "Не активована вчасно. Купіть нову, щоб займатися в залі"]
       : lastCard?.state === "expired"
-        ? ["danger" as const, "Закінчилась", lastCard.label, `Діяла до ${ddmm(lastCard.validUntil!)}`]
+        ? ["danger" as const, "Закінчилась", lastCard.label, `Діяла до ${ddmm(lastCard.validUntil)}`]
         : ["none" as const, "Немає", null, "Потрібна, щоб займатися в залі і з тренером"];
 
   return (

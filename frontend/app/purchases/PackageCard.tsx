@@ -45,7 +45,7 @@ export function PackageCard({ p }: { p: TrainingPackage }) {
       <div className="flex items-baseline justify-between space-x-3">
         <span className="text-heading font-semibold">{packageTitle(p)}</span>
         <span className="text-subtle text-xs whitespace-nowrap">
-          {p.state === "active" ? `діє до ${ddmm(p.validUntil!)}` : `почати до ${ddmm(p.activateBy)}`}
+          {p.state === "active" ? `діє до ${ddmm(p.validUntil)}` : `почати до ${ddmm(p.activateBy)}`}
         </span>
       </div>
       <TrainingDots done={p.total - p.left} total={p.total} />

@@ -131,12 +131,12 @@ export function SlotCard({
                 </button>
               )
             )}
-            {canSwitch && (
+            {otherSlot && canSwitch && (
               <button
-                onClick={() => setModal({ action: "switch", targetSlot: otherSlot! })}
+                onClick={() => setModal({ action: "switch", targetSlot: otherSlot })}
                 className="btn-secondary w-full py-3 rounded-lg border text-sm transition-colors"
               >
-                Перейти на {otherSlot!.slotTime}
+                Перейти на {otherSlot.slotTime}
               </button>
             )}
             <button

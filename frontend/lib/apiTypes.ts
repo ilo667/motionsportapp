@@ -108,28 +108,35 @@ export interface CatalogItem {
 export type CardState = "waiting" | "active" | "expired" | "burned";
 export type PassState = CardState | "used";
 
-// The card a member has now (waiting or active); dates are YYYY-MM-DD
-export interface ClubCard {
-  id: string;
-  label: string;
-  state: "waiting" | "active";
-  validUntil: string | null; // set once active
-  activateBy: string; // last day to activate a waiting card
-}
+// Dates exist only from activation, so the types say which states have them: after a check of `state` TypeScript
+// knows the date is there (backend: cardState / passState in purchases/validity.ts). Dates are YYYY-MM-DD
+type NotActivated = { validFrom: null; validUntil: null };
+type Activated = { validFrom: string; validUntil: string };
 
-export interface TrainingPackage {
+// The card a member has now (waiting or active); activateBy = the last day to activate a waiting card
+export type ClubCard = { id: string; label: string; activateBy: string } & (
+  { state: "waiting"; validUntil: null } | { state: "active"; validUntil: string }
+);
+
+// A card on the client page: every state
+export type AdminClubCard = { id: string; label: string; activateBy: string; source: "purchase" | "manual" } & (
+  ({ state: "waiting" | "burned" } & NotActivated) | ({ state: "active" | "expired" } & Activated)
+);
+
+// The first attendance mark activates a pass; a used one was always activated (spending activates)
+export type TrainingPackage = {
   id: string;
   trainingType: TrainingType;
   title: string;
   total: number;
   left: number;
-  state: PassState;
   purchasedOn: string;
   activateBy: string;
-  activatedOn: string | null;
-  validUntil: string | null;
   createdAt: string;
-}
+} & (
+  | { state: "waiting" | "burned"; activatedOn: null; validUntil: null }
+  | { state: "active" | "expired" | "used"; activatedOn: string; validUntil: string }
+);
 
 export interface PurchaseLine {
   section?: PriceSection; // club_card → shown as «Клубна карта · …»
@@ -165,15 +172,7 @@ export interface CashRequest extends Purchase {
 
 export interface MemberPurchases {
   card: ClubCard | null;
-  cards: {
-    id: string;
-    label: string;
-    state: CardState;
-    validFrom: string | null;
-    validUntil: string | null;
-    activateBy: string;
-    source: "purchase" | "manual";
-  }[];
+  cards: AdminClubCard[];
   packages: TrainingPackage[];
   purchases: (Purchase & { decidedBy: string | null })[];
 }
@@ -182,7 +181,11 @@ export interface MyPurchases {
   catalog: { clubCards: CatalogItem[]; services: CatalogItem[]; groupPasses: CatalogItem[] };
   card: ClubCard | null;
   // The latest card with its state: shows «згоріла» / «закінчилась» when there is no card any more
-  lastCard: { label: string; state: CardState; activateBy: string; validUntil: string | null } | null;
+  lastCard:
+    | ({ label: string; activateBy: string } & (
+        { state: "waiting" | "burned"; validUntil: null } | { state: "active" | "expired"; validUntil: string }
+      ))
+    | null;
   packages: TrainingPackage[];
   pending: Purchase | null;
   canPayCash: boolean; // cash goes to the member's trainer
@@ -190,12 +193,12 @@ export interface MyPurchases {
 
 // «Заморозити абонемент»: until = the last frozen day (null while the trainer hasn't approved)
 export interface MyFreeze {
-  freeze: {
-    id: string;
-    state: "requested" | "active" | "unfreeze_requested";
-    startedOn: string | null;
-    until: string | null;
-  } | null;
+  freeze:
+    | ({ id: string } & (
+        | { state: "requested"; startedOn: null; until: null }
+        | { state: "active" | "unfreeze_requested"; startedOn: string; until: string }
+      ))
+    | null;
   canFreeze: boolean; // a card or trainings to freeze, and no open freeze
 }
 

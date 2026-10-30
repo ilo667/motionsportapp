@@ -176,6 +176,8 @@ export default function SchedulePage() {
   const closeAt = schedule?.bookingCloseAt ? new Date(schedule.bookingCloseAt) : null;
   const beforeWindow = now && openAt ? now < openAt : false;
   const afterWindow = now && closeAt ? now >= closeAt : false;
+  // The shown day falls in the member's freeze: no booking on it
+  const frozenThatDay = !!schedule?.frozenUntil && !!schedule.localDate && schedule.localDate <= schedule.frozenUntil;
 
   return (
     <PageLayout variant="top" loading={loading} action={scheduleAction}>
@@ -208,9 +210,9 @@ export default function SchedulePage() {
 
               <div className="rounded-2xl border border-line p-3 flex flex-col space-y-3">
                 <div className="flex items-center">
-                  {beforeWindow ? (
+                  {beforeWindow && schedule.bookingOpenAt ? (
                     <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
-                      До {kyivTime(schedule.bookingOpenAt!)}
+                      До {kyivTime(schedule.bookingOpenAt)}
                     </span>
                   ) : afterWindow ? (
                     <span className="text-xs text-muted bg-surface border border-line rounded-full px-3 py-1">
@@ -235,7 +237,7 @@ export default function SchedulePage() {
                     bookingWindowOpen={schedule.bookingWindowOpen}
                     afterWindow={afterWindow}
                     bookingOpenAt={schedule.bookingOpenAt}
-                    frozen={!!schedule.frozenUntil && schedule.localDate! <= schedule.frozenUntil}
+                    frozen={frozenThatDay}
                     onMutate={handleMutate}
                     onRefresh={fetchSchedule}
                   />

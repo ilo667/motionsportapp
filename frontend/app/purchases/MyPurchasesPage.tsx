@@ -91,7 +91,7 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
             .map((p) => (
               <p key={p.id} className="text-subtle text-xs px-1">
                 {packageTitle(p)}: {p.left} з {p.total}{" "}
-                {p.state === "burned" ? "згоріли (не почато вчасно)" : `згоріли, строк до ${ddmm(p.validUntil!)}`}
+                {p.state === "expired" ? `згоріли, строк до ${ddmm(p.validUntil)}` : "згоріли (не почато вчасно)"}
               </p>
             ))}
 

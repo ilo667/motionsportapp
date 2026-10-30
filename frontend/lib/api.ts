@@ -70,7 +70,9 @@ async function request<T>(path: string, method = "GET", body?: unknown): Promise
     const body = await res.json().catch(() => ({}));
     throw new ApiError(body.message ?? res.statusText, res.status, body);
   }
-  // NestJS sends an empty body for a null result (e.g. a trainer with no upcoming trainings)
+  // NestJS sends an empty body for a null result (e.g. a trainer with no upcoming trainings).
+  // The response is trusted, not checked at run time: apiTypes.ts describes the backend's answers, and both sides
+  // live in this repo and change together, so a runtime schema (zod) would be a second copy of every type
   const text = await res.text();
   return (text ? JSON.parse(text) : null) as T;
 }

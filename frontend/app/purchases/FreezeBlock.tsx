@@ -70,7 +70,7 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
       <div className="flex items-center justify-between space-x-3">
         <span className="text-heading font-semibold">Заморозка</span>
         <Badge tone="warn" size="status" className="whitespace-nowrap">
-          {freeze.state === "requested" ? "Чекає тренера" : `До ${ddmm(freeze.until!)}`}
+          {freeze.state === "requested" ? "Чекає тренера" : `До ${ddmm(freeze.until)}`}
         </Badge>
       </div>
       {freeze.state === "requested" && (
@@ -86,7 +86,7 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
       {freeze.state === "active" && (
         <>
           <p className="text-subtle text-xs mt-2">
-            Абонемент заморожено до {ddmm(freeze.until!)} включно. Записатися на тренування до того дня не можна; строки
+            Абонемент заморожено до {ddmm(freeze.until)} включно. Записатися на тренування до того дня не можна; строки
             вже подовжено.
           </p>
           <button
