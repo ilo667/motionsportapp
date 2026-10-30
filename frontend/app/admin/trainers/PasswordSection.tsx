@@ -66,7 +66,11 @@ export function PasswordSection() {
           required
           className={FIELD}
         />
-        {error && <p className="text-danger text-sm">{error}</p>}
+        {error && (
+          <p role="alert" className="text-danger text-sm">
+            {error}
+          </p>
+        )}
         {done && <p className="text-accent text-sm">Пароль змінено.</p>}
         <button
           type="submit"

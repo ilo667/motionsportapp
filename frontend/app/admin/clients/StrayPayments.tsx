@@ -51,7 +51,11 @@ export function StrayPayments() {
         Оплата прийшла, коли покупку вже скасовано, тож клієнт нічого не отримав. Видайте покупку вручну або поверніть
         гроші.
       </p>
-      {loadFailed && <p className="text-danger text-xs mb-3">Не вдалося завантажити. Оновіть сторінку.</p>}
+      {loadFailed && (
+        <p role="alert" className="text-danger text-xs mb-3">
+          Не вдалося завантажити. Оновіть сторінку.
+        </p>
+      )}
       <div className="flex flex-col space-y-3">
         {items.map((p) => (
           <div key={p.paymentId} className="rounded-xl border border-warn-line bg-warn-bg p-4">
@@ -71,6 +75,7 @@ export function StrayPayments() {
               <div className="text-subtle text-xs mt-2">Номер платежу для повернення: {p.liqpayPaymentId}</div>
             )}
             <button
+              type="button"
               onClick={() => handled(p.paymentId)}
               disabled={busyId === p.paymentId}
               className="w-full py-3 rounded-xl border border-line text-heading font-semibold mt-4 hover:bg-surface transition-colors disabled:opacity-60"
@@ -80,7 +85,11 @@ export function StrayPayments() {
           </div>
         ))}
       </div>
-      {error && <p className="text-danger text-xs mt-2">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-xs mt-2">
+          {error}
+        </p>
+      )}
     </section>
   );
 }

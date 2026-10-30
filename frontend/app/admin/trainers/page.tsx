@@ -40,7 +40,11 @@ export default function TrainersPage() {
     <PageLayout variant="top" loading={!trainers && !loadError} action={<AdminMenu />}>
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">Тренери</h1>
 
-      {loadError && <p className="text-danger text-sm">Не вдалося завантажити тренерів.</p>}
+      {loadError && (
+        <p role="alert" className="text-danger text-sm">
+          Не вдалося завантажити тренерів.
+        </p>
+      )}
 
       {trainers && (
         <div className="flex flex-col space-y-10">
@@ -69,6 +73,7 @@ export default function TrainersPage() {
                   </div>
                   {!t.disabledAt && t.username !== me && t.id !== firstId(trainers) && (
                     <button
+                      type="button"
                       onClick={() => {
                         setDisabledText("");
                         setDisabling(t);

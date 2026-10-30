@@ -31,7 +31,12 @@ function Visits({ memberId }: { memberId: string }) {
       .catch(() => setFailed(true));
   }, [memberId]);
 
-  if (failed) return <p className="text-danger text-xs">Не вдалося завантажити відвідування</p>;
+  if (failed)
+    return (
+      <p role="alert" className="text-danger text-xs">
+        Не вдалося завантажити відвідування
+      </p>
+    );
   if (!items) return <p className="text-muted text-xs">Завантаження...</p>;
   if (items.length === 0) return <p className="text-subtle">Ще не було тренувань</p>;
   return (

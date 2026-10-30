@@ -120,15 +120,26 @@ function RevenueBlock({ revenue }: { revenue: TrainerStats["revenue"] }) {
             role="group"
             aria-label="Період"
           >
-            <button onClick={() => setAllTime(true)} aria-pressed={allTime} className={segButton(allTime)}>
+            <button
+              type="button"
+              onClick={() => setAllTime(true)}
+              aria-pressed={allTime}
+              className={segButton(allTime)}
+            >
               Весь час
             </button>
-            <button onClick={() => setAllTime(false)} aria-pressed={!allTime} className={segButton(!allTime)}>
+            <button
+              type="button"
+              onClick={() => setAllTime(false)}
+              aria-pressed={!allTime}
+              className={segButton(!allTime)}
+            >
               Місяць
             </button>
           </div>
         )}
         <button
+          type="button"
           onClick={() => {
             setChart(!chart);
             // The chart shows the last 12 months: an older pick goes to the current month
@@ -148,6 +159,7 @@ function RevenueBlock({ revenue }: { revenue: TrainerStats["revenue"] }) {
           <div className="flex items-end space-x-1.5 h-36 border-b border-line">
             {shown.map((m, i) => (
               <button
+                type="button"
                 key={m.month}
                 onClick={() => setSelected(offset + i)}
                 aria-label={`${monthName(m.month)}: ${formatUah(m.total)}`}
@@ -173,6 +185,7 @@ function RevenueBlock({ revenue }: { revenue: TrainerStats["revenue"] }) {
       {!chart && !allTime && (
         <div className="flex items-center justify-between space-x-3">
           <button
+            type="button"
             onClick={() => setSelected(selected - 1)}
             disabled={selected === 0}
             aria-label="Попередній місяць"
@@ -182,6 +195,7 @@ function RevenueBlock({ revenue }: { revenue: TrainerStats["revenue"] }) {
           </button>
           <span className="text-heading font-semibold">{monthName(month.month)}</span>
           <button
+            type="button"
             onClick={() => setSelected(selected + 1)}
             disabled={selected === months.length - 1}
             aria-label="Наступний місяць"
@@ -220,7 +234,11 @@ export default function StatsPage() {
         Статистика
       </h1>
 
-      {loadError && <p className="text-danger text-sm">Не вдалося завантажити статистику.</p>}
+      {loadError && (
+        <p role="alert" className="text-danger text-sm">
+          Не вдалося завантажити статистику.
+        </p>
+      )}
 
       {stats && (
         <div className="flex flex-col space-y-8">

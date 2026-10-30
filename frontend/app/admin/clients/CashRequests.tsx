@@ -36,6 +36,7 @@ export function CashRequests({ requests, onDecided }: { requests: CashRequest[];
               </div>
             ))}
             <button
+              type="button"
               onClick={() => decide(r.id, true)}
               disabled={busyId === r.id}
               className="btn-primary w-full py-3.5 rounded-lg font-semibold mt-4 transition-colors disabled:opacity-60"
@@ -43,6 +44,7 @@ export function CashRequests({ requests, onDecided }: { requests: CashRequest[];
               Отримано {formatUah(r.totalUah)}
             </button>
             <button
+              type="button"
               onClick={() => decide(r.id, false)}
               disabled={busyId === r.id}
               className="block mx-auto text-subtle text-xs underline hover:text-body py-2 mt-1 transition-colors disabled:opacity-60"
@@ -52,7 +54,11 @@ export function CashRequests({ requests, onDecided }: { requests: CashRequest[];
           </div>
         ))}
       </div>
-      {error && <p className="text-danger text-xs mt-2">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-xs mt-2">
+          {error}
+        </p>
+      )}
     </section>
   );
 }

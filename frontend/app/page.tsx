@@ -157,7 +157,7 @@ export default function SchedulePage() {
       <Link href="/purchases" className="text-sm text-accent hover:underline">
         Мій абонемент
       </Link>
-      <button onClick={handleLogout} className="text-muted text-sm hover:text-body transition-colors">
+      <button type="button" onClick={handleLogout} className="text-muted text-sm hover:text-body transition-colors">
         Вийти
       </button>
     </div>
@@ -257,7 +257,11 @@ export default function SchedulePage() {
             </>
           )}
 
-          {mutateError && <p className="text-danger text-sm mt-4 text-center">{mutateError}</p>}
+          {mutateError && (
+            <p role="alert" className="text-danger text-sm mt-4 text-center">
+              {mutateError}
+            </p>
+          )}
         </>
       )}
     </PageLayout>

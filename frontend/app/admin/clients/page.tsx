@@ -101,11 +101,19 @@ export default function ClientsPage() {
     <PageLayout variant="top" loading={!members && !loadError} action={<AdminMenu />}>
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">Клієнти</h1>
 
-      {loadError && <p className="text-danger text-sm">Не вдалося завантажити клієнтів.</p>}
+      {loadError && (
+        <p role="alert" className="text-danger text-sm">
+          Не вдалося завантажити клієнтів.
+        </p>
+      )}
 
       {members && (
         <div className="flex flex-col space-y-8">
-          {reloadError && <p className="text-danger text-sm">Не вдалося оновити список. Оновіть сторінку.</p>}
+          {reloadError && (
+            <p role="alert" className="text-danger text-sm">
+              Не вдалося оновити список. Оновіть сторінку.
+            </p>
+          )}
           <StrayPayments />
           <CashRequests requests={data?.cash ?? []} onDecided={reload} />
           <FreezeRequests requests={data?.freezes ?? []} onDecided={reload} />

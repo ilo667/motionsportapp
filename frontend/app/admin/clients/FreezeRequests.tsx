@@ -47,6 +47,7 @@ export function FreezeRequests({ requests, onDecided }: { requests: FreezeReques
                 </p>
                 <div className="flex space-x-2">
                   <button
+                    type="button"
                     onClick={() => decide(r, true)}
                     disabled={busyId === r.id}
                     className="btn-primary flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
@@ -54,6 +55,7 @@ export function FreezeRequests({ requests, onDecided }: { requests: FreezeReques
                     Заморозити
                   </button>
                   <button
+                    type="button"
                     onClick={() => setConfirmId(null)}
                     disabled={busyId === r.id}
                     className="btn-ghost flex-1 py-2.5 rounded-lg border text-sm transition-colors disabled:opacity-60"
@@ -65,6 +67,7 @@ export function FreezeRequests({ requests, onDecided }: { requests: FreezeReques
             ) : (
               <>
                 <button
+                  type="button"
                   onClick={() => (r.kind === "freeze" ? setConfirmId(r.id) : decide(r, true))}
                   disabled={busyId === r.id}
                   className="btn-primary w-full py-3.5 rounded-lg font-semibold mt-4 transition-colors disabled:opacity-60"
@@ -72,6 +75,7 @@ export function FreezeRequests({ requests, onDecided }: { requests: FreezeReques
                   {r.kind === "unfreeze" ? "Розморозити з сьогодні" : "Заморозити"}
                 </button>
                 <button
+                  type="button"
                   onClick={() => decide(r, false)}
                   disabled={busyId === r.id}
                   className="block mx-auto text-subtle text-xs underline hover:text-body py-2 mt-1 transition-colors disabled:opacity-60"
@@ -83,7 +87,11 @@ export function FreezeRequests({ requests, onDecided }: { requests: FreezeReques
           </div>
         ))}
       </div>
-      {error && <p className="text-danger text-xs mt-2">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-xs mt-2">
+          {error}
+        </p>
+      )}
     </section>
   );
 }

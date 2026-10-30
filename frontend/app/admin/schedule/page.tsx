@@ -127,7 +127,11 @@ export default function GroupSchedulePage() {
         тренування додавайте в календарі.
       </p>
 
-      {loadError && <p className="text-danger text-sm">Не вдалося завантажити розклад.</p>}
+      {loadError && (
+        <p role="alert" className="text-danger text-sm">
+          Не вдалося завантажити розклад.
+        </p>
+      )}
 
       {schedule && (
         <div className="flex flex-col space-y-6">
@@ -143,6 +147,7 @@ export default function GroupSchedulePage() {
                     {times.length === 0 && adding !== n && <span className="m-1 text-subtle text-sm">вихідний</span>}
                     {times.map((t) => (
                       <button
+                        type="button"
                         key={t}
                         onClick={() => removeTime(n, t)}
                         aria-label={`Прибрати ${short} ${t}`}
@@ -167,6 +172,7 @@ export default function GroupSchedulePage() {
                           className={`${TIME_FIELD} w-36`}
                         />
                         <button
+                          type="button"
                           onClick={() => addTime(n)}
                           className="btn-primary px-3 py-2 rounded-lg text-xs font-medium transition-colors"
                         >
@@ -177,6 +183,7 @@ export default function GroupSchedulePage() {
                   </div>
                   {adding !== n && (
                     <button
+                      type="button"
                       onClick={() => {
                         setAdding(n);
                         setDraft("");
@@ -213,6 +220,7 @@ export default function GroupSchedulePage() {
               Автоматично додавати на 3 тижні наперед
             </span>
             <button
+              type="button"
               role="switch"
               aria-checked={schedule.autoCreate}
               aria-labelledby="auto-create"
@@ -225,7 +233,11 @@ export default function GroupSchedulePage() {
             </button>
           </div>
 
-          {error && <p className="text-danger text-sm">{error}</p>}
+          {error && (
+            <p role="alert" className="text-danger text-sm">
+              {error}
+            </p>
+          )}
           {saved && (
             <div className="space-y-2">
               <p className="text-accent text-sm">{saved.text}</p>
@@ -243,6 +255,7 @@ export default function GroupSchedulePage() {
           )}
 
           <button
+            type="button"
             onClick={save}
             disabled={saving}
             className="btn-primary w-full py-3.5 rounded-lg font-semibold transition-colors disabled:opacity-60"

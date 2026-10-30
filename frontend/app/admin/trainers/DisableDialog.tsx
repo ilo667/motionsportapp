@@ -65,16 +65,21 @@ export function DisableDialog({
         перейдуть до обраного тренера. Тренування, що ще не закінчились, буде скасовано, а записані клієнти отримають
         сповіщення. Вимкнення не можна скасувати.
       </p>
-      {error && <p className="text-danger text-sm">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-sm">
+          {error}
+        </p>
+      )}
       <div className="flex flex-col space-y-2">
         <button
+          type="button"
           onClick={disable}
           disabled={busy || !transferToId}
           className="btn-ghost hover-danger w-full py-3 rounded-lg border border-danger text-danger text-sm transition-colors disabled:opacity-60"
         >
           {busy ? "Зачекайте..." : "Вимкнути"}
         </button>
-        <button onClick={onClose} className="text-muted text-sm py-2 transition-colors hover:text-body">
+        <button type="button" onClick={onClose} className="text-muted text-sm py-2 transition-colors hover:text-body">
           Закрити
         </button>
       </div>

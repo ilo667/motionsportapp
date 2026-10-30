@@ -46,6 +46,7 @@ export function CancelRefunds({ refunds, onDone }: { refunds: CancelRefund[]; on
                 : "оплачено готівкою: віддайте в руки"}
             </div>
             <button
+              type="button"
               onClick={() => done(r.id)}
               disabled={busyId === r.id}
               className="btn-primary w-full py-3.5 rounded-lg font-semibold mt-4 transition-colors disabled:opacity-60"
@@ -55,7 +56,11 @@ export function CancelRefunds({ refunds, onDone }: { refunds: CancelRefund[]; on
           </div>
         ))}
       </div>
-      {error && <p className="text-danger text-xs mt-2">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-xs mt-2">
+          {error}
+        </p>
+      )}
     </section>
   );
 }

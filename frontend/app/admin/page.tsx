@@ -153,7 +153,11 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {mutateError && <p className="text-danger text-sm mb-4 text-center">{mutateError}</p>}
+      {mutateError && (
+        <p role="alert" className="text-danger text-sm mb-4 text-center">
+          {mutateError}
+        </p>
+      )}
 
       {schedule.status !== "CANCELLED" && (
         <CancelDayButton

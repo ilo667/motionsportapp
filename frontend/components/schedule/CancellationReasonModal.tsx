@@ -67,6 +67,7 @@ export function CancellationReasonModal({ action, switchTime, slotId, onConfirm,
 
       <div className="flex flex-col space-y-2 mt-4">
         <button
+          type="button"
           disabled={!canSubmit}
           onClick={handleSubmit}
           className={`w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 ${
@@ -75,7 +76,11 @@ export function CancellationReasonModal({ action, switchTime, slotId, onConfirm,
         >
           {submitLabel}
         </button>
-        <button onClick={onDismiss} className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors">
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors"
+        >
           Назад
         </button>
       </div>

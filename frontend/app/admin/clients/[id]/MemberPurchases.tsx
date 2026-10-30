@@ -125,7 +125,12 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
     }
   };
 
-  if (failed) return <p className="text-danger text-xs">Не вдалося завантажити покупки</p>;
+  if (failed)
+    return (
+      <p role="alert" className="text-danger text-xs">
+        Не вдалося завантажити покупки
+      </p>
+    );
   if (!data) return <p className="text-muted text-xs">Завантаження...</p>;
 
   return (
@@ -154,6 +159,7 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
               </div>
               {c.state === "waiting" && (
                 <button
+                  type="button"
                   onClick={() => activate(c.id)}
                   disabled={saving}
                   className="btn-primary px-4 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-40"
@@ -180,6 +186,7 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
               ))}
             </select>
             <button
+              type="button"
               onClick={() => addCard(true)}
               disabled={!cardId || saving}
               className="btn-primary px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 m-1"
@@ -187,20 +194,25 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
               Додати й активувати з сьогодні
             </button>
             <button
+              type="button"
               onClick={() => addCard(false)}
               disabled={!cardId || saving}
               className="btn-ghost px-3 py-1.5 rounded-lg border text-xs transition-colors disabled:opacity-40 m-1"
             >
               Додати
             </button>
-            <button onClick={() => setCardItems(null)} className="text-subtle text-xs hover:text-body m-1">
+            <button
+              type="button"
+              onClick={() => setCardItems(null)}
+              className="text-subtle text-xs hover:text-body m-1"
+            >
               Скасувати
             </button>
           </div>
         ) : (
           // Only when the client has no club card now (none, ended or burned)
           !data.card && (
-            <button onClick={openAddCard} className="text-accent text-xs hover:underline mt-2">
+            <button type="button" onClick={openAddCard} className="text-accent text-xs hover:underline mt-2">
               + Додати клубну карту з рецепції
             </button>
           )
@@ -247,7 +259,11 @@ export function MemberPurchases({ memberId, onChanged }: { memberId: string; onC
           </div>
         ))}
       </section>
-      {error && <p className="text-danger text-xs mt-2">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-xs mt-2">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

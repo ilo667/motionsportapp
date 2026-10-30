@@ -62,6 +62,7 @@ export function PushSubscribeButton() {
   if (subscribed) {
     return (
       <button
+        type="button"
         onClick={unsubscribe}
         className="flex items-center text-xs text-muted hover:text-body transition-colors"
         title="Вимкнути сповіщення"
@@ -74,6 +75,7 @@ export function PushSubscribeButton() {
 
   return (
     <button
+      type="button"
       onClick={subscribe}
       className="flex items-center text-xs text-accent hover:underline transition-colors"
       title="Увімкнути push-сповіщення"

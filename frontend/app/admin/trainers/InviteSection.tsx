@@ -86,21 +86,22 @@ export function InviteSection({ invites, onChange }: { invites: TrainerInvite[];
           </p>
           <p className="text-subtle text-sm">Скопіюйте його зараз: пізніше побачити посилання ще раз не вийде.</p>
           <div className="flex space-x-3">
-            <button onClick={copy} className="btn-primary flex-1 py-3 rounded-lg font-medium text-sm">
+            <button type="button" onClick={copy} className="btn-primary flex-1 py-3 rounded-lg font-medium text-sm">
               {copied ? "Скопійовано" : "Копіювати"}
             </button>
             {"share" in navigator && (
-              <button onClick={share} className="btn-secondary px-4 py-3 rounded-lg font-medium text-sm">
+              <button type="button" onClick={share} className="btn-secondary px-4 py-3 rounded-lg font-medium text-sm">
                 Поділитися
               </button>
             )}
-            <button onClick={() => setLink(null)} className="btn-ghost px-4 py-3 rounded-lg text-sm">
+            <button type="button" onClick={() => setLink(null)} className="btn-ghost px-4 py-3 rounded-lg text-sm">
               Готово
             </button>
           </div>
         </div>
       ) : (
         <button
+          type="button"
           onClick={create}
           disabled={busy}
           className="btn-primary w-full py-3 rounded-lg font-medium text-sm disabled:opacity-60"
@@ -109,7 +110,11 @@ export function InviteSection({ invites, onChange }: { invites: TrainerInvite[];
         </button>
       )}
 
-      {error && <p className="text-danger text-sm mt-3">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-sm mt-3">
+          {error}
+        </p>
+      )}
 
       {invites.length > 0 && (
         <div className="mt-5">
@@ -121,6 +126,7 @@ export function InviteSection({ invites, onChange }: { invites: TrainerInvite[];
                   від {invite.createdBy} · діє до {formatDateTime(invite.expiresAt)}
                 </p>
                 <button
+                  type="button"
                   onClick={() => revoke(invite.id)}
                   className="shrink-0 text-sm text-muted hover:text-danger transition-colors"
                 >

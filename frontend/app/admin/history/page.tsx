@@ -160,7 +160,11 @@ export default function HistoryPage() {
     <PageLayout variant="top" loading={!days && !error} action={<AdminMenu />}>
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">Історія</h1>
 
-      {error && <p className="text-danger text-sm mb-4">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-sm mb-4">
+          {error}
+        </p>
+      )}
 
       {days && days.length === 0 && <p className="text-muted text-sm">Минулих тренувань ще немає.</p>}
 
@@ -183,6 +187,7 @@ export default function HistoryPage() {
                   <div className="bg-surface px-4 py-3">{dayTitle}</div>
                 ) : (
                   <button
+                    type="button"
                     onClick={() => toggle(day.localDate)}
                     aria-expanded={expanded}
                     className="w-full text-left bg-surface px-4 py-3 flex items-start justify-between space-x-3 hover:bg-surface/70 transition-colors"
@@ -217,6 +222,7 @@ export default function HistoryPage() {
 
           {nextBefore && (
             <button
+              type="button"
               onClick={loadMore}
               disabled={loadingMore}
               className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"

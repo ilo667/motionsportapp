@@ -137,6 +137,7 @@ export function NoteCell({ member, onSaved }: { member: AdminMember; onSaved: (n
   if (!editing) {
     return (
       <button
+        type="button"
         onClick={() => {
           setDraft(member.trainerNote ?? "");
           setEditing(true);
@@ -172,7 +173,11 @@ export function NoteCell({ member, onSaved }: { member: AdminMember; onSaved: (n
         className="input-field w-full border rounded-lg px-3 py-2 text-sm focus:outline-none resize-none"
         placeholder="Напр.: ходить через раз"
       />
-      {error && <span className="text-danger text-xs">{error}</span>}
+      {error && (
+        <span role="alert" className="text-danger text-xs">
+          {error}
+        </span>
+      )}
     </div>
   );
 }
@@ -210,6 +215,7 @@ export function TrainerPicker({
     <div className="flex flex-col items-start space-y-1 mt-2">
       {!member.trainerId && (
         <button
+          type="button"
           onClick={() => assign(myId)}
           disabled={saving}
           className="btn-secondary text-xs px-3 py-1 rounded-lg border transition-colors disabled:opacity-60"
@@ -237,7 +243,11 @@ export function TrainerPicker({
             ))}
         </select>
       </label>
-      {error && <span className="text-danger text-xs">{error}</span>}
+      {error && (
+        <span role="alert" className="text-danger text-xs">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

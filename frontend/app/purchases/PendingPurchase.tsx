@@ -57,6 +57,7 @@ export function PendingPurchase({ pending, onChanged }: { pending: Purchase; onC
         <div className="flex flex-col space-y-2 mt-3">
           {pending.method === "LIQPAY" && (
             <button
+              type="button"
               onClick={pay}
               disabled={busy}
               className="btn-primary w-full py-3 rounded-lg text-sm transition-colors disabled:opacity-60"
@@ -65,6 +66,7 @@ export function PendingPurchase({ pending, onChanged }: { pending: Purchase; onC
             </button>
           )}
           <button
+            type="button"
             onClick={cancel}
             disabled={busy}
             className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"
@@ -73,7 +75,11 @@ export function PendingPurchase({ pending, onChanged }: { pending: Purchase; onC
           </button>
         </div>
       </div>
-      {error && <p className="text-danger text-sm">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-sm">
+          {error}
+        </p>
+      )}
     </>
   );
 }

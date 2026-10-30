@@ -66,6 +66,7 @@ export default function RegisterPage() {
             <div className="flex items-center justify-between">
               <span className="font-geologica font-semibold text-xl text-heading">{result.memberCode}</span>
               <button
+                type="button"
                 onClick={() => copyToClipboard(result.memberCode, "code")}
                 className="text-accent text-sm hover:underline ml-2"
               >
@@ -79,6 +80,7 @@ export default function RegisterPage() {
             <div className="flex items-center justify-between space-x-2">
               <span className="font-mono text-sm text-body break-all">{result.recoveryCode}</span>
               <button
+                type="button"
                 onClick={() => copyToClipboard(result.recoveryCode, "recovery")}
                 className="text-accent text-sm hover:underline shrink-0"
               >
@@ -93,6 +95,7 @@ export default function RegisterPage() {
         </p>
 
         <button
+          type="button"
           onClick={() => router.push("/")}
           className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors"
         >
@@ -144,10 +147,18 @@ export default function RegisterPage() {
             className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="••••••"
           />
-          {pinError && <p className="text-danger text-xs mt-1">{pinError}</p>}
+          {pinError && (
+            <p role="alert" className="text-danger text-xs mt-1">
+              {pinError}
+            </p>
+          )}
         </div>
 
-        {error && <p className="text-danger text-sm">{error}</p>}
+        {error && (
+          <p role="alert" className="text-danger text-sm">
+            {error}
+          </p>
+        )}
 
         <button
           type="submit"

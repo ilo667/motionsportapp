@@ -79,6 +79,7 @@ export function CancellationList({ title, items, withDate = false }: Cancellatio
                   <Badge tone={fee.waived ? "none" : "warn"}>{feeLabel(fee)}</Badge>
                   {!fee.waived && !fee.refundDone && (
                     <button
+                      type="button"
                       onClick={() => waive(c.bookingId)}
                       disabled={busyId === c.bookingId}
                       className="text-subtle text-xs underline hover:text-body transition-colors disabled:opacity-60"
@@ -92,7 +93,11 @@ export function CancellationList({ title, items, withDate = false }: Cancellatio
           );
         })}
       </ul>
-      {error && <p className="text-danger text-xs">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-xs">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

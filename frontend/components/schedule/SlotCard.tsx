@@ -79,6 +79,7 @@ export function SlotCard({
                   <span className="text-subtle">Гість:</span> {slot.myGuest.name}
                 </span>
                 <button
+                  type="button"
                   onClick={() => onMutate(() => api.removeGuest(slot.id))}
                   className="text-subtle text-xs underline hover:text-body transition-colors"
                 >
@@ -124,6 +125,7 @@ export function SlotCard({
               !isFull && (
                 // A free guest takes one more seat on this training
                 <button
+                  type="button"
                   onClick={() => setGuestName("")}
                   className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors"
                 >
@@ -133,6 +135,7 @@ export function SlotCard({
             )}
             {otherSlot && canSwitch && (
               <button
+                type="button"
                 onClick={() => setModal({ action: "switch", targetSlot: otherSlot })}
                 className="btn-secondary w-full py-3 rounded-lg border text-sm transition-colors"
               >
@@ -140,6 +143,7 @@ export function SlotCard({
               </button>
             )}
             <button
+              type="button"
               onClick={() => setModal({ action: "cancel" })}
               className="btn-danger w-full py-3 rounded-lg text-sm transition-colors"
             >
@@ -152,6 +156,7 @@ export function SlotCard({
           <p className="text-muted text-sm">Ви вже записані на інший час</p>
         ) : !isFull ? (
           <button
+            type="button"
             onClick={() => (groupPassLeft > 0 ? onMutate(() => api.book(slot.id)) : setBuying(true))}
             className="btn-primary w-full py-3 rounded-lg text-sm transition-colors"
           >
@@ -165,6 +170,7 @@ export function SlotCard({
             {bookingWindowOpen &&
               (slot.isMyVacancyAlert ? (
                 <button
+                  type="button"
                   onClick={async () => {
                     await onMutate(() => api.unsubscribeVacancy(slot.id));
                     onRefresh();
@@ -175,6 +181,7 @@ export function SlotCard({
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={async () => {
                     await ensurePushSubscribed();
                     await onMutate(() => api.subscribeVacancy(slot.id));

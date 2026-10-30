@@ -52,6 +52,7 @@ function BuyTile({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="flex-1 min-w-0 rounded-xl border border-line bg-surface p-4 text-left hover:border-subtle transition-colors"
     >
@@ -87,6 +88,7 @@ export function BuyBlock({
       <h2 className={`${titleClass} pt-3`}>Купити</h2>
       {canBuyService && (
         <button
+          type="button"
           onClick={() => onBuy("service")}
           className="btn-primary w-full rounded-lg p-4 text-left transition-colors"
         >

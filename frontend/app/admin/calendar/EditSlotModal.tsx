@@ -107,11 +107,16 @@ export function EditSlotModal({
         />
       )}
 
-      {error && <p className="text-danger text-sm">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-sm">
+          {error}
+        </p>
+      )}
 
       <div className="flex flex-col space-y-2">
         {assigned && (
           <button
+            type="button"
             onClick={handleSaveMembers}
             disabled={saving}
             className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
@@ -120,13 +125,14 @@ export function EditSlotModal({
           </button>
         )}
         <button
+          type="button"
           onClick={handleCancelSlot}
           disabled={saving}
           className="btn-ghost hover-danger w-full py-3 rounded-lg border text-sm transition-colors disabled:opacity-60"
         >
           Скасувати тренування {slot.slotTime}
         </button>
-        <button onClick={onClose} className="text-muted text-sm py-2 transition-colors hover:text-body">
+        <button type="button" onClick={onClose} className="text-muted text-sm py-2 transition-colors hover:text-body">
           Закрити
         </button>
       </div>

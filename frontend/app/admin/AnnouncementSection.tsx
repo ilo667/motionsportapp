@@ -54,6 +54,7 @@ export function AnnouncementSection({
           />
           <div className="flex space-x-2">
             <button
+              type="button"
               onClick={async () => {
                 await onMutate(() => api.updateAnnouncementText(date, editingText));
                 setEditingText(null);
@@ -63,6 +64,7 @@ export function AnnouncementSection({
               Зберегти
             </button>
             <button
+              type="button"
               onClick={() => setEditingText(null)}
               className="btn-ghost flex-1 py-2 rounded-lg border text-sm transition-colors"
             >
@@ -75,6 +77,7 @@ export function AnnouncementSection({
       {/* Actions */}
       <div className="-m-1 flex flex-wrap mb-4">
         <button
+          type="button"
           disabled={generating}
           onClick={async () => {
             setGenerating(true);
@@ -88,12 +91,14 @@ export function AnnouncementSection({
         {announcement?.text && !announcement.publishedAt && (
           <>
             <button
+              type="button"
               onClick={() => setEditingText(announcement.text ?? "")}
               className="m-1 btn-ghost py-2 px-3 rounded-lg border text-sm transition-colors"
             >
               Редагувати
             </button>
             <button
+              type="button"
               onClick={() => onMutate(() => api.publishAnnouncement(date))}
               className="m-1 btn-primary py-2 px-3 rounded-lg text-sm transition-colors"
             >
@@ -103,6 +108,7 @@ export function AnnouncementSection({
         )}
         {announcement?.publishedAt && (
           <button
+            type="button"
             onClick={() => onMutate(() => api.unpublishAnnouncement(date))}
             className="m-1 btn-ghost hover-danger py-2 px-3 rounded-lg border text-sm transition-colors"
           >
@@ -118,6 +124,7 @@ export function AnnouncementSection({
           <div key={ex.id} className="flex items-start space-x-2 bg-surface rounded-lg px-3 py-2">
             <p className="flex-1 text-sm text-body">{ex.text}</p>
             <button
+              type="button"
               onClick={() => onMutate(() => api.deleteAnnouncementExample(ex.id))}
               className="text-muted hover:text-danger text-xs shrink-0 mt-0.5 transition-colors"
             >
@@ -137,7 +144,11 @@ export function AnnouncementSection({
             if (e.key === "Enter") addExample();
           }}
         />
-        <button onClick={addExample} className="btn-primary py-2 px-3 rounded-lg text-sm transition-colors">
+        <button
+          type="button"
+          onClick={addExample}
+          className="btn-primary py-2 px-3 rounded-lg text-sm transition-colors"
+        >
           +
         </button>
       </div>

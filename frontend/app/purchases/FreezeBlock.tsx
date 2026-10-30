@@ -35,7 +35,7 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
     return (
       <div className="rounded-xl border border-line bg-surface p-4">
         {!confirming ? (
-          <button onClick={() => setConfirming(true)} className={link}>
+          <button type="button" onClick={() => setConfirming(true)} className={link}>
             Заморозити абонемент
           </button>
         ) : (
@@ -49,18 +49,23 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
               <li>Розморозити раніше можна запитом до тренера.</li>
             </ul>
             <button
+              type="button"
               onClick={() => run(api.requestFreeze)}
               disabled={busy}
               className="btn-primary w-full py-3 rounded-lg text-sm mt-4 transition-colors disabled:opacity-60"
             >
               {busy ? "Надсилаємо..." : "Надіслати запит тренеру"}
             </button>
-            <button onClick={() => setConfirming(false)} disabled={busy} className={`${link} mt-1`}>
+            <button type="button" onClick={() => setConfirming(false)} disabled={busy} className={`${link} mt-1`}>
               Скасувати
             </button>
           </>
         )}
-        {error && <p className="text-danger text-xs mt-2">{error}</p>}
+        {error && (
+          <p role="alert" className="text-danger text-xs mt-2">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
@@ -78,7 +83,7 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
           <p className="text-subtle text-xs mt-2">
             Запит на заморозку надіслано. Заморозка почнеться, коли тренер підтвердить.
           </p>
-          <button onClick={() => run(api.cancelFreezeRequest)} disabled={busy} className={`${link} mt-2`}>
+          <button type="button" onClick={() => run(api.cancelFreezeRequest)} disabled={busy} className={`${link} mt-2`}>
             Скасувати запит
           </button>
         </>
@@ -90,6 +95,7 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
             вже подовжено.
           </p>
           <button
+            type="button"
             onClick={() => run(api.requestUnfreeze)}
             disabled={busy}
             className="btn-ghost w-full py-3 rounded-lg border text-sm mt-3 transition-colors disabled:opacity-60"
@@ -103,7 +109,11 @@ export function FreezeBlock({ data, onChanged }: { data: MyFreeze; onChanged: ()
           Запит на розморозку надіслано. Тренер підтвердить, і можна буде записуватись.
         </p>
       )}
-      {error && <p className="text-danger text-xs mt-2">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-xs mt-2">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

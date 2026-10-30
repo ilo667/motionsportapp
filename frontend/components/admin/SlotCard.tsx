@@ -73,6 +73,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                 <p className="text-teal text-sm text-center py-2">✓ Всі учасники підтверджені</p>
               ) : (
                 <button
+                  type="button"
                   onClick={() => onMutate(() => api.markAllAttendance(slot.id))}
                   className="btn-secondary w-full py-2.5 rounded-lg border text-sm transition-colors"
                 >
@@ -82,6 +83,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
 
             {!confirmCancel ? (
               <button
+                type="button"
                 onClick={() => setConfirmCancel(true)}
                 className="btn-ghost hover-danger w-full py-2.5 rounded-lg border text-sm transition-colors"
               >
@@ -94,6 +96,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                 </p>
                 <div className="flex space-x-2">
                   <button
+                    type="button"
                     onClick={() => {
                       setConfirmCancel(false);
                       onMutate(() => api.cancelSlot(slot.id));
@@ -103,6 +106,7 @@ export function SlotCard({ slot, onMutate }: SlotCardProps) {
                     Відмінити
                   </button>
                   <button
+                    type="button"
                     onClick={() => setConfirmCancel(false)}
                     className="btn-ghost flex-1 py-2 rounded-lg border text-xs transition-colors"
                   >

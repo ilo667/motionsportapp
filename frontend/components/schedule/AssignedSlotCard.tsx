@@ -57,6 +57,7 @@ export function AssignedSlotCard({ slot, onMutate }: AssignedSlotCardProps) {
               <p className="text-muted text-sm">Тренування вже почалося</p>
             ) : (
               <button
+                type="button"
                 onClick={() => setCancelOpen(true)}
                 className="btn-danger w-full py-3 rounded-lg text-sm transition-colors"
               >

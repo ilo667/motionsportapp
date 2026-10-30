@@ -11,6 +11,7 @@ export function CancelDayButton({ date, onCancel }: { date: string; onCancel: ()
       <p className="text-muted text-xs mb-3 uppercase tracking-wide font-medium">Керування днем</p>
       {!confirming ? (
         <button
+          type="button"
           onClick={() => setConfirming(true)}
           className="btn-ghost hover-danger w-full py-3 rounded-lg border text-sm transition-colors"
         >
@@ -24,6 +25,7 @@ export function CancelDayButton({ date, onCancel }: { date: string; onCancel: ()
           </p>
           <div className="flex space-x-2">
             <button
+              type="button"
               onClick={() => {
                 setConfirming(false);
                 onCancel();
@@ -33,6 +35,7 @@ export function CancelDayButton({ date, onCancel }: { date: string; onCancel: ()
               Скасувати
             </button>
             <button
+              type="button"
               onClick={() => setConfirming(false)}
               className="btn-ghost flex-1 py-2.5 rounded-lg border text-sm transition-colors"
             >

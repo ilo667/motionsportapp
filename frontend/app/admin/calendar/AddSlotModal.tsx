@@ -100,8 +100,10 @@ export function AddSlotModal({
       <div className="flex flex-col space-y-2">
         {TYPES.map((t) => (
           <button
+            type="button"
             key={t}
             onClick={() => selectType(t)}
+            aria-pressed={selectedType === t}
             className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${selectedType === t ? "" : "border-line"}`}
             style={
               selectedType === t
@@ -147,6 +149,7 @@ export function AddSlotModal({
               { value: true, label: "Щотижня" },
             ].map((o) => (
               <button
+                type="button"
                 key={o.label}
                 onClick={() => setWeekly(o.value)}
                 aria-pressed={weekly === o.value}
@@ -171,17 +174,22 @@ export function AddSlotModal({
         <MemberPickers type={selectedType} memberIds={memberIds} setMemberIds={setMemberIds} members={members} />
       )}
 
-      {error && <p className="text-danger text-sm">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-sm">
+          {error}
+        </p>
+      )}
 
       <div className="flex flex-col space-y-2">
         <button
+          type="button"
           onClick={handleAdd}
           disabled={saving}
           className="btn-primary w-full py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
         >
           {saving ? "Зачекайте..." : "Зберегти"}
         </button>
-        <button onClick={onClose} className="text-muted text-sm py-2 transition-colors hover:text-body">
+        <button type="button" onClick={onClose} className="text-muted text-sm py-2 transition-colors hover:text-body">
           Закрити
         </button>
       </div>

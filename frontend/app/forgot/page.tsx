@@ -70,6 +70,7 @@ export default function ForgotPage() {
           <div className="flex items-center justify-between space-x-2">
             <span className="font-mono text-sm text-body break-all">{result.recoveryCode}</span>
             <button
+              type="button"
               onClick={() => copyToClipboard(result.recoveryCode)}
               className="text-accent text-sm hover:underline shrink-0"
             >
@@ -83,6 +84,7 @@ export default function ForgotPage() {
         </p>
 
         <button
+          type="button"
           onClick={() => router.push("/")}
           className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors"
         >
@@ -147,10 +149,18 @@ export default function ForgotPage() {
             className="input-field w-full border rounded-lg px-4 py-3 text-sm focus:outline-none"
             placeholder="••••••"
           />
-          {pinError && <p className="text-danger text-xs mt-1">{pinError}</p>}
+          {pinError && (
+            <p role="alert" className="text-danger text-xs mt-1">
+              {pinError}
+            </p>
+          )}
         </div>
 
-        {error && <p className="text-danger text-sm">{error}</p>}
+        {error && (
+          <p role="alert" className="text-danger text-sm">
+            {error}
+          </p>
+        )}
 
         <button
           type="submit"

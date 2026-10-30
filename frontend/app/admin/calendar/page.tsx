@@ -177,7 +177,11 @@ export default function CalendarPage() {
   return (
     <PageLayout variant="top" action={<AdminMenu />}>
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-6">Календар</h1>
-      {loadError && <p className="text-danger text-sm mb-4">Не вдалося завантажити календар. Оновіть сторінку.</p>}
+      {loadError && (
+        <p role="alert" className="text-danger text-sm mb-4">
+          Не вдалося завантажити календар. Оновіть сторінку.
+        </p>
+      )}
 
       <div className="flex items-center -m-1 flex-wrap mb-4">
         {TYPES.map((t) => (

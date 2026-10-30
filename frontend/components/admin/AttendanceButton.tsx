@@ -39,6 +39,7 @@ export function AttendanceButton({
 }) {
   return (
     <button
+      type="button"
       disabled={disabled}
       onClick={() => onChange(nextAttendance(status))}
       aria-label={`${name}: ${TITLES[status]}. Натисніть, щоб змінити`}

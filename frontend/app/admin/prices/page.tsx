@@ -43,6 +43,7 @@ function ConfirmModal({
       </p>
       <div className="flex flex-col space-y-2">
         <button
+          type="button"
           ref={confirmRef}
           onClick={onConfirm}
           disabled={saving}
@@ -51,6 +52,7 @@ function ConfirmModal({
           {saving ? "Збереження..." : "Так, змінити для всіх"}
         </button>
         <button
+          type="button"
           onClick={onDismiss}
           disabled={saving}
           className="btn-ghost w-full py-3 rounded-lg border text-sm transition-colors"
@@ -125,7 +127,11 @@ export default function PricesPage() {
       <h1 className="font-geologica font-semibold text-title sm:text-display text-heading uppercase mb-2">Ціни</h1>
       <p className="text-muted text-xs mb-6">Один прайс для всіх тренерів. Натисніть на ціну, щоб змінити.</p>
 
-      {loadError && <p className="text-danger text-sm">Не вдалося завантажити ціни.</p>}
+      {loadError && (
+        <p role="alert" className="text-danger text-sm">
+          Не вдалося завантажити ціни.
+        </p>
+      )}
 
       {items && (
         <div className="flex flex-col space-y-8">
@@ -150,12 +156,14 @@ export default function PricesPage() {
                         className="input-field w-24 border rounded-lg px-2 py-1 text-right tabular-nums focus:outline-none"
                       />
                       <button
+                        type="button"
                         onClick={() => askConfirm(item)}
                         className="btn-primary px-3 py-1 rounded-lg text-xs font-medium transition-colors"
                       >
                         Зберегти
                       </button>
                       <button
+                        type="button"
                         onClick={stopEdit}
                         aria-label="Скасувати"
                         className="btn-ghost px-2 py-1 rounded-lg border text-xs transition-colors"
@@ -164,7 +172,11 @@ export default function PricesPage() {
                       </button>
                     </div>
                   </div>
-                  {error && <p className="text-danger text-xs text-right mt-1">{error}</p>}
+                  {error && (
+                    <p role="alert" className="text-danger text-xs text-right mt-1">
+                      {error}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-between space-x-3 py-0.5">
@@ -177,6 +189,7 @@ export default function PricesPage() {
                     )}
                   </span>
                   <button
+                    type="button"
                     onClick={() => startEdit(item)}
                     aria-label={`Змінити ціну: ${lineName(item)}`}
                     className="font-geologica text-heading tabular-nums whitespace-nowrap rounded-lg border border-transparent px-2 py-1 -mr-2 hover:border-line hover:bg-surface transition-colors"

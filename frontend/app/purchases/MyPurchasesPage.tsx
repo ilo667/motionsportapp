@@ -73,7 +73,11 @@ export function MyPurchasesPage({ startType }: { startType?: AssignedType }) {
         Мій абонемент
       </h1>
 
-      {loadError && <p className="text-danger text-base">Не вдалося завантажити покупки.</p>}
+      {loadError && (
+        <p role="alert" className="text-danger text-base">
+          Не вдалося завантажити покупки.
+        </p>
+      )}
 
       {data && (
         <div className="flex flex-col space-y-3">

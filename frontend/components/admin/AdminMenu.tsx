@@ -49,6 +49,7 @@ export function AdminMenu() {
   return (
     <div ref={rootRef} className="relative">
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Закрити меню" : "Відкрити меню"}
         aria-expanded={open}
@@ -88,6 +89,7 @@ export function AdminMenu() {
           </ul>
           <div className="border-t border-line my-2" />
           <button
+            type="button"
             onClick={logout}
             className="w-full text-left px-4 py-2.5 text-sm text-muted hover:text-danger hover:bg-background transition-colors"
           >

@@ -19,6 +19,7 @@ const SERVICE_GROUPS: { type: AssignedType; title: string }[] = [
 function Option({ item, selected, onSelect }: { item: CatalogItem; selected: boolean; onSelect: () => void }) {
   return (
     <button
+      type="button"
       onClick={onSelect}
       aria-pressed={selected}
       className={`w-full flex items-center justify-between space-x-3 rounded-xl border px-4 py-3 text-left transition-colors ${
@@ -86,6 +87,7 @@ export function PurchaseFlow({
 
   const back = (to: Step | "close") => (
     <button
+      type="button"
       onClick={() => (to === "close" ? onClose() : setStep(to))}
       className="text-subtle text-sm hover:text-body transition-colors mb-4"
     >
@@ -101,6 +103,7 @@ export function PurchaseFlow({
           Тренер побачить запит «оплата готівкою». Віддайте йому гроші на тренуванні, і він підтвердить оплату.
         </p>
         <button
+          type="button"
           onClick={() => {
             onCashSent();
             onClose();
@@ -133,6 +136,7 @@ export function PurchaseFlow({
         </div>
         <div className="flex flex-col space-y-2">
           <button
+            type="button"
             onClick={() => pay("LIQPAY")}
             disabled={busy}
             className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors disabled:opacity-60"
@@ -141,6 +145,7 @@ export function PurchaseFlow({
           </button>
           {data.canPayCash && (
             <button
+              type="button"
               onClick={() => pay("CASH")}
               disabled={busy}
               className="btn-ghost w-full py-4 rounded-lg border text-sm transition-colors disabled:opacity-60"
@@ -154,7 +159,11 @@ export function PurchaseFlow({
             Готівка: тренер побачить запит і підтвердить, коли отримає гроші. Ціна зафіксована зараз.
           </p>
         )}
-        {error && <p className="text-danger text-sm mt-3">{error}</p>}
+        {error && (
+          <p role="alert" className="text-danger text-sm mt-3">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
@@ -178,6 +187,7 @@ export function PurchaseFlow({
           ))}
         </div>
         <button
+          type="button"
           onClick={() => setStep("checkout")}
           disabled={!passId}
           className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors disabled:opacity-40 mt-5"
@@ -219,6 +229,7 @@ export function PurchaseFlow({
           </section>
         ))}
         <button
+          type="button"
           onClick={() => setStep("checkout")}
           disabled={!clubId}
           className="btn-primary w-full py-4 rounded-lg font-medium text-sm transition-colors disabled:opacity-40 mt-5"
@@ -247,6 +258,7 @@ export function PurchaseFlow({
         </section>
       ))}
       <button
+        type="button"
         onClick={() => {
           setClubId(null);
           setStep(needsCard ? "club" : "checkout");

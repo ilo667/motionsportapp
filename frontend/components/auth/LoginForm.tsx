@@ -148,7 +148,11 @@ export function LoginForm({ variant }: { variant: "member" | "admin" }) {
         <Field config={config.login} value={login} onChange={setLogin} />
         <Field config={config.secret} value={secret} onChange={setSecret} />
 
-        {error && <p className="text-danger text-sm">{error}</p>}
+        {error && (
+          <p role="alert" className="text-danger text-sm">
+            {error}
+          </p>
+        )}
 
         <button
           type="submit"
