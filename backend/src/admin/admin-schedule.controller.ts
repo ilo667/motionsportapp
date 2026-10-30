@@ -13,6 +13,7 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AdminScheduleService } from './admin-schedule.service';
+import { AdminSlotsService } from './admin-slots.service';
 import { SessionGuard, SessionUser } from '../auth/session.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -25,7 +26,10 @@ import { ParseDatePipe, ParseMonthPipe, ParseTimePipe } from '../common/pipes/da
 @Controller('admin')
 @UseGuards(SessionGuard, AdminGuard)
 export class AdminScheduleController {
-  constructor(private readonly adminScheduleService: AdminScheduleService) {}
+  constructor(
+    private readonly adminScheduleService: AdminScheduleService,
+    private readonly adminSlotsService: AdminSlotsService,
+  ) {}
 
   @Get('schedule')
   getSchedule(@CurrentUser() user: SessionUser) {
@@ -57,7 +61,7 @@ export class AdminScheduleController {
     @Body() dto: UpsertTrainingDayDto,
     @CurrentUser() user: SessionUser,
   ) {
-    return this.adminScheduleService.upsertTrainingDay(user.id, date, dto);
+    return this.adminSlotsService.upsertTrainingDay(user.id, date, dto);
   }
 
   // Group slot at any time 06:00–21:00. Assigned slots: POST training-days/:date/assigned-slots
@@ -68,7 +72,7 @@ export class AdminScheduleController {
     @Param('slotTime', ParseTimePipe) slotTime: string,
     @CurrentUser() user: SessionUser,
   ) {
-    return this.adminScheduleService.upsertGroupSlot(user.id, date, slotTime);
+    return this.adminSlotsService.upsertGroupSlot(user.id, date, slotTime);
   }
 
   @Post('training-days/:date/assigned-slots')
@@ -77,7 +81,7 @@ export class AdminScheduleController {
     @Body() dto: CreateAssignedSlotDto,
     @CurrentUser() user: SessionUser,
   ) {
-    return this.adminScheduleService.createAssignedSlot(user.id, date, dto);
+    return this.adminSlotsService.createAssignedSlot(user.id, date, dto);
   }
 
   @Put('slots/:slotId/members')
@@ -87,7 +91,7 @@ export class AdminScheduleController {
     @Body() dto: SlotMembersDto,
     @CurrentUser() user: SessionUser,
   ) {
-    return this.adminScheduleService.updateSlotMembers(user.id, slotId, dto.memberIds);
+    return this.adminSlotsService.updateSlotMembers(user.id, slotId, dto.memberIds);
   }
 
   @Patch('slots/:slotId')
@@ -97,6 +101,6 @@ export class AdminScheduleController {
     @Body() dto: UpdateSlotDto,
     @CurrentUser() user: SessionUser,
   ) {
-    return this.adminScheduleService.updateSlot(user.id, slotId, dto);
+    return this.adminSlotsService.updateSlot(user.id, slotId, dto);
   }
 }

@@ -4,6 +4,7 @@ import { validate } from 'class-validator';
 import { DateTime } from 'luxon';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { AdminScheduleService } from './admin-schedule.service';
+import { AdminSlotsService } from './admin-slots.service';
 import { AdminAttendanceService } from './admin-attendance.service';
 import { AdminMembersService } from './admin-members.service';
 import { AdminTrainersService } from './admin-trainers.service';
@@ -81,8 +82,14 @@ function makeDb(reads: unknown[][] = [], writeResult: () => unknown[] = () => [{
 const TRAINER = 'trainer-1';
 const now = DateTime.fromObject({ year: 2026, month: 10, day: 20, hour: 12 }, { zone: 'Europe/Kyiv' });
 
-function makeService(db: any, entitlements: any = { syncSpend: jest.fn() }) {
-  return new AdminScheduleService({ db } as any, {} as any, { now: () => now }, entitlements);
+// Adding / changing trainings
+function makeService(db: any) {
+  return new AdminSlotsService({ db } as any, {} as any, { now: () => now });
+}
+
+// The calendar (who is booked, paid from a package)
+function makeViews(db: any, entitlements: any = {}) {
+  return new AdminScheduleService({ db } as any, { now: () => now }, entitlements);
 }
 
 function makeAttendance(db: any, entitlements: any = { syncSpend: jest.fn() }) {
@@ -455,7 +462,7 @@ describe('Calendar — assigned slot members', () => {
       [M2, { clubCard: null, packagesLeft: [{ trainingType: 'personal', left: 2 }] }],
     ]);
     const entitlements = { summaries: jest.fn().mockResolvedValue(summaries) };
-    const result = await makeService(db, entitlements).getCalendar(TRAINER, '2026-10');
+    const result = await makeViews(db, entitlements).getCalendar(TRAINER, '2026-10');
     expect(result.find((s) => s.slotId === 'g1')?.members).toEqual([]);
     // Оля's training was already spent from a package (now empty): paid all the same. Іра cancelled
     expect(result.find((s) => s.slotId === 'p1')?.members).toEqual([
@@ -497,7 +504,7 @@ describe('Cancellation reasons for the trainer', () => {
   it('calendar modal: cancelled and moved, with reason and time', async () => {
     // the slot, who is booked on it now (nobody), then the cancellations
     const { db } = makeDb([[{ id: 's1', trainerId: TRAINER }], [], rows]);
-    await expect(makeService(db).getSlotCancellations(TRAINER, 's1')).resolves.toEqual([
+    await expect(makeViews(db).getSlotCancellations(TRAINER, 's1')).resolves.toEqual([
       {
         bookingId: 'b1',
         displayName: 'Оля',
@@ -633,7 +640,7 @@ describe('History of past trainings', () => {
         },
       ],
     ]);
-    const { days, nextBefore } = await makeService(db).getHistory(TRAINER);
+    const { days, nextBefore } = await makeViews(db).getHistory(TRAINER);
     expect(nextBefore).toBeNull();
     expect(days).toHaveLength(1);
     expect(days[0].slots[0].participants.map((p) => [p.displayName, p.attendanceStatus, p.guestOf])).toEqual([
@@ -666,7 +673,7 @@ describe('History of past trainings', () => {
         },
       ],
     ]);
-    const { days } = await makeService(db).getHistory(TRAINER);
+    const { days } = await makeViews(db).getHistory(TRAINER);
     expect(days[0].slots[0].cancellations).toEqual([]);
     expect(days[0].slots[0].participants).toHaveLength(1);
   });
@@ -674,7 +681,7 @@ describe('History of past trainings', () => {
   it('returns a cursor when there are older days than one page', async () => {
     const fifteen = Array.from({ length: 15 }, (_, i) => day(20 - i));
     const { db } = makeDb([fifteen, []]);
-    const { days, nextBefore } = await makeService(db).getHistory(TRAINER);
+    const { days, nextBefore } = await makeViews(db).getHistory(TRAINER);
     expect(days).toHaveLength(14);
     expect(nextBefore).toBe('2026-10-07'); // the oldest day on this page
   });
@@ -712,7 +719,7 @@ describe('History of past trainings', () => {
     const { db } = makeDb([[]]);
     const where = jest.fn(() => ({ orderBy: () => ({ limit: () => Promise.resolve([]) }) }));
     db.select = jest.fn(() => ({ from: () => ({ where }) }));
-    await makeService(db).getHistory(TRAINER, '2026-12-31');
+    await makeViews(db).getHistory(TRAINER, '2026-12-31');
     const cond = new PgDialect().sqlToQuery((where.mock.calls[0] as unknown[])[0] as any);
     expect(cond.params).toContain('2026-10-20'); // today in the test clock, not the cursor
   });
@@ -747,7 +754,7 @@ describe('Calendar «Скасували»', () => {
         },
       ],
     ]);
-    const list = await makeService(db).getSlotCancellations(TRAINER, 's1');
+    const list = await makeViews(db).getSlotCancellations(TRAINER, 's1');
     expect(list.map((c) => c.displayName)).toEqual(['Оля']);
   });
 });
@@ -766,9 +773,7 @@ describe('Cancelling a training gives the trainings back', () => {
 
   it('cancelling one training removes its marks and spends (a ✓ or ✗ no longer costs a training)', async () => {
     const { db } = makeDb([[mySlot], [{ memberId: M1 }], [mySlot]]);
-    const svc = new AdminScheduleService({ db } as any, notifications as any, { now: () => now }, {
-      syncSpend: jest.fn(),
-    } as any);
+    const svc = new AdminSlotsService({ db } as any, notifications as any, { now: () => now });
     await svc.updateSlot(TRAINER, 's1', { status: 'CANCELLED' });
     const deleted = db.delete.mock.calls.map((c: unknown[]) => c[0]);
     expect(deleted).toEqual(expect.arrayContaining([packageSpends, attendance]));
@@ -777,9 +782,7 @@ describe('Cancelling a training gives the trainings back', () => {
   // The member cancelled late first: that spend and its fee stay (only «Не списувати» forgives it)
   it("leaves a member's late cancellation as it was: spends go back only from active bookings", async () => {
     const { db, sets } = makeDb([[mySlot], [{ memberId: M1 }], [mySlot]]);
-    const svc = new AdminScheduleService({ db } as any, notifications as any, { now: () => now }, {
-      syncSpend: jest.fn(),
-    } as any);
+    const svc = new AdminSlotsService({ db } as any, notifications as any, { now: () => now });
     await svc.updateSlot(TRAINER, 's1', { status: 'CANCELLED' });
     const deleted = db.delete.mock.calls.map((c: unknown[]) => c[0]);
     expect(deleted.filter((t: unknown) => t === packageSpends)).toHaveLength(1);
@@ -791,7 +794,7 @@ describe('Cancelling a training gives the trainings back', () => {
     const notify = { enqueueAndProcess: jest.fn().mockResolvedValue(undefined) };
     // Reads: the slot with its date, the slot lock, the active bookings, the slot after the update
     const { db } = makeDb([[mySlot], [], [{ id: 'b1', slotId: 's1', memberId: M1 }], [mySlot]]);
-    const svc = new AdminScheduleService({ db } as any, notify as any, { now: () => now }, {} as any);
+    const svc = new AdminSlotsService({ db } as any, notify as any, { now: () => now });
     await svc.updateSlot(TRAINER, 's1', { status: 'CANCELLED' });
     expect(notify.enqueueAndProcess).toHaveBeenCalledWith('SLOT_CANCELLED', 'slot-cancelled:s1:2026-10-20', {
       memberIds: [M1],
@@ -802,9 +805,7 @@ describe('Cancelling a training gives the trainings back', () => {
 
   it('«Скасувати мої тренування цього дня» does the same for every cancelled training', async () => {
     const { db } = makeDb([[{ id: 'day-1', localDate: '2026-10-25' }], [{ id: 's1', slotTime: '18:00' }], []]);
-    const svc = new AdminScheduleService({ db } as any, notifications as any, { now: () => now }, {
-      syncSpend: jest.fn(),
-    } as any);
+    const svc = new AdminSlotsService({ db } as any, notifications as any, { now: () => now });
     await svc.upsertTrainingDay(TRAINER, '2026-10-25', { status: 'CANCELLED' } as any);
     const deleted = db.delete.mock.calls.map((c: unknown[]) => c[0]);
     expect(deleted).toEqual(expect.arrayContaining([packageSpends, attendance]));
@@ -848,7 +849,7 @@ describe('Each trainer sees and changes only own trainings', () => {
 
   it("history and the today page look only at days with this trainer's slots", () => {
     const { db } = makeDb();
-    const cond = new PgDialect().sqlToQuery((makeService(db) as any).hasSlotsOf(TRAINER));
+    const cond = new PgDialect().sqlToQuery((makeViews(db) as any).hasSlotsOf(TRAINER));
     expect(cond.sql).toContain('ts.trainer_id = $1');
     expect(cond.params).toEqual([TRAINER]);
   });
@@ -863,7 +864,7 @@ describe("Trainer's today page — the booking window of the trainer's own sched
       { id: 'p', slotTime: '18:00', trainingType: 'personal', status: 'ACTIVE', capacity: 1, bookedCount: 1 },
     ];
     const { db } = makeDb([[day], own]);
-    const result = await makeService(db).getSchedule(TRAINER); // 12:00: the 10:00 group is over, 18:00 ahead
+    const result = await makeViews(db).getSchedule(TRAINER); // 12:00: the 10:00 group is over, 18:00 ahead
     expect(mockLoadSchedule).toHaveBeenCalledWith(db, TRAINER);
     expect(result).toMatchObject({
       localDate: '2026-10-20',
